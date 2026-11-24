@@ -268,6 +268,10 @@ class FixEvidenceView(WireModel):
     cause: str | None = Field(description="The cause, in code's own words.")
     failed_part: list[str]
     changes: list[FixChangeView]
+    read_list: str | None = Field(
+        description="The repositories the fixed version reads that join the team's read list "
+        "once it is turned back on, in code's words. Null when it adds none."
+    )
     scenarios: list[FixScenarioView]
     checks: list[FixCheckView]
 

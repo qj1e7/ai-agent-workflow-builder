@@ -224,11 +224,13 @@
             "approval_requested": "#/components/schemas/ApprovalRequested",
             "execution_linked": "#/components/schemas/ExecutionLinked",
             "execution_resumed": "#/components/schemas/ExecutionResumed",
+            "fix_decided": "#/components/schemas/FixDecided",
             "fix_handed_back": "#/components/schemas/FixHandedBack",
             "fix_handoff": "#/components/schemas/FixHandoff",
             "fix_proposed": "#/components/schemas/FixProposed",
             "fix_round": "#/components/schemas/FixRound",
             "fix_started": "#/components/schemas/FixStarted",
+            "fix_tried": "#/components/schemas/FixTried",
             "leg_dispatched": "#/components/schemas/LegDispatched",
             "run_created": "#/components/schemas/RunCreated",
             "run_expired": "#/components/schemas/RunExpired",
@@ -351,6 +353,12 @@
           },
           {
             "$ref": "#/components/schemas/FixHandedBack"
+          },
+          {
+            "$ref": "#/components/schemas/FixDecided"
+          },
+          {
+            "$ref": "#/components/schemas/FixTried"
           }
         ]
       },
@@ -1824,6 +1832,10 @@
         ],
         "title": "ApprovalDecidedData",
         "type": "object"
+      },
+      "ApprovalIdText": {
+        "pattern": "^apr_[0-9A-Za-z]{1,40}$",
+        "type": "string"
       },
       "ApprovalItem": {
         "additionalProperties": false,
@@ -7394,6 +7406,93 @@
         "title": "FixChoiceView",
         "type": "object"
       },
+      "FixDecided": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FixDecidedData"
+          },
+          "kind": {
+            "const": "fix_decided",
+            "default": "fix_decided",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "FixDecided",
+        "type": "object"
+      },
+      "FixDecidedData": {
+        "additionalProperties": false,
+        "description": "An Approver's yes or no to a fix's set-up approval.",
+        "properties": {
+          "approval_id": {
+            "$ref": "#/components/schemas/ApprovalIdText"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "by_name": {
+            "$ref": "#/components/schemas/ShownName"
+          },
+          "fix_id": {
+            "$ref": "#/components/schemas/FixId"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShownName"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver said no, from the short list."
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/FixVerdict"
+          }
+        },
+        "required": [
+          "fix_id",
+          "approval_id",
+          "verdict",
+          "by",
+          "by_name"
+        ],
+        "title": "FixDecidedData",
+        "type": "object"
+      },
       "FixEventIn": {
         "additionalProperties": false,
         "properties": {
@@ -7504,6 +7603,18 @@
             "title": "Made By",
             "type": "string"
           },
+          "read_list": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The repositories the fixed version reads that join the team's read list once it is turned back on, in code's words. Null when it adds none.",
+            "title": "Read List"
+          },
           "run_id": {
             "title": "Run Id",
             "type": "string"
@@ -7530,6 +7641,7 @@
           "cause",
           "failed_part",
           "changes",
+          "read_list",
           "scenarios",
           "checks"
         ],
@@ -8449,6 +8561,114 @@
           "handed_back",
           "declined",
           "dropped"
+        ],
+        "type": "string"
+      },
+      "FixTried": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FixTriedData"
+          },
+          "kind": {
+            "const": "fix_tried",
+            "default": "fix_tried",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "FixTried",
+        "type": "object"
+      },
+      "FixTriedData": {
+        "additionalProperties": false,
+        "description": "How the one real test run of a fix went, and what that did to the workflow.",
+        "properties": {
+          "approval_id": {
+            "$ref": "#/components/schemas/ApprovalIdText"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "approved_by_name": {
+            "$ref": "#/components/schemas/ShownName"
+          },
+          "fix_id": {
+            "$ref": "#/components/schemas/FixId"
+          },
+          "pressed_by": {
+            "description": "Who pressed Turn back on.",
+            "title": "Pressed By",
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/FixTriedResult"
+          },
+          "test_run_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunIdText"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "fix_id",
+          "approval_id",
+          "approved_by",
+          "approved_by_name",
+          "pressed_by",
+          "result"
+        ],
+        "title": "FixTriedData",
+        "type": "object"
+      },
+      "FixTriedResult": {
+        "enum": [
+          "turned_on",
+          "kept_paused",
+          "test_failed",
+          "not_put_live"
+        ],
+        "type": "string"
+      },
+      "FixVerdict": {
+        "enum": [
+          "approved",
+          "declined"
         ],
         "type": "string"
       },
@@ -13649,6 +13869,10 @@
         ],
         "title": "RunFailedData",
         "type": "object"
+      },
+      "RunIdText": {
+        "pattern": "^run_[0-9A-Za-z]{1,40}$",
+        "type": "string"
       },
       "RunList": {
         "additionalProperties": false,

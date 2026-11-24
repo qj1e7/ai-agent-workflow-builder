@@ -206,7 +206,8 @@ class Settings:
     and the drafted card says so."""
     fix_model: bool = False
     """FIX_MODEL. Off, nobody can start Fix it for me (ADR 0055), so its coordinator makes no paid
-    call. On, an Operator may ask for a fix on a stopped run, and each fix may spend up to $2."""
+    call. On, an Operator may ask for a fix on a stopped run. The coordinator holds each fix to
+    $2 in the runtime, and platform-api to one Scenario writer call and 4 explainer calls."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:

@@ -77,6 +77,8 @@ const REQUIRED_KEYS = {
   fix_round: ['fix_id', 'round', 'passed', 'scenarios', 'progress'],
   fix_proposed: ['fix_id', 'version', 'digest'],
   fix_handed_back: ['fix_id', 'why'],
+  fix_decided: ['fix_id', 'approval_id', 'verdict', 'by'],
+  fix_tried: ['fix_id', 'approval_id', 'approved_by', 'result'],
 } as const satisfies RequiredKeys
 
 const ACTOR_KINDS: ReadonlySet<string> = new Set(['user', 'platform', 'workflow', 'agent', 'safety_checker'])

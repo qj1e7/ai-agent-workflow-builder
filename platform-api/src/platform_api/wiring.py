@@ -14,7 +14,7 @@ from platform_api.builder.drafted_simulations import DraftedSimulations
 from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.builder.explain import Explainer
 from platform_api.builder.fix_parts import FixLayouts, FixParts
-from platform_api.builder.fixes import Fixes, FixSettings, FixTrying
+from platform_api.builder.fixes import Fixes, FixLive, FixSettings, FixTrying
 from platform_api.builder.key_sweep import KeySweep
 from platform_api.builder.made_in_n8n import MadeInN8n
 from platform_api.builder.n8n_holds import Holding
@@ -299,7 +299,7 @@ class BuilderTries:
         by: UserId,
         authors: frozenset[UserId],
         stopped_version: int,
-    ) -> str | None:
+    ) -> FixLive | str:
         return await self._builder.put_fixed_live(
             use_case_id, trying, document, by, authors, stopped_version
         )

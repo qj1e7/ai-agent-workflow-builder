@@ -17,7 +17,7 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
-from platform_api.builder.fixes import STALE, FixTrying
+from platform_api.builder.fixes import STALE, FixLive, FixTrying
 from platform_api.builder.in_n8n import put_back, write_in_n8n
 from platform_api.builder.last_run import RunHistory, last_run_view
 from platform_api.builder.layout import REPO_INPUT, LayoutPlan, PlannedAgent, lay_out
@@ -1694,13 +1694,14 @@ class Builder:
         by: UserId,
         authors: frozenset[UserId],
         stopped_version: int,
-    ) -> str | None:
-        """Once its test run passed, the fix goes live as a new version: n8n publishes the draft
-        the test run tried, under the version compare, and the workflow is on. Its authors are
-        the fix's parties and the authors of the version it replaces, so none of them approves
-        its runs. Only while the version the fix was made for is still in use, checked under the
-        workflow's lock in the transaction that adds the version: else STALE, and nothing goes
-        live. Answers why not in words."""
+    ) -> FixLive | str:
+        """Once its test run passed, the fix becomes the version in use: n8n publishes the draft
+        the test run tried, under the version compare. Its authors are the fix's parties and the
+        authors of the version it replaces, so none of them approves its runs. A workflow an
+        Operator paused stays paused, with the fix ready for when someone resumes it. Only while
+        nobody holds it in n8n and the version the fix was made for is still in use, checked
+        under the workflow's lock in the transaction that adds the version: else STALE, or the
+        hold's words, and nothing changes. Answers why not in words."""
         assert self._n8n is not None
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, use_case_id, alone=True)
@@ -1712,13 +1713,17 @@ class Builder:
                 return NOT_TAKEN
             if row["current_version"] != stopped_version:
                 return STALE
+            if self.holding is not None:
+                held = await self.holding.refused_while_held(uow.conn, use_case_id, by)
+                if held is not None:
+                    return held.words
             current = (await versions_of(uow.conn, use_case_id))[0]
             assert current.held is not None
-            live = current.held.version_id if is_on(state) else None
-            expected = Expected(trying.draft, live)
+            live = is_on(state)
+            expected = Expected(trying.draft, current.held.version_id if live else None)
             try:
                 put = await self._n8n.put_back(
-                    row["n8n_workflow_id"], expected, document, True, held=trying.draft
+                    row["n8n_workflow_id"], expected, document, live, held=trying.draft
                 )
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("n8n did not publish the fix of %s: %s", use_case_id, error)
@@ -1734,18 +1739,12 @@ class Builder:
                 current.number,
                 fixed,
                 Made("fixed", by, "page"),
-                Publication(by, "portal"),
+                Publication(by, "portal") if live else None,
                 list(dict.fromkeys(also)),
                 put.draft,
             )
-            if isinstance(state, Paused):
-                await uow.conn.execute(
-                    "UPDATE builder.use_cases SET paused_at = NULL, paused_by = NULL"
-                    " WHERE use_case_id = %s",
-                    (use_case_id,),
-                )
-        log.info("put the fix of %s live, on %s's press", use_case_id, by)
-        return None
+        log.info("put the fix of %s in use, on %s's press, paused: %s", use_case_id, by, not live)
+        return FixLive(paused=not live)
 
     async def _checked_draft(self, use_case_id: str, target: N8nTarget) -> NoTestRun | str:
         """The version id of the draft a test run would run, once n8n would run nothing in it

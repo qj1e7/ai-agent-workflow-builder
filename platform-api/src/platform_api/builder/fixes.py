@@ -73,11 +73,14 @@ from platform_api.db import Connection, Database, hold_workflow, json
 from platform_api.monitoring import (
     ActivityEvent,
     FixData,
+    FixDecidedData,
     FixHandedBackData,
     FixHandoffData,
+    FixOutcomeData,
     FixProposedData,
     FixRefused,
     FixStartedData,
+    FixTriedData,
     RunCreatedData,
     cause_words,
     current_failure,
@@ -87,8 +90,10 @@ from platform_api.monitoring import (
 from platform_api.monitoring import RunFailedData as StopData
 from platform_api.orchestration import (
     EVENT_SUMMARY_LIMIT,
+    GITHUB_RELEASES,
     MOST_EVENTS,
     STOP_MESSAGE_LIMIT,
+    TYPE_OF,
     AgentRejected,
     AgentUnavailable,
     Approved,
@@ -143,6 +148,19 @@ APPROVED: Final = (
 )
 TESTING: Final = "Trying the fix with a test run, which writes nothing."
 ON: Final = "The fix passed its test run, so the workflow is back on with it."
+ON_PAUSED: Final = (
+    "The fix passed its test run and is saved. The workflow stays paused, so the fix runs once "
+    "someone resumes it."
+)
+READ_LIST: Final = (
+    "Once it is turned back on, {places} joins the team's list of repositories any workflow may "
+    "read."
+)
+REPLAY_THE_STOP: Final = "replay_the_stop"
+"""The coordinator's own replay of the stop (agent_runtime.fixing.replay.REPLAY)."""
+READ_BLOCK: Final = TYPE_OF["read"]
+TRY_LEASE: Final = timedelta(minutes=5)
+"""A press of Turn back on whose test run hasn't started by then was cut off, and is freed."""
 TEST_FAILED: Final = (
     "The test run didn't pass, so the fix wasn't turned on. The workflow stays as it was."
 )
@@ -194,6 +212,7 @@ type FixState = Literal[
     "declined",
     "dropped",
 ]
+type TriedResult = Literal["turned_on", "kept_paused", "test_failed", "not_put_live"]
 BUSY_STATES: Final[frozenset[FixState]] = frozenset({"drafting", "waiting", "approved", "testing"})
 STATE_WORDS: Final[Mapping[FixState, str]] = {
     "drafting": DRAFTING,
@@ -267,6 +286,14 @@ class FixTrying:
 
 
 @dataclass(frozen=True)
+class FixLive:
+    """The fix went in as the workflow's version in use. A workflow an Operator paused stays
+    paused, so the fix runs once someone resumes it."""
+
+    paused: bool
+
+
+@dataclass(frozen=True)
 class FixSettings:
     on: bool
     """FIX_MODEL: off, nobody can start a fix."""
@@ -280,6 +307,8 @@ class FixSettings:
 
 class FixActivity(Protocol):
     async def note_fix(self, run_id: RunId, data: FixData) -> FixRefused | None: ...
+
+    async def note_fix_outcome(self, run_id: RunId, data: FixOutcomeData) -> FixRefused | None: ...
 
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]: ...
 
@@ -317,7 +346,7 @@ class FixTries(Protocol):
         by: UserId,
         authors: frozenset[UserId],
         stopped_version: int,
-    ) -> str | None: ...
+    ) -> FixLive | str: ...
 
 
 # One fix, as it is kept
@@ -359,6 +388,7 @@ class FixRow:
     turned_on_at: datetime | None
     test_failed_at: datetime | None
     turn_on_problem: str | None
+    stays_paused: bool
 
 
 def fix_state(row: FixRow, now: datetime) -> FixState:
@@ -387,6 +417,8 @@ def said(row: FixRow, state: FixState) -> str:
         return DROPPED_WORDS.get(row.dropped_why or "", STALE)
     if state == "test_failed" and row.turn_on_problem:
         return row.turn_on_problem
+    if state == "on" and row.stays_paused:
+        return ON_PAUSED
     return STATE_WORDS[state]
 
 
@@ -396,9 +428,31 @@ def plan_key(plan: WorkflowPlan) -> str:
 
 
 def proven(results: Mapping[str, Mapping[str, Any]] | None) -> bool:
-    """Every scenario that applies passed, and at least one applied."""
-    applied = [r for r in (results or {}).values() if r.get("verdict") != "not_tried"]
-    return bool(applied) and all(r.get("verdict") == "passed" for r in applied)
+    """Every scenario that applies passed, the coordinator's replay of the stop among them."""
+    found = results or {}
+    applied = [r for r in found.values() if r.get("verdict") != "not_tried"]
+    replayed = found.get(REPLAY_THE_STOP, {}).get("verdict") == "passed"
+    return replayed and all(r.get("verdict") == "passed" for r in applied)
+
+
+def _reads(plan: WorkflowPlan) -> set[str]:
+    """The repositories the plan's Read blocks read, with each setting's value put in."""
+    resolved = _resolved(plan)
+    return {
+        str(resolved[block.name].get("place"))
+        for block in plan.blocks
+        if block.type == READ_BLOCK
+        and resolved[block.name].get("source") == GITHUB_RELEASES
+        and isinstance(resolved[block.name].get("place"), str)
+    }
+
+
+def _read_list(stopped: WorkflowPlan, fixed: WorkflowPlan) -> str | None:
+    """What the fixed version adds to the team's read list once it is tried, in code's words."""
+    added = sorted(_reads(fixed) - _reads(stopped))
+    if not added:
+        return None
+    return READ_LIST.format(places=" and ".join(f"“{place}”" for place in added))
 
 
 def _settings_kept(stopped: WorkflowPlan, fixed: WorkflowPlan) -> bool:
@@ -593,7 +647,27 @@ class Fixes:
         asker: Principal,
     ) -> FixRow | Refused | NotFound:
         """Writes the fix's start in the log and keeps the fix, one workflow at a time: under
-        the workflow's fix lock, so two asks can't both start one."""
+        the workflow's fix lock, so two asks can't both start one. A start the platform then
+        couldn't keep is ended in the log at once, so it never holds the run for 20 minutes."""
+        started: list[str] = []
+        try:
+            return await self._begin_once(run_id, created, set_up, stopped_at, stop, asker, started)
+        except Exception:
+            for fix_id in started:
+                log.warning("fix %s: kept no row for its start, so it ends now", fix_id)
+                await self._log.note_fix(run_id, FixHandedBackData(fix_id=fix_id, why="gave_up"))
+            raise
+
+    async def _begin_once(
+        self,
+        run_id: RunId,
+        created: RunCreatedData,
+        set_up: SetUpPlan,
+        stopped_at: Sequence[str],
+        stop: StoppedRun,
+        asker: Principal,
+        started: list[str],
+    ) -> FixRow | Refused | NotFound:
         use_case_id = created.use_case_id
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, f"fix:{use_case_id}", alone=True)
@@ -635,6 +709,7 @@ class Fixes:
             )
             if refused is not None:
                 return Refused(NOT_STOPPED if refused.why == "not_stopped" else BUSY)
+            started.append(fix_id)
             await uow.conn.execute(
                 "INSERT INTO builder.fixes (fix_id, run_id, use_case_id, drafted_id, name,"
                 " stopped_version, stopped_at, stop, asked_by, asked_by_name, started_at, ends_by)"
@@ -804,7 +879,15 @@ class Fixes:
             ).fetchone()
         if claimed is None:
             return await self._viewed(fix_id)
-        trying = await self._tries.try_fixed(row.use_case_id, row.document, by, row.stopped_version)
+        try:
+            trying = await self._tries.try_fixed(
+                row.use_case_id, row.document, by, row.stopped_version
+            )
+        except Exception:
+            # A press the builder broke on frees the fix, so it never stays "testing" with no
+            # test run, and holds no other fix back.
+            await self._mark(fix_id, "testing_at = NULL, testing_by = NULL")
+            raise
         if isinstance(trying, str):
             await self._mark(fix_id, "testing_at = NULL, testing_by = NULL")
             if trying == STALE:
@@ -915,13 +998,69 @@ class Fixes:
         return NOT_READY if laid is None else await self._held(row, laid)
 
     async def approved(self, approved: ApprovedSetUp) -> None:
-        """The yes came. Nothing is set up: Turn back on tries the fix with its test run."""
+        """The yes came. Nothing is set up: Turn back on tries the fix with its test run. The
+        run's log gets the yes with the Approver."""
         async with self._db.transaction("builder") as uow:
             await uow.conn.execute(
                 "UPDATE builder.fixes SET approved_at = coalesce(approved_at, %s)"
                 " WHERE fix_id = %s AND digest = %s AND approval_id = %s AND dropped_at IS NULL",
                 (uow.now, approved.drafted_id, approved.digest, approved.approval_id),
             )
+        row = await self._row(approved.drafted_id)
+        if row is not None and row.approved_at is not None:
+            await self._note_decision(row)
+
+    async def _note_decision(self, row: FixRow) -> None:
+        """The Approver's yes or no on the run's log, once (ADR 0055, section 8)."""
+        state = (
+            None
+            if row.approval_id is None
+            else await self._approvals.get(ApprovalId(row.approval_id))
+        )
+        if state is None or not state.decisions:
+            return
+        if not isinstance(state.status, Approved | Declined):
+            return
+        decision = state.decisions[-1]
+        names = await self._approvals.names([decision.by])
+        verdict: Literal["approved", "declined"] = (
+            "approved" if isinstance(state.status, Approved) else "declined"
+        )
+        data = FixDecidedData(
+            fix_id=row.fix_id,
+            approval_id=state.request.id,
+            verdict=verdict,
+            by=decision.by,
+            by_name=_name_shown(names.get(decision.by), decision.by),
+            reason=decision.reason if verdict == "declined" else None,
+        )
+        refused = await self._log.note_fix_outcome(row.run_id, data)
+        if refused is not None:
+            log.warning("fix %s: the log took no decision (%s)", row.fix_id, refused.why)
+
+    async def _note_tried(self, row: FixRow, result: TriedResult) -> None:
+        """How the test run went, with the approval and its Approver, on the run's log, once."""
+        state = (
+            None
+            if row.approval_id is None
+            else await self._approvals.get(ApprovalId(row.approval_id))
+        )
+        if state is None or not state.decisions:
+            return
+        approver = state.decisions[-1].by
+        names = await self._approvals.names([approver])
+        data = FixTriedData(
+            fix_id=row.fix_id,
+            approval_id=state.request.id,
+            approved_by=approver,
+            approved_by_name=_name_shown(names.get(approver), approver),
+            pressed_by=row.testing_by or row.asked_by,
+            result=result,
+            test_run_id=row.test_run_id,
+        )
+        refused = await self._log.note_fix_outcome(row.run_id, data)
+        if refused is not None:
+            log.warning("fix %s: the log took no test run (%s)", row.fix_id, refused.why)
 
     # The worker
 
@@ -976,10 +1115,11 @@ class Fixes:
             return
         if outcome == "failed":
             await self._mark(fix_id, "test_failed_at = %(now)s")
+            await self._note_tried(row, "test_failed")
             log.info("fix %s: its test run didn't pass, so it stays off", fix_id)
             return
         assert row.document is not None and row.test_draft is not None
-        refused = await self._tries.put_live(
+        put = await self._tries.put_live(
             row.use_case_id,
             FixTrying(row.test_run_id, row.test_draft),
             row.document,
@@ -987,19 +1127,26 @@ class Fixes:
             await self._parties(row),
             row.stopped_version,
         )
-        if refused == STALE:
+        if put == STALE:
             await self._drop(fix_id, "stale")
+            await self._note_tried(row, "not_put_live")
             return
-        if refused is not None:
+        if isinstance(put, str):
             async with self._db.transaction("builder") as uow:
                 await uow.conn.execute(
                     "UPDATE builder.fixes SET test_failed_at = %s, turn_on_problem = %s"
                     " WHERE fix_id = %s",
-                    (uow.now, refused, fix_id),
+                    (uow.now, put, fix_id),
                 )
+            await self._note_tried(row, "not_put_live")
             return
-        await self._mark(fix_id, "turned_on_at = %(now)s")
-        log.info("fix %s: its test run passed, and the workflow is back on with it", fix_id)
+        async with self._db.transaction("builder") as uow:
+            await uow.conn.execute(
+                "UPDATE builder.fixes SET turned_on_at = %s, stays_paused = %s WHERE fix_id = %s",
+                (uow.now, put.paused, fix_id),
+            )
+        await self._note_tried(row, "kept_paused" if put.paused else "turned_on")
+        log.info("fix %s: its test run passed, and it is the version in use", fix_id)
 
     # Inside
 
@@ -1043,10 +1190,19 @@ class Fixes:
             row = await self._reread(row)
         if row.approval_id is None:
             return row
-        approval = await self._approvals.get(ApprovalId(row.approval_id))
+        if (
+            row.testing_at is not None
+            and row.test_run_id is None
+            and now - row.testing_at > (TRY_LEASE)
+        ):
+            # A press cut off before its test run began, as by a restart: free it.
+            await self._mark(row.fix_id, "testing_at = NULL, testing_by = NULL")
+            row = await self._reread(row)
+        approval = await self._approvals.get(ApprovalId(row.approval_id or ""))
         status = None if approval is None else approval.status
         if isinstance(status, Declined):
             await self._drop(row.fix_id, "declined")
+            await self._note_decision(row)
         elif isinstance(status, Closed):
             await self._drop(row.fix_id, "expired" if status.ended is Ended.EXPIRED else "stale")
         elif row.testing_at is None and await self._stale(row):
@@ -1054,6 +1210,7 @@ class Fixes:
             await self._drop(row.fix_id, "stale")
         elif isinstance(status, Approved) and row.approved_at is None:
             await self._mark(row.fix_id, "approved_at = %(now)s")
+            await self._note_decision(row)
         return await self._reread(row)
 
     async def _reread(self, row: FixRow) -> FixRow:
@@ -1171,6 +1328,7 @@ class Fixes:
             cause=self._cause_words(row),
             failed_part=part,
             changes=changes_between(set_up.plan, row.plan),
+            read_list=_read_list(set_up.plan, row.plan),
             scenarios=[
                 FixScenarioView(
                     name=name,
@@ -1274,14 +1432,17 @@ def _named(digest: str) -> str:
 
 def _shown_name(person: Principal) -> str:
     """The name the log shows for who asked, or their id when the name can't be shown."""
-    name = person.display.strip()[:80]
+    return _name_shown(person.display, person.user_id)
+
+
+def _name_shown(name: str | None, person: UserId) -> str:
+    """A person's name as the log shows it, or their id when the name can't be shown."""
+    shown = (name or person).strip()[:80]
     try:
-        FixStartedData(
-            fix_id="fix_0", asked_by=person.user_id, asked_by_name=name, ends_by=_SOME_TIME
-        )
+        FixStartedData(fix_id="fix_0", asked_by=person, asked_by_name=shown, ends_by=_SOME_TIME)
     except ValidationError:
-        return person.user_id[:80]
-    return name
+        return person[:80]
+    return shown
 
 
 _SOME_TIME: Final = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
@@ -1291,7 +1452,7 @@ _COLUMNS: Final = (
     " asked_by, asked_by_name, started_at, ends_by, plan, document, digest, version, cause,"
     " made_by, answered_by, stored_at, proposed_at, approval_id, handed_back_at, approved_at,"
     " dropped_at, dropped_why, simulated, test_run_id, test_draft, testing_by, testing_at,"
-    " turned_on_at, test_failed_at, turn_on_problem"
+    " turned_on_at, test_failed_at, turn_on_problem, stays_paused"
 )
 
 
@@ -1347,4 +1508,5 @@ def _from(r: Mapping[str, Any]) -> FixRow:
         turned_on_at=r["turned_on_at"],
         test_failed_at=r["test_failed_at"],
         turn_on_problem=r["turn_on_problem"],
+        stays_paused=bool(r["stays_paused"]),
     )

@@ -13,11 +13,13 @@ from platform_api.monitoring.agent_events import (
     AgentStepStartedData,
 )
 from platform_api.monitoring.fix_events import (
+    FixDecidedData,
     FixHandedBackData,
     FixHandoffData,
     FixProposedData,
     FixRoundData,
     FixStartedData,
+    FixTriedData,
 )
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
 from platform_api.wire import (
@@ -390,6 +392,16 @@ class FixHandedBack(_Envelope):
     data: FixHandedBackData
 
 
+class FixDecided(_Envelope):
+    kind: Literal["fix_decided"] = "fix_decided"
+    data: FixDecidedData
+
+
+class FixTried(_Envelope):
+    kind: Literal["fix_tried"] = "fix_tried"
+    data: FixTriedData
+
+
 type ActivityEvent = Annotated[
     RunCreated
     | LegDispatched
@@ -424,7 +436,9 @@ type ActivityEvent = Annotated[
     | FixHandoff
     | FixRound
     | FixProposed
-    | FixHandedBack,
+    | FixHandedBack
+    | FixDecided
+    | FixTried,
     Field(discriminator="kind"),
 ]
 

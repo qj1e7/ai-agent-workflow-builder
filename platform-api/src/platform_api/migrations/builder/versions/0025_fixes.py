@@ -29,7 +29,9 @@ def upgrade() -> None:
     # model calls for the fix. simulated holds each simulation platform-api ran for it, by the
     # plan's key, so a store needs one that passed. Turn back on records who pressed it and the
     # test run, which writes nothing, then when the fixed version went live, or that the test run
-    # failed, or why it couldn't go live (turn_on_problem). name and stop are the workflow's name
+    # failed, or why it couldn't go live (turn_on_problem). stays_paused says a workflow an
+    # Operator paused kept paused, with the fix as its version in use. name and stop are the
+    # workflow's name
     # and the stop as the run's log held them when the fix was asked for.
     op.execute(f"""
         CREATE TABLE builder.fixes (
@@ -71,6 +73,7 @@ def upgrade() -> None:
             turned_on_at timestamptz,
             test_failed_at timestamptz,
             turn_on_problem text,
+            stays_paused boolean NOT NULL DEFAULT false,
             CONSTRAINT fixes_stored_whole CHECK (
                 (stored_at IS NULL) = (plan IS NULL)
                 AND (plan IS NULL) = (document IS NULL)

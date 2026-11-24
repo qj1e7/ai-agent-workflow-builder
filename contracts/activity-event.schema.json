@@ -701,6 +701,10 @@
       "title": "ApprovalDecidedData",
       "type": "object"
     },
+    "ApprovalIdText": {
+      "pattern": "^apr_[0-9A-Za-z]{1,40}$",
+      "type": "string"
+    },
     "ApprovalOutcomeNotPosted": {
       "additionalProperties": false,
       "properties": {
@@ -1118,6 +1122,94 @@
         "acting"
       ],
       "type": "string"
+    },
+    "FixDecided": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/FixDecidedData"
+        },
+        "kind": {
+          "const": "fix_decided",
+          "default": "fix_decided",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "FixDecided",
+      "type": "object"
+    },
+    "FixDecidedData": {
+      "additionalProperties": false,
+      "description": "An Approver's yes or no to a fix's set-up approval.",
+      "properties": {
+        "approval_id": {
+          "$ref": "#/$defs/ApprovalIdText"
+        },
+        "by": {
+          "title": "By",
+          "type": "string"
+        },
+        "by_name": {
+          "$ref": "#/$defs/ShownName"
+        },
+        "fix_id": {
+          "$ref": "#/$defs/FixId"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ShownName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the Approver said no, from the short list."
+        },
+        "verdict": {
+          "$ref": "#/$defs/FixVerdict"
+        }
+      },
+      "required": [
+        "fix_id",
+        "approval_id",
+        "verdict",
+        "by",
+        "by_name"
+      ],
+      "title": "FixDecidedData",
+      "type": "object"
     },
     "FixFound": {
       "enum": [
@@ -1583,6 +1675,115 @@
       "title": "FixStartedData",
       "type": "object"
     },
+    "FixTried": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/FixTriedData"
+        },
+        "kind": {
+          "const": "fix_tried",
+          "default": "fix_tried",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "FixTried",
+      "type": "object"
+    },
+    "FixTriedData": {
+      "additionalProperties": false,
+      "description": "How the one real test run of a fix went, and what that did to the workflow.",
+      "properties": {
+        "approval_id": {
+          "$ref": "#/$defs/ApprovalIdText"
+        },
+        "approved_by": {
+          "title": "Approved By",
+          "type": "string"
+        },
+        "approved_by_name": {
+          "$ref": "#/$defs/ShownName"
+        },
+        "fix_id": {
+          "$ref": "#/$defs/FixId"
+        },
+        "pressed_by": {
+          "description": "Who pressed Turn back on.",
+          "title": "Pressed By",
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/$defs/FixTriedResult"
+        },
+        "test_run_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunIdText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "fix_id",
+        "approval_id",
+        "approved_by",
+        "approved_by_name",
+        "pressed_by",
+        "result"
+      ],
+      "title": "FixTriedData",
+      "type": "object"
+    },
+    "FixTriedResult": {
+      "enum": [
+        "turned_on",
+        "kept_paused",
+        "test_failed",
+        "not_put_live"
+      ],
+      "type": "string"
+    },
+    "FixVerdict": {
+      "enum": [
+        "approved",
+        "declined"
+      ],
+      "type": "string"
+    },
     "FixWidening": {
       "enum": [
         "outside_failed_part",
@@ -1885,6 +2086,10 @@
       ],
       "title": "RunFailedData",
       "type": "object"
+    },
+    "RunIdText": {
+      "pattern": "^run_[0-9A-Za-z]{1,40}$",
+      "type": "string"
     },
     "RunLost": {
       "additionalProperties": false,
@@ -2861,11 +3066,13 @@
       "approval_requested": "#/$defs/ApprovalRequested",
       "execution_linked": "#/$defs/ExecutionLinked",
       "execution_resumed": "#/$defs/ExecutionResumed",
+      "fix_decided": "#/$defs/FixDecided",
       "fix_handed_back": "#/$defs/FixHandedBack",
       "fix_handoff": "#/$defs/FixHandoff",
       "fix_proposed": "#/$defs/FixProposed",
       "fix_round": "#/$defs/FixRound",
       "fix_started": "#/$defs/FixStarted",
+      "fix_tried": "#/$defs/FixTried",
       "leg_dispatched": "#/$defs/LegDispatched",
       "run_created": "#/$defs/RunCreated",
       "run_expired": "#/$defs/RunExpired",
@@ -2988,6 +3195,12 @@
     },
     {
       "$ref": "#/$defs/FixHandedBack"
+    },
+    {
+      "$ref": "#/$defs/FixDecided"
+    },
+    {
+      "$ref": "#/$defs/FixTried"
     }
   ]
 }
