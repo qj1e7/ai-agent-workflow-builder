@@ -157,7 +157,7 @@ class DraftedWorkflowView(WireModel):
     )
     can_send: bool
     why_not_send: str | None = Field(
-        description="Why Send for approval can't work now, in words shown in its place."
+        description="Why Turn on can't ask for the one-time check now, in words shown in its place."
     )
     replaced_waiting: bool = Field(
         description="This revision replaced a set-up approval that was still waiting."

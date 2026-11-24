@@ -62,7 +62,7 @@ Opening a drafted workflow in your own n8n space, without its keys, to change it
 _Avoid_: Open in n8n (that is a set-up workflow's)
 
 **Set-up approval**:
-An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051).
+An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051). The app calls it the one-time check: one line on the drafted workflow's card, which Turn on asks for (ADR 0053).
 _Avoid_: Approval (that is a run's yes to a write)
 
 **Workflow report**:

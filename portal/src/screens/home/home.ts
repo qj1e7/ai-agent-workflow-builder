@@ -189,15 +189,11 @@ function approvalWords(item: ApprovalItem, now: Date): ItemWords {
   }
 }
 
-function setupWords(item: SetUpApprovalItem, now: Date): ItemWords {
-  return {
-    tone: 'wait',
-    title: `${item.name} needs your yes to set up`,
-    meta: `Sent by ${item.sent_by_name}, ${runWhen(item.sent_at, now)}`,
-    lines: [],
-    note: null,
-    why: null,
-  }
+/** A drafted workflow's one-time check, in the prototype's words (ADR 0053, item 3), as the Approvers who can say yes read it. */
+const ASKS_FOR_CHECK = 'asks for a one-time check'
+
+function setupWords(item: SetUpApprovalItem): ItemWords {
+  return { tone: 'wait', title: item.name, meta: `${item.sent_by_name} ${ASKS_FOR_CHECK}.`, lines: [], note: null, why: null }
 }
 
 function confirmationWords(item: ConfirmationItem, now: Date): ItemWords {
@@ -325,7 +321,7 @@ export function wordsOf(need: Need, now: Date, modelOff = false): ItemWords {
     case 'confirmation':
       return confirmationWords(need.item, now)
     case 'setup':
-      return setupWords(need.item, now)
+      return setupWords(need.item)
     case 'stopped':
       return stoppedWords(need.item, now, modelOff)
     case 'declined':
@@ -384,7 +380,7 @@ export function lineOf(need: Need, now: Date): NeedLine {
     case 'approval':
       return line('wait', need.item.use_case_name, 'needs your yes')
     case 'setup':
-      return line('wait', need.item.name, 'needs your yes to set up', 'needs your yes')
+      return line('wait', need.item.sent_by_name, `${ASKS_FOR_CHECK} of ${need.item.name}`, ASKS_FOR_CHECK)
     case 'connection':
       return connectionLine(need.item, now)
     case 'address':
@@ -420,7 +416,7 @@ export function actionsOf(need: Need, modelOff = false): readonly Action[] {
     case 'approval':
       return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}`, item: approvalItem(need.item.run_id) }]
     case 'setup':
-      return [{ kind: 'open', label: 'Review and decide', to: need.item.link }]
+      return [{ kind: 'open', label: 'Check it', to: need.item.link }]
     case 'connection':
       return noModel(need.item)
         ? [{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }]

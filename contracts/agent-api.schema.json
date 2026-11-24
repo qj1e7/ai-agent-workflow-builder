@@ -2612,6 +2612,13 @@
           "title": "Replies",
           "type": "integer"
         },
+        "setups": {
+          "default": 0,
+          "description": "Drafted workflows' one-time checks waiting for this Approver's yes.",
+          "minimum": 0,
+          "title": "Setups",
+          "type": "integer"
+        },
         "stopped": {
           "minimum": 0,
           "title": "Stopped",

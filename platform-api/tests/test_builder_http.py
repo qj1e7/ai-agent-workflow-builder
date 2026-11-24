@@ -430,6 +430,7 @@ class FakeHome:
             connections=[],
             addresses=[],
             fixes=[],
+            setup_approvals=[1],
             replied=[1],
             declined_total=1,
             questions_for_me_total=1,
@@ -807,7 +808,8 @@ async def test_the_runtime_gets_the_facts_the_screens_show_for_the_signed_in_per
     assert fact.our_version_ticket == (None if source is None else source["ticket"])
     needs = facts.needs_you
     assert needs is not None
-    assert (needs.declined, needs.questions, needs.total) == (1, 1, 6), "Home's whole count"
+    assert (needs.declined, needs.questions, needs.setups) == (1, 1, 1)
+    assert needs.total == 7, "Home's whole count, a one-time check to give included"
     parts = needs.model_dump(exclude={"total"})
     assert sum(parts.values()) == needs.total, f"every part of the total is named: {parts}"
     assert [u.name for u in (await front.builder.list_use_cases()).use_cases] == [
