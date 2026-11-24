@@ -347,14 +347,14 @@ async def test_a_kept_answer_is_not_asked_for_again(client: httpx.AsyncClient, a
 
 
 @pytest.mark.parametrize(
-    "runtime",
-    [Runtime(status=500), Runtime(times_out=True), Runtime(answer={"kind": "kept", "why": "call"})],
+    "answering",
+    [{"status": 500}, {"times_out": True}, {"answer": {"kind": "kept", "why": "call"}}],
     ids=["runtime-down", "runtime-slow", "model-call-failed"],
 )
 async def test_a_call_that_failed_is_asked_again(
-    client: httpx.AsyncClient, app: FastAPI, runtime: Runtime
+    client: httpx.AsyncClient, app: FastAPI, answering: dict[str, Any]
 ):
-    finds(app, runtime)
+    runtime = finds(app, Runtime(**answering))
     await append(app, RUN, stop())
     await troubleshoot(client, find_cause=True)
     await troubleshoot(client, find_cause=True)
