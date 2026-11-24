@@ -619,6 +619,9 @@ class ExecutionRecord:
     ran: Mapping[str, str] = field(default_factory=dict[str, str])
     """Each block n8n ran, with the status of its last try, such as success or error. Read
     only with the execution's data."""
+    failed_block: Mapping[str, Any] | None = None
+    """The block whose error ended the execution, as the execution ran it: its type, parameters
+    and retry settings. Read only with the execution's data."""
 
 
 @dataclass(frozen=True)
@@ -925,7 +928,19 @@ def _record_of(execution: _ExecutionOut) -> ExecutionRecord:
         node if isinstance(node, str) else None,
         error if isinstance(error, str) else None,
         _ran(execution),
+        _failed_block(execution),
     )
+
+
+def _failed_block(execution: _ExecutionOut) -> dict[str, Any] | None:
+    """The block n8n's error names, from the workflow the execution ran, or as the error itself
+    holds it when the record has no workflow."""
+    failed = _fields(_at(execution.data, "resultData", "error", "node"))
+    name = failed.get("name")
+    if not isinstance(name, str):
+        return None
+    ran = [n for n in _nodes(execution.workflow_data or {}) if n.get("name") == name]
+    return dict(ran[0]) if ran else dict(failed)
 
 
 def _ran(execution: _ExecutionOut) -> dict[str, str]:
@@ -1401,6 +1416,12 @@ def _facts(record: ExecutionRecord) -> ExecutionFacts:
     )
 
 
+def _failed(execution_id: N8nExecutionId, record: ExecutionRecord) -> FailedExecution:
+    return FailedExecution(
+        execution_id, _facts(record), record.failed_node, record.error, record.failed_block
+    )
+
+
 class N8nExecutions:
     """n8n's records of executions, through its public API (ENGINE-PLAN 2.3)."""
 
@@ -1759,7 +1780,7 @@ class N8nWorkflows:
             return None
         if record.status == "success":
             return Finished(execution_id)
-        return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)
+        return _failed(execution_id, record)
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | TryLater | None:
         """The block that failed and n8n's words for it, from n8n's own record. None unless n8n
@@ -1771,4 +1792,4 @@ class N8nWorkflows:
             return N8N_UNREADABLE
         if record is None or record.status != "error":
             return None
-        return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)
+        return _failed(execution_id, record)

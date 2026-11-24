@@ -200,6 +200,7 @@ run "simulation_on_holds_no_real_key_and_reaches_only_its_own_subnet" {
         "N8N_DIAGNOSTICS_ENABLED", "N8N_VERSION_NOTIFICATIONS_ENABLED", "N8N_PERSONALIZATION_ENABLED",
         "N8N_HIRING_BANNER_ENABLED", "N8N_DISABLED_MODULES", "N8N_RUNNERS_BROKER_LISTEN_ADDRESS",
         "N8N_RUNNERS_AUTH_TOKEN", "EXECUTIONS_DATA_SAVE_ON_SUCCESS", "WAB_API_URL", "WAB_NODE_KEY", "WAB_START_SECRET",
+        "WAB_REQUEST_TIMEOUT_SECONDS",
       ]))
     )
     error_message = "The simulation n8n may hold only the settings listed here, so a real key added later fails this test."
@@ -278,6 +279,11 @@ run "simulation_on_holds_no_real_key_and_reaches_only_its_own_subnet" {
       local.simulation_jobs["sim-bootstrap"].image == local.jobs.bootstrap.image
     )
     error_message = "The simulation n8n must run the platform n8n's image and guards, and the platform's bootstrap."
+  }
+
+  assert {
+    condition     = local.simulation_apps["sim-n8n"].env.WAB_REQUEST_TIMEOUT_SECONDS == local.apps.n8n.env.WAB_REQUEST_TIMEOUT_SECONDS
+    error_message = "The simulation n8n must give up on a read as soon as the platform's n8n does (ADR 0056)."
   }
 
   assert {

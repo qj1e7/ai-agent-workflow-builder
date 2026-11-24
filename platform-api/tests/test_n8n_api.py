@@ -335,6 +335,8 @@ def failures_for(n8n: FakeN8n) -> N8nWorkflows:
 
 
 RAN = ExecutionFacts("wf1", "webhook", None, None, "v1")
+READ_BLOCK = {"name": "Read release", "type": "CUSTOM.wabRead"}
+"""The failed block as the fake's error names it."""
 
 
 async def test_the_sweep_reads_how_each_execution_ended_from_n8n_s_own_record() -> None:
@@ -346,7 +348,9 @@ async def test_the_sweep_reads_how_each_execution_ended_from_n8n_s_own_record() 
     failures = failures_for(n8n)
     ended = {e: await failures.ended(N8nExecutionId(e)) for e in ("45", "46", "running")}
     assert ended == {
-        "45": FailedExecution(N8nExecutionId("45"), RAN, "Read release", "GitHub answered 503."),
+        "45": FailedExecution(
+            N8nExecutionId("45"), RAN, "Read release", "GitHub answered 503.", READ_BLOCK
+        ),
         "46": Finished(N8nExecutionId("46")),
         "running": None,
     }
@@ -363,12 +367,41 @@ async def test_a_failure_is_the_block_and_the_words_from_n8n_s_own_record() -> N
     n8n.execution("46", "error", last_node="Compare", nonce="start_1", retry_of="44")
     failures = failures_for(n8n)
     assert await failures.failure(N8nExecutionId("45")) == FailedExecution(
-        N8nExecutionId("45"), RAN, "Read release", "GitHub answered 503."
+        N8nExecutionId("45"), RAN, "Read release", "GitHub answered 503.", READ_BLOCK
     )
     retried = ExecutionFacts("wf1", "webhook", N8nExecutionId("44"), "start_1", "v1")
     assert await failures.failure(N8nExecutionId("46")) == FailedExecution(
         N8nExecutionId("46"), retried, "Compare", None
     )
+
+
+async def test_a_failure_carries_the_failed_block_as_the_execution_ran_it() -> None:
+    """The block's type, parameters and retry settings, from the workflow the execution ran, so
+    the stop can name the source it called and the tries n8n made."""
+    n8n = FakeN8n()
+    n8n.execution("45", "error", failed=("Get releases", "The connection was aborted"))
+    github = {
+        "name": "Get releases",
+        "type": "n8n-nodes-base.github",
+        "typeVersion": 1.1,
+        "parameters": {"resource": "release", "operation": "getAll"},
+        "retryOnFail": True,
+        "maxTries": 3,
+    }
+    other = {"name": "Done", "type": "n8n-nodes-base.noOp", "typeVersion": 1, "parameters": {}}
+    n8n.executions["45"]["workflowData"] = {"nodes": [other, github]}
+    failures = failures_for(n8n)
+    failed = await failures.ended(N8nExecutionId("45"))
+    assert isinstance(failed, FailedExecution) and failed.block == github
+    assert await failures.failure(N8nExecutionId("45")) == failed
+
+
+async def test_a_failure_without_the_workflow_takes_the_block_from_n8n_s_error() -> None:
+    n8n = FakeN8n()
+    n8n.execution("45", "error", failed=("Read release", "GitHub answered 503."))
+    failed = await failures_for(n8n).failure(N8nExecutionId("45"))
+    assert isinstance(failed, FailedExecution)
+    assert failed.block == READ_BLOCK
 
 
 async def test_an_execution_that_did_not_end_in_an_error_is_no_failure() -> None:
@@ -475,7 +508,7 @@ async def test_the_sweep_reads_an_execution_s_data_only_once_it_failed() -> None
     assert await N8nExecutions(api_for(n8n)).landed(N8nExecutionId("46"))
     assert n8n.data_reads == []
     assert await failures.ended(N8nExecutionId("47")) == FailedExecution(
-        N8nExecutionId("47"), RAN, "Read release", "GitHub answered 503."
+        N8nExecutionId("47"), RAN, "Read release", "GitHub answered 503.", READ_BLOCK
     )
     assert n8n.data_reads == ["47"]
 

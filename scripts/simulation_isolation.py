@@ -109,6 +109,7 @@ SERVICES = {
             "WAB_NODE_KEY",
             "WAB_START_SECRET",
             "NODE_EXTRA_CA_CERTS",
+            "WAB_REQUEST_TIMEOUT_SECONDS",
         },
         frozenset({"sim", "runners"}),
     ),

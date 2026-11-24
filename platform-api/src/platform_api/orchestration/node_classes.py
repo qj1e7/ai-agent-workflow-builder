@@ -194,6 +194,11 @@ class Use:
     """Switches a notice leaves off, such as Slack's link_names, which turns a written @channel
     into a call to everyone in it."""
 
+    @property
+    def system(self) -> str:
+        """The outside system, as the tag's last word names it: Jira in Reads Jira."""
+        return self.tag.split()[-1]
+
 
 @dataclass(frozen=True)
 class OnType:
@@ -202,6 +207,13 @@ class OnType:
     """By version, written as `version_key` writes it."""
     uses: Mapping[str, Use]
     """By version, for one of n8n's own nodes for an outside system."""
+
+    @property
+    def system(self) -> str | None:
+        """The outside system one of n8n's own nodes reaches, whichever version, as its rows that
+        say what it does name it. None for any other type."""
+        named = {use.system for use in self.uses.values()}
+        return named.pop() if len(named) == 1 else None
 
 
 @dataclass(frozen=True)
@@ -276,6 +288,23 @@ class NodeClasses:
         if chosen == "off":
             return Off("operation", what)
         return Runs(chosen, entry.uses.get(str(key)))
+
+    def doing(
+        self, node_type: str, version: object, parameters: Mapping[str, object]
+    ) -> tuple[str, On] | None:
+        """What a block runs to do, as `verdict` reads it, such as ("issue getAll", "read") for a
+        Jira search. None when the file turns it off or doesn't class it."""
+        entry = self._types.get(node_type)
+        key = version_key(version)
+        classed = None if not isinstance(entry, OnType) or key is None else entry.versions.get(key)
+        if classed is None:
+            return None
+        picked = _what(classed, parameters)
+        if isinstance(picked, Off) or picked[1] == "off":
+            return None
+        what, on = picked
+        assert on != "off"
+        return what, on
 
     def unclassed(self, served: Iterable[Mapping[str, Any]]) -> list[str]:
         """Every way the node types n8n serves, as its `/types/nodes.json` lists them, and the

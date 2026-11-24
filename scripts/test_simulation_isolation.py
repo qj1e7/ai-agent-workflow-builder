@@ -64,6 +64,7 @@ def good_sim() -> dict[str, Any]:
                     "WAB_NODE_KEY": made_up("SIM_NODE_KEY"),
                     "WAB_START_SECRET": made_up("SIM_START_SECRET"),
                     "NODE_EXTRA_CA_CERTS": "/wab-test-ca/ca.pem",
+                    "WAB_REQUEST_TIMEOUT_SECONDS": "30",
                 },
                 "networks": {"sim": None, "runners": {"aliases": ["n8n-broker"]}},
                 "volumes": [{"type": "volume", "source": "slack-ca", "target": "/wab-test-ca"}],

@@ -7,6 +7,7 @@ from typing import Final, Literal, Protocol
 from pydantic import Field
 
 from platform_api.monitoring.events import RunFailedData
+from platform_api.monitoring.source_stops import CAUSES, SourceStop, headline, read_stop
 from platform_api.shared import JIRA_SITE_CHANGED, NO_START_BLOCK, WRITE_STOP_ADVICE, RunId
 from platform_api.wire import FailureReason, WireModel
 
@@ -191,7 +192,28 @@ def explain(reason: FailureReason) -> Advice:
     return ADVICE[reason]
 
 
+def _source_stop(failure: RunFailedData) -> SourceStop | None:
+    if failure.reason != "WorkflowNodeError" or not failure.retryable:
+        return None
+    return read_stop(failure.message)
+
+
+def source_advice(stop: SourceStop) -> Advice:
+    """What a block that got no usable answer from its source tells, from the stop's own facts."""
+    source = stop.source or "the source"
+    return Advice(
+        explanation=headline(stop),
+        likely_cause=CAUSES[stop.delay],
+        suggested_action="retry",
+        suggestion="Retry the run in a few minutes. If it stops here again, check that "
+        f"{source} is up and that n8n can reach it.",
+    )
+
+
 def explain_failure(failure: RunFailedData) -> Advice:
+    stop = _source_stop(failure)
+    if stop is not None:
+        return source_advice(stop)
     if failure.reason == "AgentError" and not failure.retryable:
         # The work leg's failure message starts with the agent's error type, as "ModelNeeded: ...".
         return KNOWN_AGENT_STOPS.get(failure.message.partition(": ")[0], AGENTS_STOPPED)
@@ -297,21 +319,25 @@ def _safe_to_retry(failure: RunFailedData, retry: RetryAnswer) -> str:
     return f"Yes. {wait}Nothing was written, so a retry is safe."
 
 
-DIDNT_ANSWER: Final = re.compile(r"\bGitHub (?:returned 5\d\d|could not be reached)\b")
-"""The runtime's words when GitHub gave no usable answer, every try."""
+RUNTIME_SOURCES: Final = ("GitHub", "Jira", "Confluence")
+"""The sources the agent runtime reads for an agent, as its fixed sentences name them
+(agent_runtime's github.py, jira.py, confluence.py and release_source.py)."""
+DIDNT_ANSWER: Final = re.compile(
+    rf"(?:^|: |\. )(?P<source>{'|'.join(RUNTIME_SOURCES)}) "
+    r"(?:returned 5\d\d|could not be reached)\b"
+)
+"""The runtime's sentence when one of those sources gave no usable answer, every try, at the
+start of the message or of one of its sentences."""
 
 
 def what_happened(failure: RunFailedData, at: datetime | None = None) -> str:
-    """One sentence: GitHub didn't answer, with the time it stopped when that is known, or the
-    advice's explanation. Every place that names a stop says this sentence. A place that shows
-    the time beside it leaves `at` out."""
-    if (
-        failure.reason == "AgentError"
-        and failure.retryable
-        and DIDNT_ANSWER.search(failure.message)
-    ):
+    """One sentence: the source that didn't answer, with the time it stopped when that is known,
+    or the advice's explanation. Every place that names a stop says this sentence. A place that
+    shows the time beside it leaves `at` out."""
+    found = DIDNT_ANSWER.search(failure.message)
+    if failure.reason == "AgentError" and failure.retryable and found is not None:
         when = "" if at is None else f" at {at.hour}:{at.minute:02d}"
-        return f"GitHub didn't answer{when}."
+        return f"{found.group('source')} didn't answer{when}."
     return explain_failure(failure).explanation
 
 
