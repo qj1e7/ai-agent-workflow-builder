@@ -20,6 +20,9 @@ emails, user and account ids, avatars and text people wrote are never kept. The 
 - text: never kept. Any text becomes a fixed made-up value, since text people wrote may name
   anyone. A link is text too, and it is rebuilt on a made-up place, or becomes a fixed link.
 
+A value longer than its field ever is, such as 80 characters for a version, is left out before
+any pattern reads it, so no value can make a pattern take long.
+
 A value kept that has the shape of a key, such as a long run of letters and digits or a known
 key's prefix, is masked, as traces are (agent-runtime's monitoring/masking.py).
 
@@ -57,7 +60,8 @@ SAMPLE_ITEMS: Final = 100
 SAMPLE_LIMIT: Final = 200
 """The most samples a store keeps besides the made-up ones. A new one forgets the oldest."""
 
-_VERSION: Final = re.compile(r"^(?=[^ ]*\d+\.\d+)[A-Za-z0-9][A-Za-z0-9._+=@-]{0,79}$")
+_VERSION: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+=@-]*$")
+_DOTTED: Final = re.compile(r"\d+\.\d+")
 _EMAIL: Final = re.compile(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}")
 _TIME: Final = re.compile(
     r"^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$"
@@ -73,9 +77,12 @@ _KEY_SHAPE: Final = re.compile(
 
 @dataclass(frozen=True)
 class Shaped:
-    """Kept when the value has this shape, else left out."""
+    """Kept when the value is no longer than `longest` and has this shape, and holds `holds` when
+    it names one, else left out. The length is checked first."""
 
     pattern: re.Pattern[str]
+    longest: int
+    holds: re.Pattern[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -132,10 +139,10 @@ ALLOW_LISTS: Final[Mapping[AnswerKind, AllowList]] = {
     "github.release": AllowList(
         "A GitHub release",
         {
-            "tag_name": Shaped(_VERSION),
+            "tag_name": Shaped(_VERSION, 80, _DOTTED),
             "name": SameAs("tag_name"),
-            "published_at": Shaped(_TIME),
-            "created_at": Shaped(_TIME),
+            "published_at": Shaped(_TIME, 32),
+            "created_at": Shaped(_TIME, 32),
             "html_url": Rebuilt("https://github.com/sample/sample/releases/tag/{}", "tag_name"),
             "prerelease": Flag(),
             "draft": Flag(),
@@ -147,9 +154,9 @@ ALLOW_LISTS: Final[Mapping[AnswerKind, AllowList]] = {
         "A release our Read block read",
         {
             "kind": OneOf(("release",)),
-            "id": Shaped(_VERSION),
+            "id": Shaped(_VERSION, 80, _DOTTED),
             "name": SameAs("id"),
-            "published_at": Shaped(_TIME),
+            "published_at": Shaped(_TIME, 32),
         },
         {"suffix": "id", "empty_field": "published_at", "long_text": "name"},
     ),
@@ -168,11 +175,11 @@ ALLOW_LISTS: Final[Mapping[AnswerKind, AllowList]] = {
     "jira.issue": AllowList(
         "A Jira issue",
         {
-            "key": Shaped(_ISSUE_KEY),
+            "key": Shaped(_ISSUE_KEY, 30),
             "fields.summary": Text(ISSUE_SUMMARY),
             "fields.status.name": OneOf(("To Do", "In Progress", "Done")),
-            "fields.created": Shaped(_TIME),
-            "fields.updated": Shaped(_TIME),
+            "fields.created": Shaped(_TIME, 32),
+            "fields.updated": Shaped(_TIME, 32),
         },
         {"empty_field": "fields.status.name", "long_text": "fields.summary"},
     ),
@@ -210,8 +217,11 @@ def _kept(rule: Rule, value: object, item: Mapping[str, Any]) -> tuple[bool, obj
     """Whether the field stays, and with what value. A rule that refers to another field reads
     it from what is already kept."""
     match rule:
-        case Shaped(pattern):
-            if isinstance(value, str) and pattern.match(value) and not _EMAIL.search(value):
+        case Shaped(pattern, longest, holds):
+            if not isinstance(value, str) or len(value) > longest:
+                return False, None
+            held = holds is None or holds.search(value) is not None
+            if held and pattern.match(value) and not _EMAIL.search(value):
                 return True, _masked(value)
             return False, None
         case Flag():

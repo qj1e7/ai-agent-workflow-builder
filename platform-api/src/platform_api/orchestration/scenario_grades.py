@@ -13,7 +13,9 @@ What code expects of each kind:
   nothing is written. At one of n8n's own blocks, a timeout's words are ones the troubleshooter
   names (block_sources.source_stop).
 - Approver says no: it ends as Declined, with nothing written.
-- Odd data: it ends in one of the cases above, never in a failure with no reason.
+- Odd data: it ends in one of the cases above, never in a failure with no reason. A stop
+  counts only with our own words, or words the troubleshooter names: a block that throws on the
+  odd data fails.
 
 Whatever the kind, a run that asks to write with no yes fails. A pinned block never counts as run,
 since n8n shows it as run although it never ran. It is listed as not tried, with why.
@@ -96,7 +98,9 @@ class _Seen:
     at: str | None = None
     """The block that stopped it."""
     named: bool = False
-    """Whether the troubleshooter names the stop as a source's."""
+    """Whether the stop is in our own words, or words the troubleshooter names."""
+    said: str = ""
+    """The words of the stop."""
 
 
 def _changes(count: int) -> str:
@@ -141,13 +145,14 @@ def _stopped(plan: SimulationPlan, run: SimulatedRun, execution: ExecutionRecord
         # The gateway's own words, as n8n shows only its status for an answer to try again.
         said = next((c.detail for c in reversed(run.calls) if c.block == at and c.detail), words)
         if said:
-            return _Seen("stopped", f'"{at}" stopped it: {said}', at, named=True)
+            return _Seen("stopped", f'"{at}" stopped it: {said}', at, named=True, said=said)
     if not words:
         return _Seen("failed", f'It failed at "{at}" with no words for why.', at)
     if block.role in ("read", "notice") and block.mode != "pinned":
         stop = source_stop(at, execution.failed_block, words)
         said = words if stop is None else stop_words(stop)
-        return _Seen("stopped", f'"{at}" stopped it: {said}', at, named=stop is not None)
+        named = stop is not None
+        return _Seen("stopped", f'"{at}" stopped it: {said}', at, named=named, said=said)
     return _Seen("failed", f'It failed at "{at}", which is not a stop with a reason: {words}', at)
 
 
@@ -229,11 +234,12 @@ def _problem(
             block = plan.block(seen.at)
             own = block is not None and not block.node_type.startswith(OURS)
             if staged.kind == "timeout" and own and not seen.named:
-                said = seen.happened.removeprefix(f'"{seen.at}" stopped it: ')
-                return f'"{seen.at}" stopped it, but not as a slow source: {said}'
+                return f'"{seen.at}" stopped it, but not as a slow source: {seen.said}'
             return None
         case "approver_says_no":
             return None if seen.ending == "declined" else seen.happened
+        case "odd_data" if seen.ending == "stopped" and not seen.named:
+            return f'It failed at "{seen.at}", which is not a stop with a reason: {seen.said}'
         case "odd_data":
             return None if seen.ending in WITH_A_REASON else seen.happened
 

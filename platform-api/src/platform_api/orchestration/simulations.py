@@ -156,9 +156,11 @@ class Simulations:
             ended = await self._ended(execution)
             return grade(plan, staged, self._calls.run(run.nonce), ended)
         finally:
-            await self._remove(copied.workflow_id)
-            if github is not None:
-                await github.play(None)
+            try:
+                await self._remove(copied.workflow_id)
+            finally:
+                if github is not None:
+                    await github.play(None)
 
     async def _ended(self, execution: str) -> ExecutionRecord | None:
         """n8n's record with its data, once the run ends or the wait is over."""
