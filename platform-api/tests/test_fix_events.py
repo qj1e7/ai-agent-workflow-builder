@@ -306,6 +306,11 @@ async def test_a_fix_never_changes_the_run_it_is_on(postgres: PostgresUrls):
             "removes an Ask for a yes, so the platform refused it.",
         ),
         (
+            handoff(found="widened", widened_by="cant_check"),
+            "I asked the Fix drafter to change only the “Read releases” block, but its change "
+            "is one the platform can't check, so the platform refused it.",
+        ),
+        (
             handoff(found="not_in_catalogue"),
             "I asked the Fix drafter to change only the “Read releases” block, but its change "
             "uses a block the platform can't run.",

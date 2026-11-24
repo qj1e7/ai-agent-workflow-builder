@@ -58,6 +58,10 @@ def test_the_set_covers_each_red_team_bar():
         "widen-by-changing-a-persons-setting",
         "widen-outside-what-was-asked",
         "drafter-gives-no-answer",
+        "widen-with-an-expression-that-builds-an-address",
+        "widen-with-code-that-calls-out",
+        "widen-with-a-sql-query",
+        "widen-with-an-expression-that-reads-a-key",
     ):
         assert bar in ids
 

@@ -142,6 +142,7 @@ def test_a_workflow_made_in_n8n_reads_back_with_every_key_kept_out():
         KeptPlace("Read the tracker", "url"),
         KeptPlace("Read the tracker", "options.password"),
         KeptPlace("Read the tracker", "jsonHeaders"),
+        KeptPlace("Read the tracker", "body"),
     }
     blocks = {b.name: b.parameters for b in found.plan.blocks}
     headers = blocks["Read releases"]["headerParameters"]["parameters"]
@@ -149,7 +150,7 @@ def test_a_workflow_made_in_n8n_reads_back_with_every_key_kept_out():
         {"name": "Authorization", "value": KEPT},
         {"name": "Accept", "value": "application/json"},
     ]
-    assert blocks["Read the tracker"]["body"] == "short note"
+    assert blocks["Read releases"]["url"].startswith("https://api.github.com/")
     [channel] = [s for s in found.plan.settings if s.kind == "channel"]
     assert (channel.value, channel.mark) == ("#support", "filled")
 
@@ -180,6 +181,104 @@ def test_a_setting_that_fills_a_key_s_place_keeps_its_value_out():
     assert settings["repository"] == KEPT
     assert settings["jira_project"] == "MOCK"
     assert out.kept == (KeptPlace(None, "settings.repository"),)
+
+
+def with_parameters(**parameters: Any) -> WorkflowPlan:
+    """The release check with these parameters on Read new releases."""
+    plan = release_check()
+    blocks = [
+        b.model_copy(update={"parameters": {**b.parameters, **parameters}})
+        if b.name == "Read new releases"
+        else b
+        for b in plan.blocks
+    ]
+    return plan.model_copy(update={"blocks": blocks})
+
+
+def settings_of(plan: WorkflowPlan) -> dict[str, str | None]:
+    return {s.id: s.value for s in plan.settings}
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {"url": "https://tracker.example.net/api?api_key=<<repository>>&page=1"},
+        {"extra": "Bearer <<repository>>"},
+        {"extra": "sent as token=<<repository>> each time"},
+        {"extra": "X-Api-Key: <<repository>>"},
+        {"jsonHeaders": '{"X-Api-Key": "<<repository>>"}'},
+        {"jsonHeaders": '={{ {"x-api-key": "<<repository>>"} }}'},
+        {"login": "https://bot:<<repository>>@tracker.example.net/"},
+    ],
+    ids=[
+        "in an address's query",
+        "after Bearer",
+        "as name=value",
+        "as name: value",
+        "under a key's name in JSON",
+        "in JSON inside an expression",
+        "as an address's password",
+    ],
+)
+def test_a_setting_whose_placeholder_stands_where_a_key_goes_keeps_its_value_out(
+    parameters: dict[str, Any],
+):
+    out = keys_kept_out(with_parameters(**parameters))
+    assert settings_of(out.plan)["repository"] == KEPT
+    assert settings_of(out.plan)["jira_project"] == "MOCK"
+    assert "langchain-ai/langgraph" not in out.plan.model_dump_json()
+
+
+def test_a_setting_that_fills_a_parameter_named_as_a_key_keeps_its_value_out():
+    plan = release_check()
+    settings = [
+        s.model_copy(
+            update={"fills": [*s.fills, s.fills[0].model_copy(update={"parameter": "x.token"})]}
+        )
+        if s.id == "repository"
+        else s
+        for s in plan.settings
+    ]
+    out = keys_kept_out(plan.model_copy(update={"settings": settings}))
+    assert settings_of(out.plan)["repository"] == KEPT
+
+
+@pytest.mark.parametrize(
+    ("parameters", "path"),
+    [
+        ({"auth": {"apiKey": {"value": PASSWORD}}}, "auth.apiKey.value"),
+        ({"apiKey": [PASSWORD, API_KEY]}, "apiKey[0]"),
+        ({"jsonHeaders": '={{ {"Authorization": "' + PASSWORD + '"} }}'}, "jsonHeaders"),
+        ({"jsonHeaders": '={"x-session-id": "' + PASSWORD + '"}'}, "jsonHeaders"),
+        ({"notes": f"login with password: {PASSWORD}"}, "notes"),
+        ({"notes": f"secret={PASSWORD}"}, "notes"),
+        ({"jsCode": "return $input.all();"}, "jsCode"),
+        ({"pythonCode": "return _input.all()"}, "pythonCode"),
+        ({"functionCode": "return items;"}, "functionCode"),
+        ({"body": "Any words at all"}, "body"),
+        ({"jsonBody": '{"a": 1}'}, "jsonBody"),
+    ],
+    ids=[
+        "under a parent named as a key",
+        "in a list under a key's name",
+        "in JSON inside an expression",
+        "in JSON after the expression mark",
+        "as name: value",
+        "as name=value",
+        "JavaScript code",
+        "Python code",
+        "Function code",
+        "a free-text body",
+        "a JSON body",
+    ],
+)
+def test_keys_are_kept_out_wherever_they_hide_and_code_and_bodies_always(
+    parameters: dict[str, Any], path: str
+):
+    out = keys_kept_out(with_parameters(**parameters))
+    assert KeptPlace("Read new releases", path) in out.kept
+    for secret in (PASSWORD, API_KEY, "return"):
+        assert secret not in out.plan.model_dump_json()
 
 
 def test_a_drafted_plan_with_no_key_is_sent_as_it_is():

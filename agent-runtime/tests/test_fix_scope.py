@@ -185,11 +185,112 @@ def test_a_draft_that_moves_or_drops_a_key_the_platform_kept_out_touches_a_key()
         ({"continueOnFail": True}, "goes_past_a_failure"),
         ({"alwaysOutputData": True}, "goes_past_a_failure"),
         ({"disabled": True}, "goes_past_a_failure"),
-        ({"onError": "stopWorkflow"}, None),
+        ({"onError": "stopWorkflow"}, "cant_check"),
     ],
 )
 def test_what_lets_a_block_go_past_its_failure_widens(parameters: dict[str, Any], by: str | None):
     assert widened(fixed(**parameters)) == by
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "={{ 'New release ' + $env.GITHUB_TOKEN }}",
+        "={{ $credentials.token }}",
+        "={{ $secrets.vault.key }}",
+        "={{ $vars.apiKey }}",
+        "={{ $('Read new releases').params.url }}",
+        '={{ $node["Read new releases"].parameter["headerParameters"] }}',
+    ],
+)
+def test_an_expression_that_reads_a_key_or_another_block_s_parameters_adds_a_key(title: str):
+    assert widened(fixed(PROPOSE, title=title), (PROPOSE,)) == "adds_a_key"
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [
+        fixed(auth={"apiKey": {"value": "plain"}}),
+        fixed(PROPOSE, body="Authorization: Basic plain"),
+        fixed(PROPOSE, title="New release, token=abc123"),
+    ],
+    ids=["a value under a key's name", "name: value", "name=value"],
+)
+def test_a_key_is_found_under_its_parent_s_name_and_in_name_value_text(plan: WorkflowPlan):
+    assert widened(plan, (READ, PROPOSE)) == "adds_a_key"
+
+
+def test_a_readable_expression_that_reads_only_the_item_s_fields_is_a_small_fix():
+    title = "=New release {{ $json.release.tag }} of {{ $json['repo_name'] }}"
+    assert widened(fixed(PROPOSE, title=title), (PROPOSE,)) is None
+
+
+def test_an_expression_already_in_the_stopped_version_may_stay_as_it_is():
+    stopped = fixed(PROPOSE, title="={{ $env.TITLE.replace('a', 'b') }}")
+    renamed = [
+        b.model_copy(update={"parameters": {**b.parameters, "url": RELEASES + "?per_page=5"}})
+        if b.name == READ
+        else b
+        for b in stopped.blocks
+    ]
+    found = scope_of(stopped, stopped.model_copy(update={"blocks": renamed}), (READ,))
+    assert found == Inside((READ,))
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [
+        fixed(options={"timeout": 5000}),
+        fixed(PROPOSE, extra="anything"),
+        fixed(
+            queryParameters={
+                "parameters": [
+                    {"name": "next", "value": "={{ 'ht' + 'tps://collector.example.net/' }}"}
+                ]
+            }
+        ),
+        fixed(PROPOSE, title="={{ $json.title.replace('a', 'b') }}"),
+        fixed(PROPOSE, title="={{ $input.first().json.title }}"),
+        fixed(PROPOSE, title="New release {{ $json.tag }}"),
+    ],
+    ids=[
+        "a parameter its type doesn't list",
+        "a parameter nobody listed",
+        "an expression that builds an address",
+        "an expression that calls a method",
+        "an expression that reads more than the item",
+        "braces with no expression mark",
+    ],
+)
+def test_a_change_code_can_t_read_is_one_it_can_t_check(plan: WorkflowPlan):
+    assert widened(plan, (READ, PROPOSE)) == "cant_check"
+
+
+def one_block(node_type: str, before: dict[str, Any], after: dict[str, Any]) -> FixWidening | None:
+    """The scope check of a plan of one block, before and after its parameters change."""
+    plan = WorkflowPlan(
+        name="One block", blocks=[_block("Shape it", node_type, **before)], wires=[], settings=[]
+    )
+    changed = plan.model_copy(update={"blocks": [_block("Shape it", node_type, **after)]})
+    found = scope_of(plan, changed, ("Shape it",))
+    return found.by if isinstance(found, Widened) else None
+
+
+@pytest.mark.parametrize(
+    ("node_type", "name", "before", "after"),
+    [
+        ("n8n-nodes-base.code", "jsCode", "return $input.all();", "await fetch($json.next);"),
+        ("n8n-nodes-base.code", "pythonCode", "return _input.all()", "import os"),
+        ("n8n-nodes-base.function", "functionCode", "return items;", "return [];"),
+        ("n8n-nodes-base.postgres", "query", "SELECT 1", "DELETE FROM releases"),
+        ("n8n-nodes-base.ssh", "command", "ls", "cat ~/.n8n/config"),
+        ("CUSTOM.wabRead", "query", "status = Open", "project = OTHER"),
+    ],
+)
+def test_a_change_to_code_or_a_query_always_widens(
+    node_type: str, name: str, before: str, after: str
+):
+    assert one_block(node_type, {name: before}, {name: after}) == "cant_check"
 
 
 def test_a_setting_a_person_filled_stays_as_it_was():
