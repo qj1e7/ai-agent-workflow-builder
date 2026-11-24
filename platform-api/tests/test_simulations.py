@@ -4,8 +4,10 @@ small stand-in for the simulation n8n runs each copy in a line, calling the gate
 do, and plays mock GitHub as the mock does."""
 
 import json
+import re
 import secrets
 from collections.abc import Iterator, Mapping
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -50,6 +52,9 @@ DROPPED = (
 )
 NOT_FOUND = "The resource you are requesting could not be found"
 EXIT_OF = {"no_answer": 0, "yes": 1, "no": 2}
+PLANNERS_RELEASE_CHECK = Path(__file__).parent / "golden" / "n8n" / "release_check.json"
+"""The release check the Planner lays out, with the yes the safety checker added (test_layout)."""
+IS_TRUE = re.compile(r"^=\{\{ \$json\.(\w+) \}\}$")
 
 
 class FakeMockGitHub:
@@ -111,6 +116,7 @@ class LineN8n(FakeSimulationN8n):
         pins: Mapping[str, Any] = document.get("pinData") or {}
         ran: dict[str, str] = {}
         name: str | None = START
+        before: str | None = None
         while name is not None:
             node = nodes[name]
             exit_index, stop = 0, None
@@ -120,6 +126,8 @@ class LineN8n(FakeSimulationN8n):
                 count, exit_index, stop = await self._ours(execution, node)
             elif node["type"] == "n8n-nodes-base.github":
                 count, stop = self._github(node)
+            elif node["type"] == "n8n-nodes-base.if":
+                count, exit_index = 1, if_exit(node, self.served.get(before or "", []))
             else:
                 count = 1
             ran[name] = "error" if stop else "success"
@@ -132,7 +140,7 @@ class LineN8n(FakeSimulationN8n):
                 return
             if count == 0:
                 break
-            name = following(document, name, exit_index)
+            before, name = name, following(document, name, exit_index)
         self.records[execution] = record(execution, workflow, nonce, "success", ran)
 
     async def _ours(self, execution: str, node: Mapping[str, Any]) -> tuple[int, int, str | None]:
@@ -143,7 +151,8 @@ class LineN8n(FakeSimulationN8n):
             case "Read":
                 work: Any = ReadCall(p.get("source", "github_releases"), p.get("place", ""), None)
             case "Agent":
-                work = AgentCall(p.get("agent", ""), {})
+                rows = (p.get("inputs") or {}).get("input") or []
+                work = AgentCall(p.get("agent", ""), {r["name"]: r["value"] for r in rows})
             case "ProposeChange":
                 work = ProposeCall(p["action"], p["place"], p["title"], p["body"], p.get("subject"))
             case "AskForYes":
@@ -180,6 +189,18 @@ class LineN8n(FakeSimulationN8n):
         served = [{"tag_name": "1.2.16"}] if play.releases is None else list(play.releases)
         self.served[node["name"]] = served
         return len(served), None
+
+
+def if_exit(node: Mapping[str, Any], items: list[Any]) -> int:
+    """n8n's IF as the Planner's layout uses it: is one field of the item before it true. Exit 0
+    is true and 1 is false. A field the item lacks is false, as the simulation n8n showed for
+    Newer? on 25 Nov."""
+    [condition] = node["parameters"]["conditions"]["conditions"]
+    assert condition["operator"] == {"type": "boolean", "operation": "true", "singleValue": True}
+    field = IS_TRUE.match(condition["leftValue"])
+    assert field is not None, condition["leftValue"]
+    item = items[0] if items else {}
+    return 0 if item.get(field.group(1)) is True else 1
 
 
 def following(document: Mapping[str, Any], name: str, exit_index: int) -> str | None:
@@ -263,6 +284,19 @@ async def test_a_release_check_passes_each_of_the_six_scenarios(stack: Stack) ->
     assert isinstance(simulation, Simulation)
     assert (simulation.tried, simulation.passed) == (6, 6)
     assert stack.github.played == [], "no block reads mock GitHub"
+
+
+@pytest.mark.anyio
+async def test_the_release_check_the_planner_lays_out_passes_each_of_the_six_scenarios(
+    stack: Stack,
+) -> None:
+    """Its Version checker proposes the change itself, and Newer? goes on to Ask for a yes only
+    when the checker's answer says newer."""
+    simulation = await stack.simulate(json.loads(PLANNERS_RELEASE_CHECK.read_text()))
+    assert verdicts(simulation) == dict.fromkeys(KINDS, "passed"), simulation
+    assert isinstance(simulation, Simulation)
+    happy = next(graded for graded in simulation.results if graded.kind == "happy_path")
+    assert "Ask for a yes" in happy.ran and "Nothing to change" not in happy.ran
 
 
 @pytest.mark.anyio

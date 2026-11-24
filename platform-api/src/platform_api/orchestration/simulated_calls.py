@@ -7,7 +7,9 @@ There our blocks call the simulation gateway in place of platform-api, through t
   activity log, and the gateway has no database.
 - Read gets the scenario's answer: recorded items, mock GitHub's releases, or a source that is
   not found or does not answer in time, played at once.
-- Agent gets a recorded reply. The gateway calls no model.
+- Agent gets a recorded reply. The gateway calls no model. The Version checker's answer says,
+  as platform-api's does, whether it found a newer release, so the release check's Newer?
+  block plays.
 - Ask for a yes gets the scenario's answer, yes, no or no answer, and asks nobody. The wake goes
   only to the simulation n8n.
 - Every write is refused, as the write gateway refuses a test run's write, and the changes it
@@ -69,6 +71,8 @@ from platform_api.orchestration.n8n_calls import (
     Waiting,
     WriteAnswer,
     WriteCall,
+    release_compared,
+    release_of,
 )
 from platform_api.orchestration.tell import Told
 from platform_api.orchestration.write_actions import Json
@@ -467,8 +471,8 @@ class SimulatedCalls:
         match call.work:
             case ReadCall(source, place):
                 return await self._read(scenario, call.node_name, source, place)
-            case AgentCall():
-                return self._agent(run, scenario, call.node_name)
+            case AgentCall() as agent:
+                return self._agent(run, scenario, call.node_name, agent)
             case ProposeCall(action, place, title, body, subject):
                 change = ProposedChange(
                     block=call.node_name,
@@ -514,7 +518,11 @@ class SimulatedCalls:
             case "timeout":
                 return TryLater(SOURCE_TIMED_OUT)
 
-    def _agent(self, run: SimulatedRun, scenario: Scenario, block: str) -> CallResult:
+    def _agent(
+        self, run: SimulatedRun, scenario: Scenario, block: str, agent: AgentCall
+    ) -> CallResult:
+        """The recorded reply, with what platform-api adds to it: the Version checker's answer
+        says whether it found a newer release, as the release check's Newer? block reads it."""
         given = _given(scenario, block)
         if isinstance(given, Refused):
             return given
@@ -524,13 +532,34 @@ class SimulatedCalls:
                     proposed = ProposedChange(block=block, **change.model_dump())
                     run.proposed.append(proposed)
                     self._count(run, proposed)
-                return Answer(tuple(cast(Mapping[str, Json], item) for item in given.items))
+                items = tuple(cast(Mapping[str, Json], item) for item in given.items)
+                repo = release_of(agent.agent, agent.inputs)
+                if repo is not None:
+                    newer, version = bool(given.proposes), self._newest_read(run, repo)
+                    items = tuple(
+                        release_compared(item, newer=newer, version=version) for item in items
+                    )
+                return Answer(items)
             case "timeout":
                 return TryLater(AGENT_TIMED_OUT)
             case _:
                 return Refused(
                     409, f'A simulation calls no model. Give "{block}" a recorded reply.'
                 )
+
+    def _newest_read(self, run: SimulatedRun, repo: str) -> str | None:
+        """The newest release the run read from the repository, which platform-api reads again
+        for the Version checker. None when the run read none there."""
+        for call in reversed(run.calls):
+            if call.kind != "read" or call.asked.get("place") != repo:
+                continue
+            if call.asked.get("source") != GITHUB_RELEASES:
+                continue
+            kept = self._kept.get((N8nExecutionId(call.execution_id), call.block))
+            if kept is not None and isinstance(kept[1], Answer) and kept[1].items:
+                newest = kept[1].items[0].get("id")
+                return newest if isinstance(newest, str) else None
+        return None
 
     def _ask(
         self, run: SimulatedRun, scenario: Scenario, execution: N8nExecutionId, resume_url: str

@@ -402,6 +402,32 @@ def test_an_agent_takes_a_recorded_reply_and_its_proposals_join_the_run(gw: Gate
     assert [(p["block"], p["title"]) for p in proposed] == [("Compare", "Upgrade")]
 
 
+CHECKER = {
+    **AGENT,
+    "agent": "crd_version_checker",
+    "inputs": {"GitHub repository": "a/b", "Jira project": "MOCK"},
+}
+OLDER = {**RELEASE, "id": "1.2.15", "name": "1.2.15"}
+
+
+@pytest.mark.parametrize("proposes", [True, False])
+def test_the_version_checker_says_whether_it_found_a_newer_release_as_platform_api_does(
+    gw: Gateway, proposes: bool
+) -> None:
+    """platform-api's Version checker answers newer when it proposes a change, with the newest
+    release our API read (n8n_call_service), and the Planner's release check goes on to Ask for a
+    yes only when it is newer. Here the newest release is the one the run read from that
+    repository."""
+    proposal = {"action": "jira.create_ticket", "place": "MOCK", "title": "Upgrade", "body": "x"}
+    reply = {"serve": "recorded", "items": [{"summary": "new"}], "proposes": [proposal] * proposes}
+    read = {"serve": "recorded", "items": [RELEASE, OLDER]}
+    gw.run(scenario({"Read releases": read, "Compare": reply}))
+    assert gw.call("calls/read", READ).status_code == 200
+    assert gw.call("calls/agent", CHECKER).json()["items"] == [
+        {"summary": "new", "newer": proposes, "version": "1.2.16"}
+    ]
+
+
 def test_a_repeat_returns_the_first_answer_and_other_content_is_refused(gw: Gateway) -> None:
     nonce = gw.run()
     first = gw.call("calls/read", READ).json()

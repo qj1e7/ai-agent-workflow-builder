@@ -61,7 +61,7 @@ scripts/simulation.sh down    # removes its containers, networks and volumes
 Our blocks in the simulation n8n call `http://gateway:8600` (ADR 0054, section 3). The gateway is its own service. It runs platform-api's image, but only its own app (`platform_api.orchestration.simulation_gateway`), and mounts platform-api's own router for our blocks, so each block gets the same answers, refusals and checks as from platform-api. It answers them from the simulated run's scenario:
 
 - Read gets recorded items, mock GitHub's releases, or a source that is not found or does not answer in time.
-- Agent gets a recorded reply. The gateway calls no model.
+- Agent gets a recorded reply. The gateway calls no model. As from platform-api, the Version checker's answer also says whether it found a newer release (`newer` when the reply proposes a change) and the newest release the run read, so the release check's Newer? block goes on to Ask for a yes.
 - Ask for a yes gets the scenario's yes, no or no answer, and asks nobody. Only the simulation n8n is woken.
 - Every write is refused with 403 "A simulation never writes.", as the write gateway refuses a test run's write. The gateway keeps how many of the changes proposed it would have made.
 - Tell answers `would_have_sent` and sends nothing.

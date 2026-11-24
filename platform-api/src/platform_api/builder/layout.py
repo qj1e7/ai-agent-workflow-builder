@@ -17,7 +17,6 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, cast
 
-from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.orchestration import (
     GITHUB_RELEASES,
     KEY_FOR_TYPE,
@@ -25,7 +24,9 @@ from platform_api.orchestration import (
     NODE_CLASSES,
     NODE_TYPES,
     NOTHING_TO_CHANGE_BLOCK,
+    REPO_INPUT,
     TYPE_OF,
+    VERSION_CHECKER_ID,
     WATCHLIST_CHECKER,
     WATCHLIST_PLACE,
     BlockKind,
@@ -54,7 +55,6 @@ START = "Start from the Portal"
 ABOUT = "About this workflow"
 READ_WATCHLIST = "Read the watchlist"
 CHECK_WATCHLIST = "Check the watchlist"
-REPO_INPUT = "GitHub repository"
 PROJECT_INPUT = "Jira project"
 
 STEP = 220
