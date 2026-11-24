@@ -3,17 +3,30 @@ import ready from '../../../../contracts/fixtures/builder/drafted.ready.json'
 import type { DraftedWorkflowView } from '../../api/types'
 import { EMPTY_DESK, desksReducer } from '../home/chatState'
 import { EMPTY, threadReducer } from '../home/threadState'
-import { addedWords, changingWords, declinedWords, draftedPill, draftedTitle, setUpLine, settledWords, stationsOf } from './drafted'
+import { addedWords, CHANGED_SINCE_CHECK, changingWords, checkedOnceWords, declinedWords, draftedPill, draftedTitle, ONE_TIME_CHECK, setUpLine, settledWords, stationsOf, TURN_ON_NOW, WAITING_FOR_CHECK } from './drafted'
 import { stillMoving } from '../../api/draftedQueries'
 
 describe('drafted workflow words', () => {
-  it('uses the same pill words the same states have everywhere', () => {
+  it('reads Draft until it is on, as ADR 0053’s four states say, whatever its one-time check stands at', () => {
     expect(draftedPill('drafting')?.label).toBe('Drafting')
     expect(draftedPill('draft')?.label).toBe('Draft')
-    expect(draftedPill('waiting')?.label).toBe('Waiting for a yes')
-    expect(draftedPill('approved')?.label).toBe('Approved')
-    expect(draftedPill('declined')?.label).toBe('Declined')
+    expect(draftedPill('waiting')?.label).toBe('Draft')
+    expect(draftedPill('approved')?.label).toBe('Draft')
+    expect(draftedPill('declined')?.label).toBe('Draft')
     expect(draftedPill('not_drafted')).toBeNull()
+  })
+
+  it('reads as the workflow it was set up as, once that is on or paused', () => {
+    expect(draftedPill('approved', false, 'draft')?.label).toBe('Draft')
+    expect(draftedPill('approved', false, 'on')?.label).toBe('On')
+    expect(draftedPill('approved', false, 'paused')?.label).toBe('Paused')
+  })
+
+  it('names the one-time check in the prototype’s words, and who gave it', () => {
+    expect(ONE_TIME_CHECK).toBe('An Approver checks it once before it first runs.')
+    expect(checkedOnceWords('Bob')).toBe('Bob checked it once.')
+    expect(WAITING_FOR_CHECK).toBe('Waiting for an Approver to check it.')
+    expect(TURN_ON_NOW).toBe('Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.')
   })
 
   it('leaves Start from the Portal out of the step line', () => {
@@ -38,6 +51,11 @@ describe('drafted workflow words', () => {
   it('reads an approved draft as setting up until n8n holds it', () => {
     expect(setUpLine(null).words).toBe('Setting it up in n8n.')
     expect(setUpLine({ state: 'set_up', use_case_id: 'uc', words: null })).toMatchObject({ kind: 'set_up', words: 'Set up as a draft.' })
+  })
+
+  it('says a version changed after the check in the platform’s own words, which name the button beside them', () => {
+    expect(CHANGED_SINCE_CHECK).toBe('Changed since it was approved. Press Turn on to ask for the check again.')
+    expect(setUpLine({ state: 'refused', use_case_id: null, words: null }).words).toBe(CHANGED_SINCE_CHECK)
   })
 
   it('keeps reading while the platform moves it, and stops once it settles', () => {

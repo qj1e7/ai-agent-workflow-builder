@@ -314,6 +314,20 @@ export function holdSetUp(queryClient: QueryClient, user: string, created: UseCa
   queryClient.setQueryData<SetUp>(keys.setUp(user, created.use_case_id), { created, at, testRunId: null, testKey, testAsked: null })
 }
 
+/**
+ * Turn on for a draft the platform set up elsewhere, as a drafted workflow once an Approver checked it: held as a set-up with no build
+ * log, so the set-up card's test run, and then on, follow as for any new workflow (ADR 0053, item 3).
+ */
+export function holdTurnOn(queryClient: QueryClient, user: string, useCaseId: string, at: number, testKey: string): void {
+  holdSetUp(queryClient, user, { use_case_id: useCaseId, version: 1, build_log: [] }, at, testKey)
+}
+
+export function useHoldTurnOn(): (useCaseId: string) => void {
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return (useCaseId) => holdTurnOn(queryClient, user, useCaseId, Date.now(), newIdempotencyKey())
+}
+
 const changeSetUp = (queryClient: QueryClient, user: string, useCaseId: string, change: Partial<SetUp>): void => {
   queryClient.setQueryData<SetUp>(keys.setUp(user, useCaseId), (held) => (held ? { ...held, ...change } : held))
 }

@@ -867,6 +867,11 @@ class NeedsYouFact(WireModel):
     fixes: int = Field(
         default=0, ge=0, description="Workflows that are on and can't run, which they can fix."
     )
+    setups: int = Field(
+        default=0,
+        ge=0,
+        description="Drafted workflows' one-time checks waiting for this Approver's yes.",
+    )
     total: int = Field(
         ge=0, description="The count Home shows under Needs you, the sum of the counts above."
     )
