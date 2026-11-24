@@ -84,6 +84,7 @@ type FixHandBack = Literal[
     "cost_limit",
     "time_limit",
     "gave_up",
+    "not_replayed",
 ]
 
 FOUND_BY: Final[Mapping[FixHandedTo, frozenset[FixFound]]] = {

@@ -423,6 +423,12 @@ Code's check that a fix's draft changes only the blocks the coordinator asked fo
 **Kept key**:
 What platform-api puts in a plan where a key stood, before it sends the plan for a fix, so no key's value leaves it. A value counts as a key by its name as well as by its shape (ADR 0055).
 
+**Replay of the stop**:
+The scenario code adds to a fix before its first simulation, built from the stopped run's own facts. For a source that was not found, the place the run read is gone and every other place answers. The stopped version must fail it and the fix must pass it, so a set of happy paths can't prove a fix that fixes nothing (ADR 0055).
+
+**Reached**:
+What a simulated run tried to reach, read from the simulation gateway's record and n8n's: a source, an agent card, a change or a place to tell, a mock, or an address n8n could not reach. A fix whose run reaches anything the stopped version neither names nor reached widens the change (ADR 0055).
+
 **Copier**:
 The part of run monitoring that copies each new activity event from PostgreSQL to Cosmos DB. It copies a run's events in order, and only one copier works on a run at a time. PostgreSQL keeps every event, so a copy that stops halfway goes on from the copied mark.
 _Avoid_: Sync, mirror

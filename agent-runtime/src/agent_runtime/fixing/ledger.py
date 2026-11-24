@@ -5,11 +5,14 @@ never writes here, and its "done" counts for nothing: `done_needs` decides when 
 and `made_progress` decides when the rounds stop."""
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Final, Literal
 
 from agent_runtime.contract import CauseFound, WorkflowPlan
 from agent_runtime.fixing.events import FixFound, FixRefusal, FixWidening
 from agent_runtime.fixing.ports import Scenario, ScenarioResult
+from agent_runtime.fixing.replay import REPLAY
+
+NEEDS_A_REPLAY: Final = "a replay of the stop that fails on the stopped version"
 
 
 @dataclass
@@ -73,6 +76,11 @@ class Ledger:
     stopped_at: frozenset[str]
     cause: CauseFound | None = None
     scenarios: dict[str, Scenario] = field(default_factory=dict[str, Scenario])
+    baseline: dict[str, ScenarioResult] = field(default_factory=dict[str, ScenarioResult])
+    """Each scenario's grade on the stopped version, tried before a draft's first simulation."""
+    allowed: set[str] = field(default_factory=set[str])
+    """What the stopped version names or reached in those tries. A draft's run that reaches
+    anything else widens the fix."""
     drafts: list[DraftTried] = field(default_factory=list[DraftTried])
     handoffs: int = 0
     turns: int = 0
@@ -95,8 +103,8 @@ class Ledger:
     def done_needs(self) -> list[str]:
         """What code still needs before the fix is done, or nothing when it is: a confirmed
         cause, a draft that changes the failed part and stays inside it, every scenario run on
-        that draft, at least one that applies, every one that applies passing, and the
-        checker's pass."""
+        that draft, at least one that applies, every one that applies passing, code's replay of
+        the stop failing on the stopped version, and the checker's pass."""
         if self.cause is None:
             return ["a confirmed cause"]
         draft = self.current()
@@ -113,6 +121,8 @@ class Ledger:
             needs.append("a scenario that applies")
         elif draft.failed():
             needs.append("every scenario that applies to pass")
+        if REPLAY not in self.baseline or self.baseline[REPLAY].verdict != "failed":
+            needs.append(NEEDS_A_REPLAY)
         if draft.checker is not True:
             needs.append("the checker's pass")
         return needs

@@ -16,6 +16,7 @@ from urllib.parse import unquote
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
+from agent_runtime.model_cost import PRICES
 from agent_runtime.monitoring.masking import MASKED_SHAPES
 from agent_runtime.planner_led import PLANNER_MODES, PlannerMode
 from evals.answer import ANSWER, ANSWER_LED
@@ -71,7 +72,8 @@ each case once."""
 ONLY_WHEN_NAMED: Final = frozenset({*PARTS_OF_REPLY, WORKFLOW_DRAFT.name})
 """Jobs a run of every job leaves out: the parts of the reply job, and the workflow drafter, whose
 one draft costs as much as 17 to 33 Planner messages (ADR 0051, section 7)."""
-PRICING = Path(__file__).parent / "pricing.json"
+PRICING = PRICES
+"""The price table the runtime ships, which the fix's cost count reads too."""
 # CI keeps the endpoints as secrets too. A URL can hold a password or a private host name.
 URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL", "AGENT_MODEL_BASE_URL")
 SECRET_ENVS = (

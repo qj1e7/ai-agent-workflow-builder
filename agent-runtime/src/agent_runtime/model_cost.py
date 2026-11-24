@@ -1,10 +1,22 @@
-"""What one model call costs, from its token counts and a price in `evals/pricing.json`'s shape.
-The eval's spend cap and a fix's cost count price calls the same way."""
+"""What one model call costs, from its token counts and a price in `pricing.json`'s shape. The
+eval's spend cap and a fix's cost count price calls the same way, from the one price table the
+runtime ships (ADR 0055, PR 5), so a fix's cost count works outside the evals too."""
 
+import json
 from collections.abc import Mapping
+from functools import cache
+from pathlib import Path
 from typing import Any, Final, cast
 
 CACHE_WRITES: Final = ("cache_creation", "ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens")
+PRICES: Final = Path(__file__).with_name("pricing.json")
+"""The price table, by `provider:model`. It is package data, so it is in the runtime image."""
+
+
+@cache
+def packaged_prices() -> dict[str, Mapping[str, Any]]:
+    """The price table the runtime ships, by `provider:model`."""
+    return cast(dict[str, Mapping[str, Any]], json.loads(PRICES.read_text()))
 
 
 def cached_tokens(usage: Mapping[str, Any]) -> tuple[int, int]:

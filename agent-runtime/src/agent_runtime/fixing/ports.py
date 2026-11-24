@@ -2,14 +2,15 @@
 
 The AI troubleshooter, the Fix drafter and the Scenario writer are sub-agents. The simulation, the
 scope check, the checker and the store of revisions are code. The Fix drafter
-(`fixing/drafter.py`) and the scope check (`fixing/scope.py`) are built. The simulation and the
-checker join in PR 5. None of them writes to a real system or a live workflow. Each takes data and
-gives data back, and the coordinator's code checks what comes back before the model reads it.
+(`fixing/drafter.py`) and the scope check (`fixing/scope.py`) are built. The Scenario writer, the
+simulation, the checker and the recorder are platform-api's (`fixing/platform_parts.py`). None of them
+writes to a real system or a live workflow. Each takes data and gives data back, and the
+coordinator's code checks what comes back before the model reads it.
 
 Every port but the scope check, which is pure code, gets `seconds`: what is left before the fix's
 deadline. It must stop by then. The coordinator stops waiting for it at the deadline anyway. The
-Fix drafter also gets `dollars_left`, what is left of the fix's cost cap as code counts it while
-the drafter works, and stops when nothing is left."""
+Fix drafter, the Scenario writer, the simulation and the checker also get `dollars_left`, what is
+left of the fix's cost cap as code counts it, and ask no model the fix can't pay for."""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -17,7 +18,14 @@ from typing import Annotated, Literal, Protocol
 
 from pydantic import Field, JsonValue, StringConstraints
 
-from agent_runtime.contract import CauseFound, WireModel, WorkflowPlan
+from agent_runtime.contract import (
+    CauseFound,
+    NoteKind,
+    RunBlockName,
+    ScenarioKind,
+    WireModel,
+    WorkflowPlan,
+)
 from agent_runtime.fixing.events import FixRecorder, FixWidening
 
 type ScenarioName = Annotated[
@@ -26,11 +34,12 @@ type ScenarioName = Annotated[
 
 
 class Scenario(WireModel):
-    """A situation to try a version in (ADR 0054), as the Scenario writer wrote it: how each
-    block that reads, and each Agent block, is served. The plays are the simulation's to read.
-    Code checks only that each block it names is a block of the version."""
+    """A situation to try a version in (ADR 0054), in the simulation's schema: its kind, and how
+    each block that reads, and each Agent block, is served. The plays are the simulation's to
+    check. Code checks only that each block it names is a block of the version."""
 
     name: ScenarioName
+    kind: ScenarioKind
     reads: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue], max_length=100)
     agents: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue], max_length=100)
 
@@ -39,6 +48,15 @@ class Scenario(WireModel):
 
 
 type Verdict = Literal["passed", "failed", "not_tried"]
+type Reach = Annotated[str, StringConstraints(min_length=1, max_length=300)]
+
+
+class ScenarioNote(WireModel):
+    """The explainer's picks for one failure, which code checked against the scenario's facts."""
+
+    block: RunBlockName
+    kind: NoteKind
+    source: RunBlockName | None = None
 
 
 class ScenarioResult(WireModel):
@@ -49,12 +67,26 @@ class ScenarioResult(WireModel):
     verdict: Verdict
     step: str | None = Field(default=None, description="The block where it failed, if it did.")
     why: str | None = Field(default=None, max_length=40, description="The grader's reason code.")
+    reached: list[Reach] = Field(
+        default_factory=list[str],
+        max_length=200,
+        description="What the run reached, from the gateway's and n8n's records, such as "
+        "read:github_releases, mock:github or host:example.com.",
+    )
+    note: ScenarioNote | None = Field(
+        default=None, description="The explainer's picks, when its model was asked."
+    )
 
 
 class Simulated(WireModel):
     results: list[ScenarioResult]
     not_reached: list[str] = Field(
         default_factory=list[str], description="Blocks no scenario reached: a gap in coverage."
+    )
+    named: list[Reach] = Field(
+        default_factory=list[str],
+        max_length=200,
+        description="What the version names in plain values, in the words `reached` uses.",
     )
 
 
@@ -112,7 +144,11 @@ class ScenarioWriter(Protocol):
     """Writes scenarios for the version, or more that reach the blocks in `cover`."""
 
     def write(
-        self, version: WorkflowPlan, cover: Sequence[str], seconds: float
+        self,
+        version: WorkflowPlan,
+        cover: Sequence[str],
+        seconds: float,
+        dollars_left: Callable[[], float],
     ) -> list[Scenario] | None: ...
 
 
@@ -120,7 +156,11 @@ class Simulation(Protocol):
     """Runs scenarios on a version in the simulation n8n, which holds no real key (ADR 0054)."""
 
     def run(
-        self, version: WorkflowPlan, scenarios: Sequence[Scenario], seconds: float
+        self,
+        version: WorkflowPlan,
+        scenarios: Sequence[Scenario],
+        seconds: float,
+        dollars_left: Callable[[], float],
     ) -> Simulated | None: ...
 
 
@@ -136,7 +176,9 @@ class ScopeCheck(Protocol):
 class Checker(Protocol):
     """The platform's grade of a version: the node allow list and the safety checker."""
 
-    def passes(self, version: WorkflowPlan, seconds: float) -> bool: ...
+    def passes(
+        self, version: WorkflowPlan, seconds: float, dollars_left: Callable[[], float]
+    ) -> bool: ...
 
 
 class Revisions(Protocol):
