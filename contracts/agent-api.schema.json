@@ -1194,15 +1194,35 @@
       "title": "CarryForward",
       "type": "object"
     },
+    "CauseCheck": {
+      "enum": [
+        "call",
+        "not_a_block",
+        "not_where_it_stopped",
+        "not_a_system",
+        "not_a_detail"
+      ],
+      "type": "string"
+    },
+    "CauseDetail": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_./-]*$",
+      "type": "string"
+    },
     "CauseFound": {
       "additionalProperties": false,
       "properties": {
-        "cause": {
-          "description": "Why the run stopped, in one short sentence as the person sees it. It passed every check and the verifier.",
-          "maxLength": 200,
-          "minLength": 1,
-          "title": "Cause",
-          "type": "string"
+        "detail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CauseDetail"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The one name the cause is about, copied from the stop in the shape its kind takes: a repository, a project's key, a field's name or a version. Or null."
         },
         "failed_part": {
           "description": "The blocks the cause is in. Code checked each is a block of the version and one where the run stopped.",
@@ -1214,16 +1234,33 @@
           "title": "Failed Part",
           "type": "array"
         },
+        "failure_kind": {
+          "$ref": "#/$defs/FailureKind",
+          "description": "What kind of failure stopped the run. Code checked the stop shows it, and sends unknown when it doesn't."
+        },
         "kind": {
           "const": "found",
           "default": "found",
           "title": "Kind",
           "type": "string"
+        },
+        "system": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CauseSystem"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The system the error came from, one the stop or a block where the run stopped names, or null for none."
         }
       },
       "required": [
-        "cause",
-        "failed_part"
+        "failed_part",
+        "system",
+        "failure_kind",
+        "detail"
       ],
       "title": "CauseFound",
       "type": "object"
@@ -1238,9 +1275,8 @@
           "type": "string"
         },
         "why": {
-          "description": "Why the rule table answers instead: the id of the check that failed, the verifier's flag, or call when the model's call failed.",
-          "title": "Why",
-          "type": "string"
+          "$ref": "#/$defs/CauseCheck",
+          "description": "Why the rule table answers instead: call when the model's call failed or its answer didn't parse, which is worth asking again, or the id of the check a field failed, which is final for that stop."
         }
       },
       "required": [
@@ -1290,7 +1326,7 @@
           "type": "array"
         },
         "within_seconds": {
-          "description": "How long the runtime has, counted from when it gets the request. Both model calls end by then, as after it the platform's rule table answers alone (ADR 0032).",
+          "description": "How long the runtime has, counted from when it gets the request. The model call ends by then, as after it the platform's rule table answers alone (ADR 0032).",
           "exclusiveMinimum": 0,
           "maximum": 10,
           "title": "Within Seconds",
@@ -1320,6 +1356,28 @@
           "$ref": "#/$defs/ModelProblem"
         }
       ]
+    },
+    "CauseSystem": {
+      "enum": [
+        "github",
+        "gitlab",
+        "bitbucket",
+        "jira",
+        "confluence",
+        "teams",
+        "slack",
+        "entra",
+        "azure",
+        "aws",
+        "docker",
+        "pypi",
+        "npm",
+        "servicenow",
+        "outlook",
+        "zendesk",
+        "gmail"
+      ],
+      "type": "string"
     },
     "CheckPartRequest": {
       "additionalProperties": false,
@@ -2105,6 +2163,19 @@
         "watchlist",
         "workflows",
         "needs_you"
+      ],
+      "type": "string"
+    },
+    "FailureKind": {
+      "enum": [
+        "not_found",
+        "refused",
+        "no_answer",
+        "wrong_value",
+        "changed_field",
+        "permission",
+        "limit",
+        "unknown"
       ],
       "type": "string"
     },

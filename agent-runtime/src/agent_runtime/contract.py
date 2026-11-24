@@ -1640,9 +1640,9 @@ explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
 
 
 # The AI troubleshooter's model version (ADR 0032, ADR 0055 section 10): a stopped run's facts in,
-# the cause and the failed part out, which code checks before anyone sees them.
+# the cause out as fields picked from those facts, which code checks. No words of the model's
+# cross: platform-api writes the sentence from the fields.
 
-CAUSE_LIMIT: Final = 200
 STOP_MESSAGE_LIMIT: Final = 2000
 EVENT_SUMMARY_LIMIT: Final = 400
 MOST_EVENTS: Final = 80
@@ -1650,6 +1650,45 @@ RUN_BLOCK_NAME_LIMIT: Final = 200
 MOST_RUN_BLOCKS: Final = 100
 
 type RunBlockName = Annotated[str, Field(min_length=1, max_length=RUN_BLOCK_NAME_LIMIT)]
+type CauseSystem = Literal[
+    "github",
+    "gitlab",
+    "bitbucket",
+    "jira",
+    "confluence",
+    "teams",
+    "slack",
+    "entra",
+    "azure",
+    "aws",
+    "docker",
+    "pypi",
+    "npm",
+    "servicenow",
+    "outlook",
+    "zendesk",
+    "gmail",
+]
+"""The systems a cause may name, each only when the run's facts name it."""
+type FailureKind = Literal[
+    "not_found",
+    "refused",
+    "no_answer",
+    "wrong_value",
+    "changed_field",
+    "permission",
+    "limit",
+    "unknown",
+]
+DETAIL_LIMIT: Final = 64
+DETAIL_NAME: Final = r"[A-Za-z0-9][A-Za-z0-9_./-]*"
+type CauseDetail = Annotated[
+    str, Field(min_length=1, max_length=DETAIL_LIMIT, pattern=f"^{DETAIL_NAME}$")
+]
+"""One name with no spaces, as a repository, a project's key or a field's name."""
+type CauseCheck = Literal[
+    "call", "not_a_block", "not_where_it_stopped", "not_a_system", "not_a_detail"
+]
 
 
 class StoppedRun(WireModel):
@@ -1683,8 +1722,8 @@ class CauseRequest(WireModel):
     within_seconds: float = Field(
         gt=0,
         le=10,
-        description="How long the runtime has, counted from when it gets the request. Both model "
-        "calls end by then, as after it the platform's rule table answers alone (ADR 0032).",
+        description="How long the runtime has, counted from when it gets the request. The model "
+        "call ends by then, as after it the platform's rule table answers alone (ADR 0032).",
     )
 
     @model_validator(mode="after")
@@ -1696,25 +1735,32 @@ class CauseRequest(WireModel):
 
 class CauseFound(WireModel):
     kind: Literal["found"] = "found"
-    cause: str = Field(
-        min_length=1,
-        max_length=CAUSE_LIMIT,
-        description="Why the run stopped, in one short sentence as the person sees it. It passed "
-        "every check and the verifier.",
-    )
     failed_part: list[RunBlockName] = Field(
         min_length=1,
         max_length=MOST_RUN_BLOCKS,
         description="The blocks the cause is in. Code checked each is a block of the version and "
         "one where the run stopped.",
     )
+    system: CauseSystem | None = Field(
+        description="The system the error came from, one the stop or a block where the run "
+        "stopped names, or null for none."
+    )
+    failure_kind: FailureKind = Field(
+        description="What kind of failure stopped the run. Code checked the stop shows it, and "
+        "sends unknown when it doesn't."
+    )
+    detail: CauseDetail | None = Field(
+        description="The one name the cause is about, copied from the stop in the shape its kind "
+        "takes: a repository, a project's key, a field's name or a version. Or null."
+    )
 
 
 class CauseKept(WireModel):
     kind: Literal["kept"] = "kept"
-    why: str = Field(
-        description="Why the rule table answers instead: the id of the check that failed, the "
-        "verifier's flag, or call when the model's call failed.",
+    why: CauseCheck = Field(
+        description="Why the rule table answers instead: call when the model's call failed or "
+        "its answer didn't parse, which is worth asking again, or the id of the check a field "
+        "failed, which is final for that stop.",
     )
 
 

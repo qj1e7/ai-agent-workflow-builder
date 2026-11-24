@@ -572,7 +572,7 @@ def create_app(
         chat = active.chat_source(body.model)
         if chat is None:
             return NO_MODEL
-        return find_cause(body, chat, verify_with=verifier_for(body.model) or chat)
+        return find_cause(body, chat)
 
     @app.post("/v1/workflows/draft", dependencies=[Depends(require_key)])
     def draft_a_workflow(body: WorkflowDraftRequest) -> WorkflowDraftResult:
