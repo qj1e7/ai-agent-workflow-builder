@@ -335,7 +335,7 @@ const SUB_AGENTS: Readonly<Partial<Record<DataOf<'fix_handoff'>['to'], AgentRef>
 }
 
 /** What the platform found that the fix can't use. */
-const REFUSED: ReadonlySet<DataOf<'fix_handoff'>['found']> = new Set(['not_in_version', 'not_where_it_stopped', 'widened', 'not_in_catalogue', 'refused', 'failed', 'no_answer'])
+const REFUSED: ReadonlySet<DataOf<'fix_handoff'>['found']> = new Set(['not_in_version', 'not_where_it_stopped', 'too_wide', 'widened', 'not_in_catalogue', 'refused', 'failed', 'no_answer'])
 
 type FixEvent = EventOf<'fix_started' | 'fix_handoff' | 'fix_round' | 'fix_proposed' | 'fix_handed_back'>
 

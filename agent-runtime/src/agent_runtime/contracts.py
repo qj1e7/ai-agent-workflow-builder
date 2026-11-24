@@ -114,7 +114,12 @@ from agent_runtime.contract import (
 from agent_runtime.free_reply import answer_of_envelope
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
-from agent_runtime.monitoring.masking import KEPT_KEY, KEY_SHAPE_SOURCES, SECRET_NAME_ENDS
+from agent_runtime.monitoring.masking import (
+    CODE_PARAMETERS,
+    KEPT_KEY,
+    KEY_SHAPE_SOURCES,
+    SECRET_NAME_ENDS,
+)
 from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
 from agent_runtime.tools import tool_list
 
@@ -1325,6 +1330,7 @@ def fixtures() -> dict[str, WireModel]:
             shapes=list(KEY_SHAPE_SOURCES),
             kept=KEPT_KEY,
             secret_name_ends=list(SECRET_NAME_ENDS),
+            code_parameters=list(CODE_PARAMETERS),
         ),
     }
 

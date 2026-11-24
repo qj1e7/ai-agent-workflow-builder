@@ -109,10 +109,25 @@ SECRET_NAME_ENDS: Final = (
     "credentials",
     "signature",
     "sessionid",
+    "secretkey",
+    "signingkey",
+    "encryptionkey",
+    "masterkey",
 )
 """How the name of a parameter, a header or a query parameter that holds a key ends, once its
 case and its separators are gone: accessToken, x-api-key and Authorization all do. A key needs
 no known shape to be one, so platform-api keeps out the value under such a name too."""
+CODE_PARAMETERS: Final = (
+    "jsCode",
+    "pythonCode",
+    "functionCode",
+    "code",
+    "query",
+    "sqlQuery",
+    "command",
+)
+"""Parameters that hold code, a query or a command. A fix never changes one, and platform-api
+keeps each out of a plan whole, as anything can stand in it, a key included."""
 _SEPARATORS: Final = re.compile(r"[\s_.\-]")
 
 

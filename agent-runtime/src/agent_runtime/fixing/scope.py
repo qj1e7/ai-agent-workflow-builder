@@ -24,7 +24,12 @@ from urllib.parse import parse_qsl, urlsplit
 from agent_runtime.contract import PlanBlock, PlanSetting, WorkflowPlan
 from agent_runtime.fixing.events import FixWidening
 from agent_runtime.fixing.ports import Inside, Scope, Widened
-from agent_runtime.monitoring.masking import KEPT_KEY, MASKED_SHAPES, names_a_secret
+from agent_runtime.monitoring.masking import (
+    CODE_PARAMETERS,
+    KEPT_KEY,
+    MASKED_SHAPES,
+    names_a_secret,
+)
 from agent_runtime.workflow_plan import PLACEHOLDER
 
 ASK_FOR_A_YES: Final = "CUSTOM.wabAskForYes"
@@ -39,7 +44,21 @@ WHAT_IT_DOES: Final = frozenset(
 """Top-level parameters that choose what a block does. A change to one can make a read a write."""
 WHERE_IT_GOES: Final = frozenset({"source", "where", "agent"})
 """Our blocks' parameters that choose the system: Read's source, Tell's where, Agent's card."""
-ADDRESS_ENDS: Final = ("url", "uri", "endpoint", "host", "hostname", "domain", "server", "site")
+ADDRESS_ENDS: Final = (
+    "url",
+    "uri",
+    "endpoint",
+    "host",
+    "hostname",
+    "domain",
+    "server",
+    "site",
+    "link",
+    "href",
+    "address",
+    "path",
+    "webhook",
+)
 """How the name of a parameter that holds an address ends, once its case is gone."""
 KEY_PARAMETERS: Final = frozenset(
     {
@@ -51,10 +70,9 @@ KEY_PARAMETERS: Final = frozenset(
     }
 )
 """Parameters that pick a key for the block."""
-CODE: Final = frozenset(
-    {"jsCode", "pythonCode", "functionCode", "code", "query", "sqlQuery", "command"}
-)
-"""Parameters that hold code, a query or a command, which a fix never changes."""
+CODE: Final = frozenset(CODE_PARAMETERS)
+"""Parameters that hold code, a query or a command, which a fix never changes. platform-api keeps
+the same list out of the plan, through key-shapes.json."""
 _CONDITION: Final = frozenset(
     {"conditions.conditions[].leftValue", "conditions.conditions[].rightValue"}
 )
@@ -92,14 +110,35 @@ NAME_VALUE: Final = re.compile(r"[\"']?([A-Za-z0-9_.\-]+)[\"']?\s*[:=]\s*(?!<<)[
 """A name, then : or =, then a value that isn't a setting's placeholder, as in token=abc or
 "Authorization": "Basic abc"."""
 URL: Final = re.compile(r"[a-z][a-z0-9+.\-]*://[^\s\"'<>]+", re.IGNORECASE)
-_INDEX: Final = re.compile(r"\[\d+\]")
+ANY_ITEM: Final = -1
+"""In a path a fix may change, any item of a list."""
+PATH_LIKE: Final = re.compile(r"[.\[\]]")
+"""What no parameter's own name holds: it would read as a path."""
 
-type Leaves = dict[str, Any]
+type Path = tuple[str | int, ...]
+"""Where a value stands: each key, and each item's place in a list."""
+type Leaves = dict[Path, Any]
+
+
+def _allowed(text: str) -> Path:
+    """A path of `MAY_CHANGE` as keys, with `ANY_ITEM` for each []."""
+    parts: list[str | int] = []
+    for part in text.split("."):
+        name, _, items = part.partition("[")
+        parts.append(name)
+        parts.extend(ANY_ITEM for _ in range(items.count("]")))
+    return tuple(parts)
+
+
+ALLOWED: Final[Mapping[str, frozenset[Path]]] = {
+    node_type: frozenset(_allowed(path) for path in paths)
+    for node_type, paths in MAY_CHANGE.items()
+}
 
 
 @dataclass(frozen=True)
 class Leaf:
-    path: str
+    path: Path
     name: str
     """The name the value goes by: its key, or for n8n's name and value pairs, as a header's or
     a query parameter's, the pair's name."""
@@ -147,8 +186,12 @@ def scope_of(stopped: WorkflowPlan, fixed: WorkflowPlan, change_only: Sequence[s
 
 
 def _widening(before: PlanBlock, after: PlanBlock) -> FixWidening | None:
-    """How a change to one block the fix may change widens it, or None."""
+    """How a change to one block the fix may change widens it, or None. A changed block with a
+    parameter whose own name reads as a path is one code can't read: n8n would take the name as
+    it is written, not as the path it looks like."""
     was, now = before.parameters, after.parameters
+    if _has_path_like_key(now):
+        return "cant_check"
     if any(_past_a_failure(now.get(k)) and now.get(k) != was.get(k) for k in GOES_PAST_A_FAILURE):
         return "goes_past_a_failure"
     if (
@@ -184,14 +227,27 @@ def _expression(value: object) -> bool:
     return isinstance(value, str) and (value.startswith("=") or "{{" in value)
 
 
-def _may_change(node_type: str, path: str) -> bool:
+def _has_path_like_key(value: object) -> bool:
+    match value:
+        case dict():
+            fields = cast(dict[str, Any], value)
+            return any(
+                PATH_LIKE.search(key) is not None or _has_path_like_key(inner)
+                for key, inner in fields.items()
+            )
+        case list():
+            return any(_has_path_like_key(inner) for inner in cast(list[Any], value))
+        case _:
+            return False
+
+
+def _may_change(node_type: str, path: Path) -> bool:
     """Whether a fix may change the value at `path` of a block of this type."""
-    if path.split(".", 1)[0].split("[", 1)[0] in CODE:
+    if not path or path[0] in CODE:
         return False
-    general = _INDEX.sub("[]", path)
+    general = tuple(ANY_ITEM if isinstance(part, int) else part for part in path)
     return any(
-        general == allowed or general.startswith((f"{allowed}.", f"{allowed}["))
-        for allowed in MAY_CHANGE.get(node_type, frozenset())
+        general[: len(allowed)] == allowed for allowed in ALLOWED.get(node_type, frozenset())
     )
 
 
@@ -218,13 +274,18 @@ def _holds_a_key(leaf: Leaf) -> bool:
 
 
 def _hosts(leaves: Leaves) -> set[str]:
-    """Every host an address in the parameters names, as scheme and host."""
+    """Every host an address in the parameters names, as scheme, host and port."""
     hosts: set[str] = set()
     for leaf in leaves.values():
         if isinstance(leaf.value, str):
             for found in URL.finditer(leaf.value):
                 parts = urlsplit(found.group())
-                hosts.add(f"{parts.scheme.lower()}://{(parts.hostname or '').lower()}")
+                try:
+                    port = str(parts.port or "")
+                except ValueError:
+                    # A port code can't read is one no other address has.
+                    port = parts.netloc
+                hosts.add(f"{parts.scheme.lower()}://{(parts.hostname or '').lower()}:{port}")
     return hosts
 
 
@@ -240,21 +301,22 @@ def _unread(value: object) -> bool:
 
 
 def _leaves(parameters: Mapping[str, Any]) -> Leaves:
-    return {leaf.path: leaf for leaf in _walk(parameters, "", "", False)}
+    return {leaf.path: leaf for leaf in _walk(parameters, (), "", False)}
 
 
-def _walk(value: Any, path: str, name: str, secret: bool) -> Iterator[Leaf]:
+def _walk(value: Any, path: Path, name: str, secret: bool) -> Iterator[Leaf]:
+    """Each value with where it stands, as keys and places, so a key named "a.b" is never the
+    same place as "b" under "a"."""
     match value:
         case dict():
             fields = cast(dict[str, Any], value)
             paired = fields.get("name") if "value" in fields else None
             for key, inner in fields.items():
                 said = str(paired) if key == "value" and isinstance(paired, str) else key
-                inside = f"{path}.{key}" if path else key
-                yield from _walk(inner, inside, said, secret or names_a_secret(said))
+                yield from _walk(inner, (*path, key), said, secret or names_a_secret(said))
         case list():
             for index, inner in enumerate(cast(list[Any], value)):
-                yield from _walk(inner, f"{path}[{index}]", name, secret)
+                yield from _walk(inner, (*path, index), name, secret)
         case _:
             yield Leaf(path, name, value, secret)
 
@@ -273,12 +335,12 @@ def _setting(setting: PlanSetting) -> tuple[object, ...]:
     return (setting.kind, setting.label, setting.value, setting.mark, fills)
 
 
-def _placeholders(plan: WorkflowPlan) -> set[tuple[str, str, str]]:
+def _placeholders(plan: WorkflowPlan) -> set[tuple[str, Path, str]]:
     """Each setting's placeholder where it stands: the block, the path and the setting."""
     return {
         (block.name, leaf.path, found)
         for block in plan.blocks
-        for leaf in _walk(block.parameters, "", "", False)
+        for leaf in _walk(block.parameters, (), "", False)
         if isinstance(leaf.value, str)
         for found in PLACEHOLDER.findall(leaf.value)
     }

@@ -21,7 +21,7 @@ A setting's placeholder can stand in a key's place too, whole or in a longer tex
 a key's name or an address's name and password, or in JSON under a key's name. Such a setting,
 and one that fills a parameter named as a key, keeps its value out the same way.
 
-The stand-in and the names are the runtime's, which it writes to
+The stand-in, the names and the code list are the runtime's, which it writes to
 contracts/fixtures/agent/key-shapes.json. A test holds them together. Pure."""
 
 import json
@@ -52,14 +52,26 @@ SECRET_NAME_ENDS: Final = (
     "credentials",
     "signature",
     "sessionid",
+    "secretkey",
+    "signingkey",
+    "encryptionkey",
+    "masterkey",
 )
 """How a name that holds a key ends, once its case and separators are gone: accessToken,
 x-api-key and Authorization all do."""
-CARRIES_KEYS: Final = frozenset(
-    {"jsCode", "pythonCode", "functionCode", "code", "body", "jsonBody", "rawBody"}
+CODE_PARAMETERS: Final = (
+    "jsCode",
+    "pythonCode",
+    "functionCode",
+    "code",
+    "query",
+    "sqlQuery",
+    "command",
 )
-"""Code and free-text bodies. Anything can stand in them, a key included, so each is kept out
-whole."""
+"""Code, a query or a command: the runtime's scope check never lets a fix change one."""
+CARRIES_KEYS: Final = frozenset({*CODE_PARAMETERS, "body", "jsonBody", "rawBody"})
+"""Code, queries, commands and free-text bodies. Anything can stand in them, a key included, so
+each is kept out whole."""
 _SEPARATORS: Final = re.compile(r"[\s_.\-]")
 _URL: Final = re.compile(r"[a-z][a-z0-9+.\-]*://[^\s\"'<>]+", re.IGNORECASE)
 _NAME_VALUE: Final = re.compile(r"[\"']?([A-Za-z0-9_.\-]+)[\"']?\s*[:=]\s*(?!<<)[\"']?[^\s\"',}&/]")

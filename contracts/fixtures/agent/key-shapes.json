@@ -46,6 +46,19 @@
     "credential",
     "credentials",
     "signature",
-    "sessionid"
+    "sessionid",
+    "secretkey",
+    "signingkey",
+    "encryptionkey",
+    "masterkey"
+  ],
+  "code_parameters": [
+    "jsCode",
+    "pythonCode",
+    "functionCode",
+    "code",
+    "query",
+    "sqlQuery",
+    "command"
   ]
 }
