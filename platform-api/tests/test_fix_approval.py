@@ -19,6 +19,7 @@ import pytest
 
 from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
+from platform_api.builder import fixes as fixes_module
 from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.builder.fix_parts import (
     FIX_TOKEN_HEADER,
@@ -31,9 +32,11 @@ from platform_api.builder.fixes import (
     DECLINED,
     HANDED_BACK,
     NEVER_PROPOSED,
+    ON_PAUSED,
     SETTING,
     STALE,
     Fixes,
+    FixLive,
     FixSettings,
     FixTrying,
 )
@@ -166,10 +169,16 @@ class Tries:
     tried: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     db: Database | None = None
     """Where the builder reads the version in use, under the workflow's lock."""
+    breaks: bool = False
+    """The builder fails as it tries the fix, as when n8n's call raises."""
+    paused: bool = False
+    """The workflow was paused, so the fix is saved for when someone resumes it."""
 
     async def try_fixed(
         self, use_case_id: str, document: dict[str, Any], by: Principal, stopped_version: int
     ) -> FixTrying | str:
+        if self.breaks:
+            raise RuntimeError("the builder broke")
         if await self._newer(use_case_id, stopped_version):
             return STALE
         self.done.append("test run")
@@ -187,11 +196,11 @@ class Tries:
         by: UserId,
         authors: frozenset[UserId],
         stopped_version: int,
-    ) -> str | None:
+    ) -> FixLive | str:
         if await self._newer(use_case_id, stopped_version):
             return STALE
         self.done.append("turned on")
-        return None
+        return FixLive(paused=self.paused)
 
     async def _newer(self, use_case_id: str, stopped_version: int) -> bool:
         assert self.db is not None
@@ -761,12 +770,25 @@ async def test_a_hand_back_asks_for_the_setting_a_fix_may_not_change(fix_lab: Fi
         }
     ]
 
+    assert page["fix"]["read_list"] == (
+        "Once it is turned back on, “langchain-ai/langgraph-py” joins the team's list of "
+        "repositories any workflow may read."
+    )
+
     facts = BuilderWorkflowFacts(fix_lab.db, cast(Specs, None), None, ())
-    assert "langchain-ai/langgraph-py" not in {o.id for o in await facts.places(GITHUB_RELEASES)}
+
+    async def readable() -> bool:
+        return "langchain-ai/langgraph-py" in {o.id for o in await facts.places(GITHUB_RELEASES)}
+
+    assert not await readable()
     assert (await fix_lab.decide(answered.json()["approval_id"], "bob")).status_code == 201
     await fix_lab.lab.approvals.work_once()
-    readable = {o.id for o in await facts.places(GITHUB_RELEASES)}
-    assert "langchain-ai/langgraph-py" in readable, "its test run may read it after the yes"
+    assert not await readable(), "an approved fix nobody turns back on adds nothing"
+    assert (await fix_lab.turn_back_on(view["fix_id"])).status_code == 202
+    assert await readable(), "its test run may read it"
+    fix_lab.tries.outcome = "failed"
+    await fix_lab.fixes.work_once()
+    assert not await readable(), "a fix whose test run failed adds nothing"
 
 
 async def test_only_the_fix_s_own_start_is_written_by_the_platform(fix_lab: FixLab):
@@ -846,6 +868,150 @@ async def test_a_fix_that_moves_a_setting_s_place_is_refused(fix_lab: FixLab):
         "/revisions", {"version": moved.model_dump(mode="json"), "cause": cause}
     )
     assert (refused.status_code, refused.json()["detail"]) == (422, SETTING)
+
+
+# From the review of 4420f1f0
+
+
+async def events_of(fix_lab: FixLab, kind: str) -> list[Any]:
+    return [e for e in await fix_lab.fix_events() if e.kind == kind]
+
+
+async def approved(fix_lab: FixLab) -> dict[str, Any]:
+    """A fix Bob said yes to, with the yes's job done."""
+    view = await fix_lab.handed_in()
+    assert (await fix_lab.decide(view["approval_id"], "bob")).status_code == 201
+    await fix_lab.lab.approvals.work_once()
+    await fix_lab.fixes.work_once()
+    return view
+
+
+async def test_the_yes_and_the_turn_on_go_in_the_run_s_log_with_the_approver(fix_lab: FixLab):
+    await fix_lab.set_up_and_stop()
+    view = await approved(fix_lab)
+    [decided] = await events_of(fix_lab, "fix_decided")
+    data = decided.data
+    assert (data.fix_id, data.approval_id, data.verdict, data.by, data.by_name) == (
+        view["fix_id"],
+        view["approval_id"],
+        "approved",
+        "bob",
+        "Bob",
+    )
+    assert decided.actor.id == "bob"
+
+    assert (await fix_lab.turn_back_on(view["fix_id"], user="carol")).status_code == 202
+    fix_lab.tries.outcome = "passed"
+    await fix_lab.fixes.work_once()
+    await fix_lab.fixes.work_once()
+    [tried] = await events_of(fix_lab, "fix_tried")
+    data = tried.data
+    assert (data.approval_id, data.approved_by, data.pressed_by, data.result) == (
+        view["approval_id"],
+        "bob",
+        "carol",
+        "turned_on",
+    )
+    assert data.test_run_id == "run_01TEST"
+
+
+async def test_a_no_and_a_test_run_that_failed_go_in_the_run_s_log(fix_lab: FixLab):
+    await fix_lab.set_up_and_stop()
+    first = await fix_lab.handed_in()
+    no = await fix_lab.decide(first["approval_id"], "bob", "decline", reason="Not needed")
+    assert no.status_code == 201
+    await fix_lab.fixes.work_once()
+    [declined] = await events_of(fix_lab, "fix_decided")
+    assert (declined.data.verdict, declined.data.by, declined.data.reason) == (
+        "declined",
+        "bob",
+        "Not needed",
+    )
+
+    second = await approved(fix_lab)
+    await fix_lab.turn_back_on(second["fix_id"])
+    fix_lab.tries.outcome = "failed"
+    await fix_lab.fixes.work_once()
+    [tried] = await events_of(fix_lab, "fix_tried")
+    assert (tried.data.approval_id, tried.data.result) == (second["approval_id"], "test_failed")
+
+
+async def test_a_paused_workflow_stays_paused_with_the_fix_and_says_so(fix_lab: FixLab):
+    await fix_lab.set_up_and_stop()
+    view = await approved(fix_lab)
+    fix_lab.tries.paused = True
+    await fix_lab.turn_back_on(view["fix_id"])
+    fix_lab.tries.outcome = "passed"
+    await fix_lab.fixes.work_once()
+    after = await fix_lab.view(view["fix_id"])
+    assert (after["state"], after["said"]) == ("on", ON_PAUSED)
+    [tried] = await events_of(fix_lab, "fix_tried")
+    assert tried.data.result == "kept_paused"
+
+
+async def test_a_fix_is_proven_only_once_its_replay_of_the_stop_passed(fix_lab: FixLab):
+    await fix_lab.set_up_and_stop()
+    view = await fix_lab.ask()
+    plan = fixed(fix_lab.stopped())
+    happy = {"happy_path": ALL_PASSED["happy_path"]}
+    await fix_lab.fixes.simulated_on(view["fix_id"], plan, happy)
+    assert (await fix_lab.store()).status_code == 409
+    replay = {**ALL_PASSED["replay_the_stop"], "verdict": "failed", "step": PROPOSE}
+    await fix_lab.fixes.simulated_on(view["fix_id"], plan, {"replay_the_stop": replay})
+    assert (await fix_lab.store()).status_code == 409
+    await fix_lab.proven()
+    assert (await fix_lab.store()).status_code == 200
+
+
+async def test_a_builder_that_breaks_as_it_tries_the_fix_frees_it_to_be_pressed_again(
+    fix_lab: FixLab,
+):
+    await fix_lab.set_up_and_stop()
+    view = await approved(fix_lab)
+    fix_lab.tries.breaks = True
+    with pytest.raises(RuntimeError):
+        await fix_lab.turn_back_on(view["fix_id"])
+    assert (await fix_lab.view(view["fix_id"]))["state"] == "approved"
+    fix_lab.tries.breaks = False
+    assert (await fix_lab.turn_back_on(view["fix_id"])).status_code == 202
+    assert fix_lab.tries.done == ["test run"]
+
+
+async def test_a_press_cut_off_before_its_test_run_started_is_freed_after_a_while(
+    fix_lab: FixLab,
+):
+    use_case_id = await fix_lab.set_up_and_stop()
+    view = await approved(fix_lab)
+    async with fix_lab.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.fixes SET testing_at = %s, testing_by = 'alice' WHERE fix_id = %s",
+            (uow.now, view["fix_id"]),
+        )
+    assert (await fix_lab.view(view["fix_id"]))["state"] == "testing"
+    fix_lab.clock.later(minutes=6)
+    await fix_lab.fixes.work_once()
+    assert (await fix_lab.view(view["fix_id"]))["state"] == "approved"
+    assert (await fix_lab.turn_back_on(view["fix_id"])).status_code == 202
+    assert fix_lab.tries.done == ["test run"]
+    assert use_case_id
+
+
+async def test_a_start_the_platform_couldn_t_keep_is_ended_in_the_log(
+    fix_lab: FixLab, monkeypatch: pytest.MonkeyPatch
+):
+    await fix_lab.set_up_and_stop()
+
+    async def broken(*_: object, **__: object) -> None:
+        raise RuntimeError("the database broke")
+
+    monkeypatch.setattr(fixes_module, "_row", broken)
+    with pytest.raises(RuntimeError):
+        await fix_lab.ask()
+    monkeypatch.undo()
+    assert [e.kind for e in await fix_lab.fix_events()] == ["fix_started", "fix_handed_back"]
+    assert fix_lab.runtime.started == []
+    again = await fix_lab.ask()
+    assert again["state"] == "drafting"
 
 
 def workflow_digest_of(document: dict[str, Any]) -> str:

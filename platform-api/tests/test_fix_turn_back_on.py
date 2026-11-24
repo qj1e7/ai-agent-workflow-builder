@@ -4,11 +4,13 @@ real test run, which stops at the yes and writes nothing (ADR 0044). Only once i
 fixed version go live, as a new version whose authors are the fix's parties."""
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
-from platform_api.builder.fixes import STALE, FixTrying
+from platform_api.builder.fixes import STALE, FixLive, FixTrying
+from platform_api.builder.n8n_holds import HeldInN8n, Holding
+from platform_api.db import Connection
 from platform_api.shared import RunId, UserId
 from tests import support
 from tests.test_n8n_lifecycle import MONDAY_NINE, made, version_row
@@ -63,7 +65,7 @@ async def test_only_then_the_fix_goes_live_as_a_new_version_with_the_fix_s_parti
     refused = await v.builder.put_fixed_live(
         use_case_id, trying, fixed, CAROL, frozenset({ALICE, CAROL}), stopped_version=1
     )
-    assert refused is None
+    assert refused == FixLive(paused=False)
     view = await v.view(use_case_id)
     assert (view["state"], view["version"]) == ("on", 2)
     second = await version_row(v.own, use_case_id, 2)
@@ -95,3 +97,52 @@ async def test_a_version_a_person_made_meanwhile_keeps_the_fix_from_being_tried_
     assert (await v.view(use_case_id))["version"] == 2
     again = await v.builder.try_fixed(use_case_id, fixed, CAROL_ON, stopped_version=1)
     assert again == STALE
+
+
+async def test_a_workflow_an_operator_paused_stays_paused_with_the_fix_saved_for_its_resume(
+    v: Versions,
+):
+    use_case_id, workflow_id = await made(v.own, on=True)
+    assert (await v.own.lab.move("alice", "pause", use_case_id)).status_code == 200
+    first = await version_row(v.own, use_case_id, 1)
+    fixed = with_a_new_note(first["document"])
+    trying = await v.builder.try_fixed(use_case_id, fixed, CAROL_ON, stopped_version=1)
+    assert isinstance(trying, FixTrying), trying
+
+    put = await v.builder.put_fixed_live(
+        use_case_id, trying, fixed, CAROL, frozenset({ALICE, CAROL}), stopped_version=1
+    )
+    assert put == FixLive(paused=True)
+    view = await v.view(use_case_id)
+    assert (view["state"], view["version"]) == ("paused", 2)
+    second = await version_row(v.own, use_case_id, 2)
+    assert second["published_by"] is None, "nobody put it live"
+
+
+class HeldByDave:
+    """Dave holds the workflow in his own n8n space (Open in n8n)."""
+
+    async def refused_while_held(
+        self, conn: Connection, use_case_id: str, actor: UserId
+    ) -> HeldInN8n | None:
+        return HeldInN8n(HELD)
+
+
+HELD = "Dave is editing it in n8n."
+
+
+async def test_a_workflow_someone_holds_in_n8n_keeps_the_fix_from_going_live(v: Versions):
+    use_case_id, workflow_id = await made(v.own, on=True)
+    first = await version_row(v.own, use_case_id, 1)
+    fixed = with_a_new_note(first["document"])
+    trying = await v.builder.try_fixed(use_case_id, fixed, CAROL_ON, stopped_version=1)
+    assert isinstance(trying, FixTrying)
+    live = v.n8n.workflows[workflow_id]["activeVersionId"]
+
+    v.builder.holding = cast(Holding, HeldByDave())
+    put = await v.builder.put_fixed_live(
+        use_case_id, trying, fixed, CAROL, frozenset({ALICE, CAROL}), stopped_version=1
+    )
+    assert put == HELD
+    assert v.n8n.workflows[workflow_id]["activeVersionId"] == live
+    assert (await v.view(use_case_id))["version"] == 1
