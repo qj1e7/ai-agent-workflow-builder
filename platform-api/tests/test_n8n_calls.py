@@ -40,6 +40,7 @@ from platform_api.orchestration.n8n_calls import (
     NodeCall,
     NodeCatalog,
     NodeOption,
+    NotFoundAtSource,
     NothingToRun,
     OwnWorkflow,
     ProposeCall,
@@ -156,6 +157,7 @@ class FakeWorkflows:
 class FakeSources:
     items: list[dict[str, Any]] = field(default_factory=lambda: [RELEASE])
     down: bool = False
+    gone: bool = False
     reads: list[tuple[str, str, str | None]] = field(
         default_factory=list[tuple[str, str, str | None]]
     )
@@ -163,8 +165,12 @@ class FakeSources:
     async def places(self, source: str) -> Sequence[NodeOption]:
         return [NodeOption(REPO, "LangGraph")] if source == "github_releases" else []
 
-    async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
+    async def read(
+        self, source: str, place: str, query: str | None
+    ) -> ReadItems | ReadFailed | NotFoundAtSource:
         self.reads.append((source, place, query))
+        if self.gone:
+            return NotFoundAtSource("GitHub", place)
         return ReadFailed("GitHub did not answer") if self.down else self.items
 
 
@@ -573,6 +579,18 @@ async def test_a_read_that_fails_is_tried_again_and_reads_once_it_answers(t: Cal
     assert await t.call("101") == TryLater("GitHub did not answer")
     t.sources.down = False
     assert await t.call("101") == Answer((RELEASE,))
+
+
+async def test_a_place_the_source_does_not_have_is_refused_in_words_and_read_once(t: Calls):
+    """25 Nov walk-through: a repository GitHub doesn't have was answered with "try again" (503),
+    so n8n showed only "Our platform could not do this step (HTTP 503)". Trying again finds
+    none, so it is refused in words the Read block shows, and n8n's next try gets the same."""
+    t.started("101")
+    t.sources.gone = True
+    refused = Refused(404, f"GitHub can't find {REPO}.")
+    assert await t.call("101") == refused
+    assert await t.call("101") == refused
+    assert len(t.sources.reads) == 1
 
 
 async def test_a_read_passes_on_at_most_the_cap_and_says_it_stopped_there(t: Calls):

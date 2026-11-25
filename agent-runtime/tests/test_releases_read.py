@@ -61,9 +61,16 @@ def test_it_reads_only_the_stable_releases_the_tag_rule_counts_newest_first():
 def test_github_trouble_is_said_once_and_whether_to_try_again():
     down = client(Releases([], SourceUnavailable(503))).post("/v1/releases/read", json=ASK).json()
     assert (down["status"], down["retryable"]) == ("not_read", True)
+    refused = client(Releases([], SourceRejected(403))).post("/v1/releases/read", json=ASK).json()
+    assert (refused["status"], refused["retryable"]) == ("not_read", False)
+    assert "403" in refused["message"]
+
+
+def test_a_repository_github_does_not_have_is_not_found_never_a_trouble_to_try_again():
+    """25 Nov walk-through: zzfake-owner/no-such-repo-xyz read as GitHub trouble, so the platform
+    asked n8n to try again and the stop said a step in the workflow engine failed."""
     gone = client(Releases([], SourceRejected(404))).post("/v1/releases/read", json=ASK).json()
-    assert (gone["status"], gone["retryable"]) == ("not_read", False)
-    assert "404" in gone["message"]
+    assert gone == {"status": "not_found"}
 
 
 def test_it_needs_the_key_and_a_repository_name():
