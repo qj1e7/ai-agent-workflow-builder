@@ -1,12 +1,22 @@
 import json
+import re
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, Field, JsonValue, StringConstraints, field_validator
+from pydantic import (
+    AwareDatetime,
+    Field,
+    JsonValue,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from platform_api.builder.templates import VERSION_PATTERN
 from platform_api.orchestration import (
     AT_PATTERN,
+    PACKAGE_VERSION_PATTERN,
+    CardToolId,
     Day,
     Grade,
     InputKind,
@@ -18,8 +28,16 @@ from platform_api.orchestration import (
     ToolKind,
 )
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
+from platform_api.wire import (
+    MAVEN_COORDINATE_PATTERN,
+    NPM_PACKAGE_PATTERN,
+    PackageKind,
+    RepoName,
+    SourceKind,
+    WireIn,
+    WireModel,
+)
 from platform_api.wire import FailureReason as FailureReasonName
-from platform_api.wire import RepoName, WireIn, WireModel
 from platform_api.wire import RunOutcome as RunOutcomeName
 from platform_api.wire import RunState as RunStateName
 
@@ -391,18 +409,79 @@ class RunStarted(WireModel):
 type SoftwareName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
 ]
-type Version = Annotated[str, Field(pattern=VERSION_PATTERN)]
+type Version = Annotated[
+    str, Field(pattern=f"{VERSION_PATTERN}|{PACKAGE_VERSION_PATTERN}", max_length=40)
+]
+"""A GitHub software's version as VERSION_PATTERN, or a package's as PACKAGE_VERSION_PATTERN.
+AddSoftware holds each to its own source."""
+
+
+class PackageIn(WireIn):
+    """A package on a registry the team installs from (ADR 0025)."""
+
+    kind: PackageKind = Field(description="maven for Maven Central, npm for the npm registry.")
+    ref: str = Field(
+        description="groupId:artifactId for Maven Central, such as "
+        "org.apache.logging.log4j:log4j-core, or the package name for npm, such as express or "
+        "@angular/core."
+    )
+
+    @model_validator(mode="after")
+    def _named_as_its_registry_names_it(self) -> PackageIn:
+        pattern = MAVEN_COORDINATE_PATTERN if self.kind == "maven" else NPM_PACKAGE_PATTERN
+        if not re.fullmatch(pattern, self.ref):
+            raise ValueError(
+                "ref must be groupId:artifactId"
+                if self.kind == "maven"
+                else "ref must be an npm package name, such as express or @angular/core"
+            )
+        return self
 
 
 class AddSoftware(WireIn):
     name: SoftwareName
-    repo: RepoName
+    repo: RepoName | None = Field(
+        default=None,
+        description="The GitHub repository whose releases are read, as owner/name. Give this "
+        "or package, not both.",
+    )
+    package: PackageIn | None = Field(
+        default=None,
+        description="The package whose versions are read from its registry. Give this or "
+        "repo, not both. Known vulnerabilities are looked up only for a package.",
+    )
     our_version: Version | None = Field(
         default=None,
-        description="The version the team runs now, such as 1.2.14. Leave it out when nobody "
+        description="The version the team runs now, such as 1.2.14, or for a package also "
+        "4.1.115.Final or 33.3.1-jre. Leave it out when nobody "
         "knows it: the list then says Not known, and the check tells about releases newer than "
         "the newest one it first reads.",
     )
+
+    @model_validator(mode="after")
+    def _one_source(self) -> AddSoftware:
+        if (self.repo is None) == (self.package is None):
+            raise ValueError("give repo or package, not both and not neither")
+        pattern = VERSION_PATTERN if self.package is None else PACKAGE_VERSION_PATTERN
+        if self.our_version is not None and not re.fullmatch(pattern, self.our_version):
+            raise ValueError(
+                "our_version must be three numbers, such as 1.2.14"
+                if self.package is None
+                else "our_version must be three numbers, with at most .Final, .RELEASE, .GA, "
+                "-jre or -android after them, such as 33.3.1-jre"
+            )
+        return self
+
+    @property
+    def source_kind(self) -> SourceKind:
+        return "github" if self.package is None else self.package.kind
+
+    @property
+    def source_ref(self) -> str:
+        if self.package is not None:
+            return self.package.ref
+        assert self.repo is not None
+        return self.repo
 
 
 class FindIn(WireIn):
@@ -410,9 +489,15 @@ class FindIn(WireIn):
 
 
 class ProjectGuess(WireModel):
-    repo: RepoName = Field(
-        description="A GitHub project that exists, as owner/name, at the address GitHub gives it "
-        "now. Checked just now."
+    kind: SourceKind = Field(
+        default="github",
+        description="Where it is published: github for a GitHub project, maven or npm for a "
+        "package on that registry (ADR 0025). The add sends a package as package, not repo.",
+    )
+    repo: str = Field(
+        description="The software at its source, checked just now: a GitHub project as "
+        "owner/name at the address GitHub gives it now, a Maven package as groupId:artifactId, "
+        "or an npm package name."
     )
     what: str = Field(description="What the project is, so the person can tell matches apart.")
     why: str = Field(description="Where the guess came from, in plain words.")
@@ -454,9 +539,12 @@ type FindOut = Annotated[
 
 
 class SourceView(WireModel):
-    kind: Literal["github"]
+    kind: SourceKind = Field(
+        description="github for GitHub releases, maven for Maven Central, npm for the npm "
+        "registry (ADR 0025)."
+    )
     ref: str
-    url: str
+    url: str = Field(description="The page a person opens to see the versions.")
 
 
 type VersionSourceKind = Literal["given", "first_check", "ticket_done"]
@@ -729,6 +817,11 @@ class ToolView(WireModel):
     kind: ToolKind
     name: str
     description: str
+    system: str = Field(description='What it reaches, in words, such as "Maven Central and npm".')
+    in_cards: bool = Field(
+        description="Whether an agent card can use it. False for a tool only the Software "
+        "watchlist check runs."
+    )
     target_input: InputKind | None = Field(
         description="For a write, the kind of the agent's one input that says where it writes."
     )
@@ -797,7 +890,7 @@ class CardInputView(WireModel):
 
 class CardBlockView(WireModel):
     say: str
-    tool: ToolId | None
+    tool: CardToolId | None
 
 
 class CardView(WireModel):
@@ -812,7 +905,7 @@ class CardView(WireModel):
     inputs: list[CardInputView]
     blocks: list[CardBlockView]
     approvals: list[CardApprovalView]
-    tools: list[ToolId] = Field(description="The tools the blocks use, each once, in order.")
+    tools: list[CardToolId] = Field(description="The tools the blocks use, each once, in order.")
 
 
 class CardList(WireModel):

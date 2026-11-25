@@ -1,0 +1,48 @@
+{
+  "summary": "Log4j has a new release: 2.24.3. Log4j 2.14.1 has 1 known vulnerability, 1 critical.",
+  "new_tags": [],
+  "proposed": [
+    {
+      "kind": "create_ticket",
+      "fields": {
+        "title": "Urgent: Upgrade Log4j from 2.14.1 to 2.24.3",
+        "body": "Log4j has 2 new releases on Maven Central (org.apache.logging.log4j:log4j-core) newer than our version 2.14.1:\n- 2.24.3\n- 2.17.1\n\nOur version has 1 known vulnerability:\n- CVE-2021-44228 (critical, CVSS 10, reported by OSV and NVD). Log4Shell Fixed in 2.15.0. https://nvd.nist.gov/vuln/detail/CVE-2021-44228\n\nProposed by the AI workflow builder."
+      },
+      "reason": "Log4j 2.24.3 is out, and we run 2.14.1, which has a critical known vulnerability",
+      "subject": "sw_01JC2A3B4C5D6E7F8G9H0J1K2L"
+    }
+  ],
+  "carry_forward": {
+    "last_run_on": null
+  },
+  "findings": [
+    {
+      "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2L",
+      "state": "behind",
+      "newest": "2.24.3",
+      "new_versions": [
+        "2.24.3",
+        "2.17.1"
+      ],
+      "detail": "2 releases newer than 2.14.1.",
+      "full_name": null,
+      "not_found": false,
+      "vulnerability_check": "checked",
+      "vulnerabilities": [
+        {
+          "id": "CVE-2021-44228",
+          "severity": "critical",
+          "score": 10.0,
+          "summary": "Log4Shell",
+          "fixed_in": "2.15.0",
+          "reported_by": [
+            "OSV",
+            "NVD"
+          ],
+          "url": "https://nvd.nist.gov/vuln/detail/CVE-2021-44228"
+        }
+      ],
+      "vulnerabilities_complete": true
+    }
+  ]
+}

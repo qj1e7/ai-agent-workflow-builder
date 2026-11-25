@@ -6,6 +6,8 @@ the runtime writes from its masker."""
 import json
 import re
 import time
+from collections.abc import Callable
+from functools import partial
 
 import pytest
 
@@ -243,10 +245,16 @@ def test_what_main_refused_and_is_let_through_now_is_written_down(text: str):
 def test_each_shape_reads_a_long_hostile_text_in_linear_time(shape: str):
     pattern = re.compile(shape)
     for name, text in HOSTILE.items():
-        begun = time.perf_counter()
-        pattern.sub(HIDDEN, text)
-        took = time.perf_counter() - begun
+        took = min(_timed(partial(pattern.sub, HIDDEN, text)) for _ in range(3))
         assert took < 0.1, f"{name}: {took:.3f}s"
+
+
+def _timed(read: Callable[[], object]) -> float:
+    """One run's time. The caller keeps the best of three, so a busy machine can't fail a read
+    that stays linear, while a pattern that backtracks still takes seconds on every run."""
+    begun = time.perf_counter()
+    read()
+    return time.perf_counter() - begun
 
 
 PEM_LINES = [

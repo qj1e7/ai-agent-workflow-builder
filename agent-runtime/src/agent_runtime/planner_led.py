@@ -129,7 +129,8 @@ class SetUpWorkflow(_Tool):
 
 
 class WatchSoftware(_Tool):
-    """Offer to put one software on the Watchlist, which checks GitHub for its new releases.
+    """Offer to put one software on the Watchlist, which checks GitHub, Maven Central or npm
+    for its new releases.
     The person taps Add to add it."""
 
     software: str = Field(description="The software, copied exactly from the message.")
@@ -750,7 +751,8 @@ BRIEFING_RULES: Final = (
     "reply, and shows the person only what it will really do. When it can't use a call, you hear "
     "why once and can call again.\n\n"
     "The platform is for workflows, tasks that run again and again on a schedule, and for the "
-    "Watchlist, which checks the team's software for new releases on GitHub. Every change to "
+    "Watchlist, which checks the team's software for new releases on GitHub, Maven Central and "
+    "npm. Every change to "
     "data, such as a new Jira ticket, waits for an Approver's yes in Teams, and the person who "
     "asked is never the Approver of their own request.\n\n"
     "Pick the tool:\n"

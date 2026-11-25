@@ -56,7 +56,13 @@ SECURITY_PHRASE_ENDS: Final = words("fix fixes patch patches alert alerts bullet
 CVE_ID: Final = re.compile(r"cve-\d{4}-\d+")
 ONE_PAGE: Final = words("page")
 """A request in words reads one named Confluence page, never a search across pages."""
-VULNERABILITIES_PLANNED: Final = "I can't check for known vulnerabilities yet. It's planned."
+VULNERABILITIES_PLANNED: Final = (
+    "I look up known vulnerabilities only in Maven Central and npm packages on the Software "
+    "watchlist, at each check. Anything wider is planned."
+)
+"""Since ADR 0025's first part, a check looks up known vulnerabilities in the version the team
+runs of each Maven Central or npm package on the watchlist. A request for any other lookup, such
+as a search of NVD or a GitHub project's advisories, is still a can't."""
 
 
 @dataclass(frozen=True)
@@ -107,6 +113,7 @@ ABILITY_OF: Final = {
     "jira.find_by_update": "read Jira tickets",
     "summarise": "sum up what I find",
     "github.releases": "check software for new releases",
+    "packages.versions": "check Maven Central and npm packages",
     "confluence.read": "read a Confluence page the team allows",
     "jira.create": "create a Jira ticket after a yes",
 }
@@ -227,6 +234,19 @@ CAPABILITIES: Final = (
         "confluence",
         ["confluence.read_page"],
         needs_model=True,
+    ),
+    # ADR 0025, first part. The Version checker reads these on the watchlist only, so no agent
+    # card or model can use its two tools. The words leave out known vulnerabilities: the reply
+    # guard counts every vulnerability phrase as unbuilt, and it checks these lines too (#335).
+    _ready(
+        "packages.versions",
+        "Check Maven Central and npm packages for new versions",
+        "read",
+        "Maven Central and npm",
+        None,
+        ["packages.read_versions", "packages.find_vulnerabilities"],
+        focus=True,
+        short="Watch Maven and npm packages",
     ),
     _ready(
         "jira.create",
@@ -355,12 +375,14 @@ CAPABILITIES: Final = (
     ),
     _not_yet(
         "registries.check",
-        "Check package registries and security advisories",
+        "Check PyPI, NuGet and Docker Hub, support end dates and exploited vulnerabilities",
         "read",
         None,
         None,
-        "check registries or security advisories",
-        "Only GitHub releases are checked today.",
+        "check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers "
+        "are using",
+        "GitHub, Maven Central and npm are checked today. Known vulnerabilities are looked up for "
+        "Maven Central and npm packages on the Software watchlist.",
     ),
     _not_yet(
         "jira.set_field",
@@ -2127,7 +2149,10 @@ RELEASE_SOURCES: Final = {
     "crates.io": "crates.io",
     "helm": "Helm",
 }
-"""Places a person may name for a software's releases. The platform reads GitHub only."""
+"""Places a person may name for a software's releases."""
+READ_SOURCES: Final = frozenset({"maven central", "maven", "npm"})
+"""The sources the Version checker reads besides GitHub (ADR 0025). A request that names one is a
+watch request like any other, so it gets no can't."""
 
 _PREPOSITION: Final = r"(?:from|on|in|via|at|using|through|of)"
 _ALSO_A_NAME: Final = frozenset({"maven", "helm"})
@@ -2141,17 +2166,27 @@ _RELEASE_SOURCE: Final = re.compile(
 
 
 def other_release_source(text: str) -> str | None:
-    """The first release source in the text other than GitHub, as the person wrote it. A source
-    that is also a software name counts only after "from", "on" and the like."""
+    """The first release source in the text that the platform does not read, as the person wrote
+    it. A source that is also a software name counts only after "from", "on" and the like."""
     for found in _RELEASE_SOURCE.finditer(text):
-        if found.group(1) is not None or found.group(2).casefold() not in _ALSO_A_NAME:
+        source = found.group(2).casefold()
+        if source in READ_SOURCES:
+            continue
+        if found.group(1) is not None or source not in _ALSO_A_NAME:
             return found.group(2)
     return None
 
 
+def a_read_source(name: str) -> bool:
+    """Whether the name is only a source the Version checker reads, as "npm" or "Maven Central",
+    so it names no software. "Maven" is software as well, so it is not one."""
+    source = " ".join(name.casefold().split())
+    return source in READ_SOURCES and source not in _ALSO_A_NAME
+
+
 def release_source_note(source: str) -> str:
     name = RELEASE_SOURCES.get(source.casefold(), source)
-    return f"I only read releases on GitHub. {name} isn't a source I read yet."
+    return f"I read releases on GitHub, Maven Central and npm. {name} isn't a source I read yet."
 
 
 def other_systems(text: str) -> list[str]:

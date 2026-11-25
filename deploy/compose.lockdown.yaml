@@ -20,6 +20,9 @@ configs:
       http_port 3128
       # The hosts the app calls today: Entra ID sign-in, GitHub's API and the AI model's address.
       acl allowed dstdomain login.microsoftonline.com api.github.com llm-gateway.aisg.sg
+      # The Version checker's package sources (ADR 0025): Maven Central and npm for versions, OSV
+      # for known vulnerabilities and NVD for their scores. Each is only read.
+      acl allowed dstdomain repo1.maven.org registry.npmjs.org api.osv.dev services.nvd.nist.gov
       acl tls port 443
       acl CONNECT method CONNECT
       http_access deny CONNECT !tls

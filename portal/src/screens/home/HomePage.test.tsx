@@ -241,7 +241,7 @@ describe('Home with no working AI model', () => {
   })
 
   it('still shows the lists and Needs you, and no Ask the team', () => {
-    expect(text(html)).toContain('I can Check software for new releases on GitHub Create a Jira ticket after a yes')
+    expect(text(html)).toContain('I can Check software for new releases on GitHub Check Maven Central and npm packages for new versions Create a Jira ticket after a yes')
     expect(buttonsIn(html)).not.toContain('Ask the team for something new')
     expect(html).toContain('data-home-item="stopped:run_01JB9"')
   })

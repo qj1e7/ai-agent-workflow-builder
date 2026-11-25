@@ -1,11 +1,20 @@
+import json
 from dataclasses import replace
 from datetime import timedelta
 
 import pytest
 
 from platform_api.builder import TEMPLATES
-from platform_api.orchestration.agents import Finding, ProposedIntentIn, TaskError
-from platform_api.orchestration.spec import WatchlistTask
+from platform_api.orchestration.agents import (
+    Finding,
+    ProposedIntentIn,
+    TaskError,
+    TaskOutput,
+    TaskRequest,
+    Vulnerability,
+    WatchlistInputs,
+)
+from platform_api.orchestration.spec import SoftwareSource, WatchedSoftware, WatchlistTask
 from platform_api.orchestration.watch import (
     ATTENTION_ORDER,
     Checked,
@@ -24,13 +33,23 @@ from platform_api.orchestration.watch import (
     TicketToPropose,
     Unusable,
     all_could_not_read,
+    is_urgent,
     newer,
     review,
     standing,
     status_of,
 )
 from platform_api.shared import ApprovalId, ProposalId, RunId, SoftwareId
-from tests.support import FASTAPI, LANGGRAPH, NOW, POSTGRES, REDIS, WATCHLIST_TASK, watched
+from tests.support import (
+    FASTAPI,
+    FIXTURES,
+    LANGGRAPH,
+    NOW,
+    POSTGRES,
+    REDIS,
+    WATCHLIST_TASK,
+    watched,
+)
 
 RUN = RunId("run_1")
 LATER = NOW + timedelta(minutes=5)
@@ -291,6 +310,108 @@ def test_a_baseline_from_the_first_check_is_titled_without_calling_it_our_versio
     assert 'differently from "Upgrade LangGraph to 1.2.16"' in old_words.detail
 
 
+def urgent_pair() -> tuple[WatchlistTask, TaskOutput]:
+    """The Version checker's own answer for Log4j 2.14.1 with Log4Shell, from contracts/.
+    agent-runtime's test_watchlist_sources.py checks it is what the check really answers."""
+    agent = FIXTURES / "agent"
+    request = TaskRequest.model_validate(
+        json.loads((agent / "watchlist-urgent-request.json").read_text(encoding="utf-8"))
+    )
+    output = TaskOutput.model_validate(
+        json.loads((agent / "watchlist-urgent-output.json").read_text(encoding="utf-8"))
+    )
+    assert isinstance(request.inputs, WatchlistInputs)
+    task = WatchlistTask(
+        tag_pattern=request.inputs.tag_pattern,
+        software=tuple(
+            WatchedSoftware(
+                id=SoftwareId(s.id),
+                name=s.name,
+                source=SoftwareSource(s.source.ref, s.source.kind),
+                our_version=s.our_version,
+                open_ticket=s.open_ticket,
+                awaiting_approval=s.awaiting_approval,
+                from_first_check=s.from_first_check,
+            )
+            for s in request.inputs.software
+        ),
+    )
+    return task, output
+
+
+def test_the_runtime_s_urgent_ticket_for_a_critical_flaw_is_kept():
+    task, output = urgent_pair()
+    assert output.proposed[0].fields["title"].startswith("Urgent: ")
+    reviewed = review(task, output.findings, output.proposed)
+    assert isinstance(reviewed, Reviewed)
+    assert reviewed.tickets == (TicketToPropose(0, task.software[0].id, "2.24.3"),)
+
+
+def test_an_urgent_title_without_a_critical_flaw_is_refused():
+    task, output = urgent_pair()
+    calm = output.findings[0].model_copy(
+        update={"vulnerabilities": [], "vulnerability_check": "checked"}
+    )
+    refused = review(task, [calm], output.proposed)
+    assert isinstance(refused, Unusable)
+    assert 'differently from "Upgrade Log4j from 2.14.1 to 2.24.3"' in refused.detail
+
+
+def test_a_critical_flaw_needs_the_urgent_title():
+    task, output = urgent_pair()
+    plain = output.proposed[0].fields["title"].removeprefix("Urgent: ")
+    calm = output.proposed[0].model_copy(
+        update={"fields": {**output.proposed[0].fields, "title": plain}}
+    )
+    refused = review(task, output.findings, [calm])
+    assert isinstance(refused, Unusable)
+    assert 'differently from "Urgent: Upgrade Log4j from 2.14.1 to 2.24.3"' in refused.detail
+
+
+@pytest.mark.parametrize(
+    ("our", "newest"), [("33.2.0-jre", "33.3.1-jre"), ("4.1.114.Final", "4.1.115.Final")]
+)
+def test_a_package_s_final_qualifier_is_kept_where_a_github_tag_would_be_refused(
+    our: str, newest: str
+):
+    task, output = urgent_pair()
+    package = replace(task.software[0], name="Guava", our_version=our)
+    task = replace(task, software=(package,))
+    found = output.findings[0].model_copy(
+        update={"newest": newest, "new_versions": [newest], "vulnerabilities": []}
+    )
+    title = f"Upgrade Guava from {our} to {newest}"
+    proposed = output.proposed[0].model_copy(update={"fields": {"title": title, "body": "..."}})
+    reviewed = review(task, [found], [proposed])
+    assert isinstance(reviewed, Reviewed), reviewed
+    assert reviewed.tickets == (TicketToPropose(0, package.id, newest),)
+    on_github = replace(package, source=SoftwareSource(package.source.ref, "github"))
+    refused = review(replace(task, software=(on_github,)), [found], [proposed])
+    assert isinstance(refused, Unusable) and "not a tag" in refused.detail
+
+
+@pytest.mark.parametrize(
+    ("severity", "score", "check", "urgent"),
+    [
+        ("critical", None, "checked", True),
+        ("high", 9.0, "checked", True),
+        ("high", 8.9, "checked", False),
+        ("unknown", None, "checked", False),
+        ("critical", 10.0, "could_not_check", False),
+    ],
+)
+def test_urgent_follows_the_version_checker_s_rule(
+    severity: str, score: float | None, check: str, urgent: bool
+):
+    flaw = Vulnerability.model_validate(
+        {"id": "CVE-1", "severity": severity, "score": score, "reported_by": ["OSV"], "url": "u"}
+    )
+    found = finding(LANGGRAPH, "behind", "1.2.16").model_copy(
+        update={"vulnerability_check": check, "vulnerabilities": [flaw]}
+    )
+    assert is_urgent(found) is urgent
+
+
 @pytest.mark.parametrize(
     ("task", "findings", "proposed", "words"),
     [
@@ -375,3 +496,36 @@ def test_each_software_the_runtime_gave_a_reason_for_keeps_its_own_and_the_rest_
 def test_a_check_that_failed_for_another_reason_says_nothing_about_the_software():
     error = TaskError(type="AgentError", message="The agent stopped", retryable=False)
     assert all_could_not_read(TASK, error, []) is None
+
+
+def test_the_check_reads_each_software_from_its_own_source():
+    """ADR 0025: a Maven Central or npm package reaches the agents as that source, never as a
+    GitHub repository."""
+    from platform_api.orchestration.agents import GithubSource, MavenSource, NpmSource
+    from platform_api.orchestration.spec import SoftwareSource, WatchedSoftware
+    from platform_api.orchestration.watch import watchlist_inputs
+
+    def watched(id: str, ref: str, kind: str) -> WatchedSoftware:
+        return WatchedSoftware(
+            id=SoftwareId(id),
+            name=id,
+            source=SoftwareSource(ref, kind),  # type: ignore[arg-type]
+            our_version="1.0.0",
+            open_ticket=None,
+            awaiting_approval=False,
+        )
+
+    task = WatchlistTask(
+        tag_pattern=r"^v?(\d+\.\d+\.\d+)$",
+        software=(
+            watched("sw_a", "grafana/grafana", "github"),
+            watched("sw_b", "org.apache.logging.log4j:log4j-core", "maven"),
+            watched("sw_c", "express", "npm"),
+        ),
+    )
+    sources = [s.source for s in watchlist_inputs(task).software]
+    assert sources == [
+        GithubSource(ref="grafana/grafana"),
+        MavenSource(ref="org.apache.logging.log4j:log4j-core"),
+        NpmSource(ref="express"),
+    ]

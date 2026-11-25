@@ -93,9 +93,10 @@ def release_check(
     ask: bool = True,
     write: bool = True,
 ) -> dict[str, Any]:
-    """A release check as the Planner lays one out: the reads in a line, then Compare, Propose a
-    change, Ask for a yes, and on Yes Make the approved changes and Tell. Each other exit of Ask
-    for a yes ends at a block of its own."""
+    """A release check of our blocks with a Propose a change block: the reads in a line, then
+    Compare, Propose a change, Ask for a yes, and on Yes Make the approved changes and Tell. Each
+    other exit of Ask for a yes ends at a block of its own. The Planner lays its release check out
+    otherwise (test_simulations.PLANNERS_RELEASE_CHECK)."""
     line = [ours(START, "StartFromPortal"), *([our_read()] if reads is None else reads)]
     inputs = {"input": [{"name": "release", "value": "={{ $json.id }}"}]}
     line.append(ours("Compare", "Agent", agent="release_checker", inputs=inputs))

@@ -8,17 +8,18 @@ import { stillChecksWords, watchlistRunsWords, watchSavedWords } from './answers
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { IconCheck } from '../../ui/icons'
-import { alreadyWords, verdictOf } from '../software/addByName'
+import { alreadyWords, kindOf, verdictOf } from '../software/addByName'
 import { describedBy, Field } from '../software/Field'
-import { checkName, NAME_HELP } from '../software/software'
+import { addedVulnerabilityWords, checkName, homeAdd, isPackage, HOME_PACKAGE_VERSION_HELP, NAME_HELP, refOf, SOURCE_NAMES } from '../software/software'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
 
 const WATCHLIST = '/software'
 
 /**
- * Adds one piece of software to the Software watchlist from Home. It finds the GitHub project first and shows it, so the
- * person sees where the releases come from before anything is saved. Several matches, or none, are chosen on the watchlist.
+ * Adds one piece of software to the Software watchlist from Home. It finds where it is published first, a GitHub project or
+ * a Maven Central or npm package, and shows it, so the person sees where the versions come from before anything is saved.
+ * Several matches, or none, are chosen on the watchlist.
  */
 export function AddToWatchlist({ name, then = null }: { name: string; then?: { readonly day: ScheduleView['day']; readonly at: string } | null }) {
   const find = useFindSoftware()
@@ -29,7 +30,12 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
   const words = useErrorWords()
   const main = useMainButton()
   const asked = useRef<string | null>(null)
+  const versionId = useId()
+  const versionBox = useRef<HTMLInputElement>(null)
   const [kept, setKept] = useState(false)
+  // A package's version, the only one its known vulnerabilities are looked up in (ADR 0025).
+  const [version, setVersion] = useState('')
+  const [versionError, setVersionError] = useState<string | undefined>(undefined)
   const { mutate } = find
   useEffect(() => {
     if (asked.current === name) return
@@ -48,13 +54,15 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
   if (kept) return <p className="muted">Not added. Nothing changed.</p>
   if (add.isSuccess) {
     const added = add.variables
+    const where = SOURCE_NAMES[added.package?.kind ?? 'github']
     const moved = move.data?.schedule
     return (
       <>
         <p className={styles['sent']} role="status">
           <IconCheck size={18} />
           <span>
-            <b>{name} is on the Software watchlist.</b> Its releases are read from GitHub, from {added.repo}.{' '}
+            <b>{name} is on the Software watchlist.</b> Its versions are read from {where}, from {refOf(added)}.
+            {added.package ? ` ${addedVulnerabilityWords(added)}` : ''}{' '}
             <Link to={WATCHLIST}>Open the Software watchlist</Link>
           </span>
         </p>
@@ -66,7 +74,7 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
   if (find.isPending || find.isIdle) {
     return (
       <p className="muted" role="status">
-        Looking for {name}’s GitHub project.
+        Looking up where {name} is published.
       </p>
     )
   }
@@ -81,7 +89,7 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
   if (answer.status !== 'found') {
     return unmoved(
       <p>
-        I couldn’t find {name}’s GitHub project. <Link to={WATCHLIST}>Add it on the Software watchlist</Link> with its address.
+        I couldn’t find where {name} is published. <Link to={WATCHLIST}>Add it on the Software watchlist</Link> and choose GitHub, Maven Central or npm.
       </p>,
     )
   }
@@ -108,21 +116,50 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
       </p>,
     )
   }
+  const kind = kindOf(only)
+  const pkg = isPackage(kind)
   // With the watch card's move, the whole watchlist moves to the time asked once it holds the software, from the version Add made.
   // The promise carries the move on even when the card leaves the screen before Add answers.
-  const moveTo = (version: number) => (then ? move.mutate({ ...then, expected_version: version }) : undefined)
-  const press = () =>
+  const moveTo = (saved: number) => (then ? move.mutate({ ...then, expected_version: saved }) : undefined)
+  const press = () => {
+    const body = homeAdd(name, kind, only.repo, version)
+    if (!body.ok) {
+      setVersionError(body.words)
+      versionBox.current?.focus()
+      return
+    }
     latch.run((settled) => {
       void add
-        .mutateAsync({ name, repo: only.repo })
+        .mutateAsync(body.value)
         .then((view) => moveTo(view.version), () => undefined)
         .finally(settled)
     })
+  }
   return (
     <>
       <p>
-        <b>{only.repo}</b> on GitHub. {only.what} {only.why}
+        <b>{only.repo}</b> on {SOURCE_NAMES[kind]}. {only.what} {only.why}
       </p>
+      {pkg ? (
+        <Field id={versionId} label="Version we run" optional help={HOME_PACKAGE_VERSION_HELP} error={versionError}>
+          <input
+            id={versionId}
+            ref={versionBox}
+            type="text"
+            value={version}
+            placeholder="1.2.14"
+            autoComplete="off"
+            inputMode="decimal"
+            spellCheck={false}
+            aria-invalid={versionError ? true : undefined}
+            aria-describedby={describedBy(versionId, versionError)}
+            onChange={(event) => {
+              setVersion(event.target.value)
+              setVersionError(undefined)
+            }}
+          />
+        </Field>
+      ) : null}
       <div className={styles['buttons']}>
         <Button variant={main} loading={add.isPending} onClick={press}>
           Add {name}

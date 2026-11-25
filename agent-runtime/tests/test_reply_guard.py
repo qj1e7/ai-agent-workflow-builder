@@ -214,7 +214,10 @@ def test_describing_how_things_work_is_no_claim(text: str):
         "I can read GitLab for you.",
         "I can check who has access in Entra.",
         "You can check for CVEs.",
-        "I can watch npm packages too.",
+        "I can watch PyPI packages too.",
+        "I can check any package registry for you.",
+        "I can tell you when Java reaches end of life.",
+        "I can list the exploited flaws.",
         "I can read GitHub issues.",
         "I can update the Confluence page.",
         "You can find tickets by priority.",
@@ -749,3 +752,24 @@ def test_about_keeps_nothing_without_facts_and_never_more_than_the_limit():
     many = '{"watchlist":[' + ",".join(f'{{"name":"S{n}"}}' for n in range(9)) + "]}"
     text = " ".join(f"S{n}" for n in range(9))
     assert len(about_of([f"S{n}" for n in range(9)], text, many)) == ABOUT_LIMIT
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I read versions from the npm registry.",
+        "I read versions from the Maven Central registry.",
+        "The Maven registry lists every version of Log4j.",
+    ],
+)
+def test_npm_s_and_maven_s_own_registries_are_built(text: str):
+    assert claims_only_what_is_built(shown_of(said(text)), OPERATOR)
+
+
+def test_npm_s_own_registry_is_built_but_any_other_registry_is_not():
+    """Item 4 of the 18 Nov review dropped "registry" from the unbuilt words, which let "any
+    package registry" claims through. Only npm's and Maven Central's are read (ADR 0025)."""
+    assert not claims_only_what_is_built(
+        shown_of(said("I can read the PyPI and Docker registries.")), OPERATOR
+    )
+    assert not claims_only_what_is_built(shown_of(said("Any registry works.")), OPERATOR)

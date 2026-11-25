@@ -1,14 +1,17 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false
 import re
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import cast
 
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
+from agent_runtime.capped import CHECK_SECONDS, deadline
 from agent_runtime.contract import (
     REPO_PATTERN,
+    SOURCE_NAMES,
     CarryForward,
     Finding,
     FindingState,
@@ -16,13 +19,16 @@ from agent_runtime.contract import (
     SoftwareToCheck,
     TaskError,
     TaskOutput,
+    Vulnerability,
     WatchlistInputs,
 )
 from agent_runtime.events import Draft
+from agent_runtime.registries import package_candidates
 from agent_runtime.release_source import (
     DEFAULT_RETRY,
     MovableSource,
     Release,
+    ReleaseSource,
     RetryPolicy,
     SourceRejected,
     SourceUnavailable,
@@ -38,6 +44,7 @@ from agent_runtime.release_source import (
 )
 from agent_runtime.summary import Checked, Summarizer
 from agent_runtime.tags import family_of, highest, newer_than
+from agent_runtime.vulnerabilities import AdvisoryReader, Looked
 
 NO_PLAIN_VERSION = "No release has a plain version number."
 NOT_FOUND_STATUSES = {404, 410}
@@ -139,13 +146,81 @@ def with_address(finding: Finding, address: Address) -> Finding:
     )
 
 
+def source_name(item: SoftwareToCheck) -> str:
+    return SOURCE_NAMES[item.source.kind]
+
+
+def _severity_words(vulnerability: Vulnerability) -> str:
+    score = "" if vulnerability.score is None else f", CVSS {vulnerability.score:g}"
+    return f"{vulnerability.severity}{score}"
+
+
+TICKET_VERSIONS = 30
+"""The newest versions an upgrade ticket lists. A registry returns every version ever published,
+so a package far behind could have hundreds, past what one ticket's description can hold."""
+TICKET_VULNERABILITIES = 20
+"""The worst known vulnerabilities an upgrade ticket lists, for the same reason."""
+NOT_LOOKED_UP = (
+    "\n\nKnown vulnerabilities in our version could not be looked up at this check. This does "
+    "not mean it has none."
+)
+NONE_LISTED = "\n\nOSV lists no known vulnerabilities in our version."
+
+
+def version_lines(new_versions: list[str]) -> str:
+    """The ticket's list of newer versions, newest first, up to TICKET_VERSIONS of them."""
+    shown = new_versions[:TICKET_VERSIONS]
+    lines = "\n".join(f"- {tag}" for tag in shown)
+    more = len(new_versions) - len(shown)
+    return f"{lines}\nand {plural(more, 'older one')}." if more else lines
+
+
+def vulnerability_lines(finding: Finding) -> str:
+    """The ticket's section on known vulnerabilities. Each line links its record, so the
+    Approver checks the evidence, not our summary of it. A package's ticket always says what the
+    lookup found, so a lookup that failed never reads as none (ADR 0025)."""
+    if finding.vulnerability_check == "could_not_check":
+        return NOT_LOOKED_UP
+    if finding.vulnerability_check != "checked":
+        return ""
+    if not finding.vulnerabilities:
+        return NONE_LISTED
+    lines: list[str] = []
+    for v in finding.vulnerabilities[:TICKET_VULNERABILITIES]:
+        fix = f" Fixed in {v.fixed_in}." if v.fixed_in else ""
+        about = f" {v.summary}" if v.summary else ""
+        sources = " and ".join(v.reported_by)
+        lines.append(f"- {v.id} ({_severity_words(v)}, reported by {sources}).{about}{fix} {v.url}")
+    count = vulnerability_count(len(finding.vulnerabilities))
+    least = "" if finding.vulnerabilities_complete else "at least "
+    head = f"\n\nOur version has {least}{count}"
+    if not finding.vulnerabilities_complete:
+        # OSV had more pages than one check reads, so these are only the first (ADR 0025).
+        head += ". OSV lists more than one check reads"
+    if len(finding.vulnerabilities) > len(lines):
+        head += f". These are the {len(lines)} worst"
+    elif not finding.vulnerabilities_complete:
+        head += ", so these are only the first"
+    return f"{head}:\n" + "\n".join(lines)
+
+
+def vulnerability_count(count: int) -> str:
+    return f"{count} known vulnerability" if count == 1 else f"{count} known vulnerabilities"
+
+
+def is_urgent(finding: Finding) -> bool:
+    return finding.vulnerability_check == "checked" and any(
+        v.urgent for v in finding.vulnerabilities
+    )
+
+
 def ticket_for(item: SoftwareToCheck, finding: Finding) -> ProposedIntent:
     assert item.our_version and finding.newest, "only a software that is behind gets a ticket"
     name, ref, our = item.name, item.source.ref, item.our_version
     if finding.full_name is not None and finding.full_name.casefold() != ref.casefold():
         ref = f"{ref}, which GitHub now calls {finding.full_name}"
     count = plural(len(finding.new_versions), "new release")
-    bullets = "\n".join(f"- {tag}" for tag in finding.new_versions)
+    bullets = version_lines(finding.new_versions)
     if item.from_first_check:
         title = f"Upgrade {name} to {finding.newest}"
         newer = f"newer than {our}, the newest the first check read"
@@ -156,12 +231,17 @@ def ticket_for(item: SoftwareToCheck, finding: Finding) -> ProposedIntent:
         title = f"Upgrade {name} from {our} to {finding.newest}"
         newer = f"newer than our version {our}"
         reason = f"{name} {finding.newest} is out, and we run {our}"
+    urgent = is_urgent(finding)
+    if urgent:
+        # The ticket still waits for an Approver, like any other (ADR 0025).
+        title = f"Urgent: {title}"
+        reason = f"{reason}, which has a critical known vulnerability"
     return ProposedIntent(
         kind="create_ticket",
         fields={
             "title": title,
-            "body": f"{name} has {count} on GitHub ({ref}) {newer}:\n"
-            f"{bullets}\n\nProposed by the AI workflow builder.",
+            "body": f"{name} has {count} on {source_name(item)} ({ref}) {newer}:\n"
+            f"{bullets}{vulnerability_lines(finding)}\n\nProposed by the AI workflow builder.",
         },
         reason=reason,
         subject=item.id,
@@ -193,24 +273,37 @@ class WatchlistChecker:
         summarizer: Summarizer,
         sleep: Callable[[float], None],
         retry: RetryPolicy = DEFAULT_RETRY,
+        registries: Mapping[str, ReleaseSource] | None = None,
+        advisories: AdvisoryReader | None = None,
+        check_seconds: float = CHECK_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        """source reads GitHub. registries reads every other source kind, by kind, and a kind
+        with no reader here cannot be checked. Without advisories, no vulnerability is looked
+        up and every finding says not_checked. Each check's outside calls share one deadline,
+        check_seconds from its start (capped.py)."""
         self._source = source
         self._summarizer = summarizer
         self._sleep = sleep
         self._retry = retry
+        self._registries = dict(registries or {})
+        self._advisories = advisories
+        self._check_seconds = check_seconds
+        self._clock = clock
         self._graph = self._build()
 
     def check(
         self, inputs: WatchlistInputs, emit: Callable[[Draft], None]
     ) -> TaskOutput | NothingChecked:
         final: dict[str, object] = {}
-        for mode, chunk in self._graph.stream(
-            WatchlistState(inputs=inputs), stream_mode=["custom", "values"]
-        ):
-            if mode == "custom" and isinstance(chunk, Draft):
-                emit(chunk)
-            elif mode == "values" and isinstance(chunk, dict):
-                final = cast(dict[str, object], chunk)
+        with deadline(self._check_seconds, self._clock):
+            for mode, chunk in self._graph.stream(
+                WatchlistState(inputs=inputs), stream_mode=["custom", "values"]
+            ):
+                if mode == "custom" and isinstance(chunk, Draft):
+                    emit(chunk)
+                elif mode == "values" and isinstance(chunk, dict):
+                    final = cast(dict[str, object], chunk)
         outcome = final.get("error") or final.get("output")
         if isinstance(outcome, TaskError):
             return NothingChecked(outcome, cast(list[Finding], final.get("findings", [])))
@@ -220,11 +313,34 @@ class WatchlistChecker:
     def _build(self):
         graph = StateGraph(WatchlistState)
         graph.add_node("read_sources", self._read_sources)
+        graph.add_node("check_vulnerabilities", self._check_vulnerabilities)
         graph.add_node("report", self._report)
         graph.add_edge(START, "read_sources")
-        graph.add_edge("read_sources", "report")
+        graph.add_edge("read_sources", "check_vulnerabilities")
+        graph.add_edge("check_vulnerabilities", "report")
         graph.add_edge("report", END)
         return graph.compile()
+
+    def _read_one(
+        self, item: SoftwareToCheck, write: Callable[[Draft], None]
+    ) -> tuple[list[Release] | TaskError, Address]:
+        """GitHub notes a moved repository on the way. A registry has no such address."""
+        name = source_name(item)
+        if item.source.kind == "github":
+            watching = Watching(self._source)
+            releases = read_releases(watching, item.source.ref, self._retry, self._sleep, write)
+            return releases, watching.address(item.source.ref)
+        registry = self._registries.get(item.source.kind)
+        if registry is None:
+            return TaskError(
+                type="UpstreamRejected",
+                message=f"This runtime has no reader for {name} set up",
+                retryable=False,
+            ), Address()
+        found = read_releases(
+            registry, item.source.ref, self._retry, self._sleep, write, source_name=name
+        )
+        return found, Address()
 
     def _read_sources(self, state: WatchlistState) -> Update:
         write = get_stream_writer()
@@ -233,15 +349,16 @@ class WatchlistChecker:
         read_errors: list[TaskError] = []
         last = len(inputs.software) - 1
         for position, item in enumerate(inputs.software):
-            write(started("read_source", f"reading the releases of {item.name}."))
-            watching = Watching(self._source)
-            releases = read_releases(watching, item.source.ref, self._retry, self._sleep, write)
-            address = watching.address(item.source.ref)
+            where = "" if item.source.kind == "github" else f" on {source_name(item)}"
+            write(started("read_source", f"reading the releases of {item.name}{where}."))
+            releases, address = self._read_one(item, write)
             if isinstance(releases, TaskError):
                 read: Read = releases
                 read_errors.append(releases)
-            else:
+            elif item.source.kind == "github":
                 read = candidates(releases, inputs.tag_pattern)
+            else:
+                read = package_candidates(releases, item.our_version)
             finding = with_address(decide(item, read), address)
             findings.append(finding)
             write(_read_finished(item, finding))
@@ -249,6 +366,40 @@ class WatchlistChecker:
                 unreadable = isinstance(read, TaskError)
                 write(_cannot_check(item, finding, unreadable=unreadable, more=position < last))
         return {"findings": findings, "read_errors": read_errors}
+
+    def _check_vulnerabilities(self, state: WatchlistState) -> Update:
+        """Looks only at the version the team runs. A version the first check read is not one
+        anyone said the team runs, so it is not looked up either (ADR 0025)."""
+        advisories = self._advisories
+        if advisories is None:
+            return {}
+        write = get_stream_writer()
+        check = advisories.start_check()
+        findings = list(state.findings)
+        for index, item in enumerate(state.inputs.software):
+            if item.our_version is None or item.from_first_check:
+                continue
+            if item.source.kind == "github":
+                continue
+            write(
+                started(
+                    "check_vulnerabilities",
+                    f"looking up known vulnerabilities in {item.name} {item.our_version}.",
+                )
+            )
+            looked = check.look(item.source.kind, item.source.ref, item.our_version)
+            if looked is None:
+                continue
+            findings[index] = findings[index].model_copy(
+                update={
+                    "vulnerability_check": looked.state,
+                    "vulnerabilities": looked.vulnerabilities,
+                    "vulnerabilities_complete": looked.all_read,
+                }
+            )
+            write(_vulnerabilities_finished(item, looked))
+            write(_vulnerabilities_to_room(item, looked))
+        return {"findings": findings}
 
     def _report(self, state: WatchlistState) -> Update:
         write = get_stream_writer()
@@ -268,8 +419,12 @@ class WatchlistChecker:
         tickets = [ticket_for(item, f) for item, f in behind]
         write(_report_total(items, behind))
         checked = [Checked(item.name, f) for item, f in pairs]
+        # The model writes about versions only. Vulnerabilities are added in fixed words, so
+        # the summary never drops one and never makes one up.
+        summary = self._summarizer.summarise_check(checked)
+        vulnerable = vulnerability_sentence(pairs)
         output = TaskOutput(
-            summary=self._summarizer.summarise_check(checked),
+            summary=f"{summary} {vulnerable}" if vulnerable else summary,
             new_tags=[],
             proposed=tickets,
             carry_forward=CarryForward(),
@@ -350,3 +505,70 @@ def _report_total(
         f"{count} of {total} watched software {verb} new releases: {tag_list(names)}. "
         f"I suggest {suggestion}.",
     )
+
+
+def _vulnerabilities_finished(item: SoftwareToCheck, looked: Looked) -> Draft:
+    if looked.state == "could_not_check":
+        what = f"could not look up vulnerabilities in {item.name}."
+    else:
+        what = f"found {vulnerability_count(len(looked.vulnerabilities))} in {item.name}."
+    result: dict[str, object] = {
+        "software_id": item.id,
+        "vulnerability_check": looked.state,
+        "vulnerabilities": [v.id for v in looked.vulnerabilities],
+    }
+    return finished("check_vulnerabilities", what, result)
+
+
+def _vulnerabilities_to_room(item: SoftwareToCheck, looked: Looked) -> Draft:
+    version = f"{item.name} {item.our_version}"
+    if looked.state == "could_not_check":
+        return to_room(
+            f"could not look up vulnerabilities in {item.name}.",
+            f"I could not look up known vulnerabilities in {version}: {looked.problem}. "
+            "This does not mean it has none.",
+        )
+    found = looked.vulnerabilities
+    if not found:
+        return to_room(
+            f"found no known vulnerabilities in {item.name}.",
+            f"OSV lists no known vulnerabilities in {version}.",
+        )
+    worst = found[0]
+    urgent = [v.id for v in found if v.urgent]
+    text = (
+        f"{version} has {vulnerability_count(len(found))}. The worst is {worst.id} "
+        f"({_severity_words(worst)})."
+    )
+    if urgent:
+        text += f" {tag_list(urgent)} {'is' if len(urgent) == 1 else 'are'} critical."
+    if looked.unscored:
+        text += (
+            f" NVD did not score {looked.unscored} of them, so those show the advisory's "
+            "own severity."
+        )
+    if not looked.all_read:
+        text += " OSV lists more than one check reads, so there may be more than these."
+    return to_room(f"reported {vulnerability_count(len(found))} in {item.name}.", text)
+
+
+def vulnerability_sentence(pairs: list[tuple[SoftwareToCheck, Finding]]) -> str:
+    """One fixed sentence for the run's summary, or nothing when no vulnerability was found
+    and no lookup failed."""
+    parts: list[str] = []
+    failed_names: list[str] = []
+    for item, finding in pairs:
+        if finding.vulnerability_check == "could_not_check":
+            failed_names.append(item.name)
+        elif finding.vulnerabilities:
+            critical = sum(1 for v in finding.vulnerabilities if v.urgent)
+            extra = f", {critical} critical" if critical else ""
+            count = vulnerability_count(len(finding.vulnerabilities))
+            least = "" if finding.vulnerabilities_complete else "at least "
+            parts.append(f"{item.name} {item.our_version} has {least}{count}{extra}")
+    sentences: list[str] = []
+    if parts:
+        sentences.append(f"{'; '.join(parts)}.")
+    if failed_names:
+        sentences.append(f"Vulnerabilities could not be looked up for {tag_list(failed_names)}.")
+    return " ".join(sentences)

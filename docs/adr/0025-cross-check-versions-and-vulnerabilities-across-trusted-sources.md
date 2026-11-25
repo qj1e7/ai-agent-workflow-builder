@@ -23,6 +23,24 @@ So the watchlist gets two specialist agents, both defined by agent cards (ADR 00
 
 Every source above is read by a tool the team builds and tests (ADR 0023). All of them only read, so none needs approval.
 
+## What part one builds (19 Nov 2026, updated 22 Nov)
+
+The code builds a first part of this decision. Where it differs from the plan above, this section is what the code does.
+
+- **Sources.** Maven Central and npm, besides GitHub releases. PyPI, NuGet, Docker Hub, endoflife.date and CISA's list are not built. The source kinds are `github`, `maven` and `npm`.
+- **One agent, not two.** The Version checker reads the versions and also looks up known vulnerabilities, with two read-only tools, `packages.read_versions` and `packages.find_vulnerabilities`. No agent card can use either. The Vulnerability checker and the vendor's own advisory are not built.
+- **Where it runs.** The Software watchlist's check runs in n8n, on the watchlist's schedule (ADR 0020), like the GitHub check.
+- **Words.** A bare "npm" or "Maven Central" names no software, so watching or asking about one asks which software. The reply guard counts every vulnerability phrase as unbuilt, so the capability list says only "new versions" for packages.
+- **Finding a source.** There is no web search. A known name is offered from a fixed list after its registry is read, and otherwise the Operator chooses where it is published.
+- **Package versions.** Three numbers, with at most one ending that marks a final build: `.Final`, `.RELEASE` or `.GA`, which compare as the numbers, or Guava's `-jre` or `-android`, which are separate builds. A check compares only the build the team runs, and watches `-jre` when no version was given. Any other ending, as `-beta1` or `-SNAPSHOT`, is a prerelease. GitHub tags keep their own pattern.
+- **Vulnerabilities.** Only for a Maven or npm package, and only for a version someone gave, never one the first check read. OSV finds them, at most 5 pages a check. When OSV had more, the finding says so, and the ticket and the run's summary say "at least". NVD scores each CVE. A record from OSV or NVD in a shape we don't read makes only that package "could not check". A package added from Home can be given its version on the card, and a package's Software page says where its vulnerabilities are listed: the last check's run gives how many and the worst, and the upgrade ticket lists each one.
+- **Urgent.** A vulnerability makes the upgrade ticket "Urgent: ..." when NVD scores it 9.0 or more, or, when NVD gives no score, when the advisory itself says critical. platform-api applies the same rule and expects the urgent title exactly then. The ticket still waits for an Approver.
+- **Evidence links.** Each vulnerability links its NVD record when it has a CVE, and its OSV record otherwise.
+- **NVD limits.** Without a key, NVD is asked at most once every 6 seconds; with `NVD_API_KEY`, every 0.6 seconds. Each check may score at most 10 CVEs without a key and 50 with one, and spends at most 20 seconds on NVD. The pace is kept across the whole runtime. A CVE not scored keeps the advisory's severity, and the check says so. The key is not in Terraform yet.
+- **One deadline per check.** Every call to Maven Central, npm, OSV and NVD in one check, with its retries and waits, shares a 40-second deadline. Each call's timeouts are cut to the time left, a retry that would not fit is not made, and out of time a registry says so, OSV makes that package "could not check" and NVD leaves the CVE unscored. With the summary's own 10 seconds, the task stays inside the 60 seconds n8n and platform-api give it. GitHub's own reads keep their timeouts.
+- **Reading outside services.** Every answer is asked for uncompressed, one that comes compressed is refused, and it is streamed and read up to a limit: 32 MB from Maven Central and npm, 8 MB per OSV page and 2 MB per NVD record. No redirect is followed.
+- **Egress.** The lock-down test's proxy allows repo1.maven.org, registry.npmjs.org, api.osv.dev and services.nvd.nist.gov.
+
 ## Considered options
 
 - **Search the whole web for versions and vulnerabilities.** It would find more, but blogs and copy sites often show old or wrong numbers. Two searches can disagree, which an Approver cannot check. Every page an agent reads could also carry planted instructions. So web search is used only to suggest a source, only on the vendor's own site, and a person confirms the result.

@@ -9,6 +9,8 @@ import {
   checkName,
   checkRepo,
   checkVersion,
+  addedVulnerabilityWords,
+  homeAdd,
   countLine,
   DAYS,
   dayOption,
@@ -109,6 +111,18 @@ describe('the other field checks', () => {
     expect(checkVersion('1.2.14')).toEqual({ ok: true, value: '1.2.14' })
     expect(checkVersion('v2.0.0')).toEqual({ ok: true, value: 'v2.0.0' })
     for (const bad of ['1.2', 'v1.2', 'vv1.2.3', '1.2.x', '1.2.3-beta']) expect(checkVersion(bad).ok, bad).toBe(false)
+    for (const bad of ['33.3.1-jre', '4.1.115.Final']) expect(checkVersion(bad).ok, bad).toBe(false)
+  })
+
+  it('takes a package version that ends as its registry writes a final build', () => {
+    for (const good of ['33.3.1-jre', '33.3.1-android', '4.1.115.Final', '5.3.39.RELEASE', '2.24.3']) {
+      expect(checkVersion(good, 'maven'), good).toEqual({ ok: true, value: good })
+    }
+    for (const bad of ['2.25.0-beta1', '3.1.0-SNAPSHOT', 'v2.24.3', '4.1.115.final']) {
+      const checked = checkVersion(bad, 'npm')
+      expect(checked.ok, bad).toBe(false)
+      if (!checked.ok) expect(checked.words).toContain('.Final or -jre')
+    }
   })
 
   it('takes a time on a 5-minute step', () => {
@@ -504,5 +518,35 @@ describe('the upgrade ticket fact on the software page', () => {
 
   it('says the last check stopped before it could tell', () => {
     expect(ticketFact(row({ status: 'cant_check' }), null)).toBe('None yet. The last check stopped before it could tell.')
+  })
+})
+
+describe('adding a package from Home (ADR 0025)', () => {
+  const LOG4J = 'org.apache.logging.log4j:log4j-core'
+
+  it('sends the version typed on the card, the one its known vulnerabilities are looked up in', () => {
+    expect(homeAdd('Log4j', 'maven', LOG4J, ' 2.14.1 ')).toEqual({ ok: true, value: { name: 'Log4j', package: { kind: 'maven', ref: LOG4J }, our_version: '2.14.1' } })
+  })
+
+  it('adds a package with no version when none is typed, and says its vulnerabilities aren’t looked up', () => {
+    const added = homeAdd('Express', 'npm', 'express', '')
+    expect(added).toEqual({ ok: true, value: { name: 'Express', package: { kind: 'npm', ref: 'express' } } })
+    if (added.ok) expect(addedVulnerabilityWords(added.value)).toBe('Without your version, known vulnerabilities aren’t looked up.')
+  })
+
+  it('refuses a version that is no package version, with the words to fix it', () => {
+    const refused = homeAdd('Log4j', 'maven', LOG4J, '2.25.0-beta1')
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.words).toContain('.Final or -jre')
+  })
+
+  it('says which version is looked up once it is added', () => {
+    expect(addedVulnerabilityWords({ name: 'Log4j', package: { kind: 'maven', ref: LOG4J }, our_version: '2.14.1' })).toBe('Each check also looks up known vulnerabilities in 2.14.1.')
+  })
+
+  it('sends no version and says nothing about vulnerabilities for a GitHub project', () => {
+    const added = homeAdd('LangGraph', 'github', 'langchain-ai/langgraph', 'ignored')
+    expect(added).toEqual({ ok: true, value: { name: 'LangGraph', repo: 'langchain-ai/langgraph' } })
+    if (added.ok) expect(addedVulnerabilityWords(added.value)).toBe('')
   })
 })

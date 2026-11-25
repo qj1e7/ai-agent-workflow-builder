@@ -98,6 +98,23 @@ software the run checks."""
 WATCHLIST_CHECKER = NodeOption("watchlist_checker", "Watchlist checker")
 """The platform's own agent that checks every watched software at once and proposes the upgrade
 tickets, with the same review as before the move (D11)."""
+VERSION_CHECKER_ID = "crd_version_checker"
+REPO_INPUT = "GitHub repository"
+
+
+def release_of(agent: str, inputs: Mapping[str, str]) -> str | None:
+    """The repository whose newest release each change the agent proposes is about: the Version
+    checker's own. None for any other agent."""
+    return inputs.get(REPO_INPUT) if agent == VERSION_CHECKER_ID else None
+
+
+def release_compared(
+    found: Mapping[str, Json], *, newer: bool, version: str | None
+) -> dict[str, Json]:
+    """The Version checker's answer, as the release check's Newer? block reads it: newer when the
+    agent proposed a change, with the newest release our API read, never one from its words. The
+    simulation gateway answers the same, so a simulation plays the release check's branch."""
+    return {**found, "newer": newer, "version": version}
 
 
 @dataclass(frozen=True)

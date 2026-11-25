@@ -242,6 +242,7 @@ function Loaded({ view, operator, held, now, rowId }: LoadedProps) {
           checkedBy={checkedBy}
           declined={declined}
           lastCheckStopped={view?.last_check?.state === 'failed'}
+          lastCheck={view?.last_check ?? null}
           onToggleHistory={() => setHistoryOpen((open) => !open)}
           onRemove={() => pressRemove(changes, removal.mutate, row, dispatch, words)}
           onAskAddress={() => setConfirming(row.id)}

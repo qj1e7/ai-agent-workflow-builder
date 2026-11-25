@@ -23,8 +23,9 @@ HOW_TO: Final = (
     "Operators set up and change workflows, and Approvers say yes or no to requests.",
     "The rail on the left opens Chat, Workflows and the Watchlist.",
     "Needs you lists what waits for you, such as a request to approve or a run that stopped.",
-    "The Watchlist holds the software your team runs, and it checks GitHub for new releases on "
-    "one schedule.",
+    "The Watchlist holds the software your team runs, and it checks each one for new releases "
+    "on one schedule.",
+    "The Watchlist reads releases on GitHub, and the versions of Maven Central and npm packages.",
     "To add software to the Watchlist, open the Watchlist and fill in Add software, or type "
     "Check and its name in the box, such as Check LangGraph for new releases.",
     "To take software off the Watchlist, type Remove and its name in the box, such as Remove "

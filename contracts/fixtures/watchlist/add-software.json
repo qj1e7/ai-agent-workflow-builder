@@ -1,5 +1,6 @@
 {
   "name": "LangGraph",
   "repo": "langchain-ai/langgraph",
+  "package": null,
   "our_version": "1.2.14"
 }

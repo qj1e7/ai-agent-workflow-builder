@@ -311,6 +311,10 @@ TOOL_PLACES: Mapping[ToolId, tuple[str, InputKind | None]] = {
     "jira.read_ticket": ("Jira", "jira_project"),
     "confluence.read_page": ("Confluence", None),
     "jira.create_ticket": ("Jira", "jira_project"),
+    # ADR 0025. No card can use these, but a report names a place for every tool. The
+    # packages come from the Software watchlist, so no card input names them.
+    "packages.read_versions": ("Maven Central and npm", None),
+    "packages.find_vulnerabilities": ("OSV and NVD", None),
 }
 """For each tool, the system it reaches and the kind of the card's input that names the place."""
 TELL_PLACES: Mapping[str, tuple[str, str]] = {

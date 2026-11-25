@@ -169,9 +169,10 @@ def lay_out() -> str:
 
 
 def release_check(first: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """A release check as the Planner lays one out: Read, Agent, Propose a change, Ask for a yes,
-    then Make the approved changes and Tell on Yes, and an end on each other exit. `first` stands
-    in for Read."""
+    """A release check of our blocks with a Propose a change block: Read, Agent, Propose a change,
+    Ask for a yes, then Make the approved changes and Tell on Yes, and an end on each other exit.
+    `first` stands in for Read. The Planner's own release check is tried in the simulation-link
+    job (e2e/tests/test_practice_systems.py)."""
     read = {"source": "github_releases", "place": "langchain-ai/langgraph"}
     inputs = {"input": [{"name": "release", "value": "={{ $json.id }}"}]}
     propose = {

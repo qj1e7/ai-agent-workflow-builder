@@ -76,6 +76,44 @@ const idOf = (status: string, from: readonly WatchedSoftwareView[] = ROW) => fro
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
+describe('a package’s known vulnerabilities on its page (ADR 0025)', () => {
+  const base = ROW[0]!
+  const asPackage = (changes: Partial<WatchedSoftwareView>): WatchlistView => ({
+    ...(statuses as WatchlistView),
+    software: [{ ...base, source: { kind: 'maven', ref: 'org.apache.logging.log4j:log4j-core', url: 'https://central.sonatype.com/artifact/org.apache.logging.log4j/log4j-core/versions' }, ...changes }],
+  })
+
+  it('says where a looked-up version’s vulnerabilities are listed, and links the last check', () => {
+    const html = renderItem(asPackage({}), ALICE, base.id)
+    const words = text(html)
+    expect(words).toContain('Known vulnerabilities')
+    expect(words).toContain('The last check’s run says how many there are and names the worst. An upgrade ticket lists each one, linked to NVD or OSV.')
+    expect(html).toContain('href="/runs/run_01JBB"')
+  })
+
+  it('says a version given after the last check is looked up next time, with no link to a run without it', () => {
+    const html = renderItem(asPackage({ our_version_source: { kind: 'given', at: '2026-11-16T09:00:00Z', ticket: null } }), ALICE, base.id)
+    expect(text(html)).toContain('Not looked up yet. The next check looks them up in this version.')
+    expect(html).not.toContain('Open the last check')
+  })
+
+  it('links no run the last check didn’t look this package up in', () => {
+    const html = renderItem(asPackage({ checked_at: '2026-11-09T01:00:00Z' }), ALICE, base.id)
+    expect(text(html)).toContain('Not looked up yet.')
+    expect(html).not.toContain('Open the last check')
+  })
+
+  it('says a version the first check read is not looked up, with no link', () => {
+    const html = renderItem(asPackage({ our_version_source: { kind: 'first_check', at: '2026-11-02T10:00:00Z', ticket: null } }), ALICE, base.id)
+    expect(text(html)).toContain('Not looked up. They’re looked up only in a version someone gave, or one an upgrade ticket set when marked Done.')
+    expect(html).not.toContain('Open the last check')
+  })
+
+  it('says nothing about vulnerabilities for a GitHub project', () => {
+    expect(text(renderItem(statuses, ALICE, base.id))).not.toContain('Known vulnerabilities')
+  })
+})
+
 describe('the Software watchlist page', () => {
   it('leaves the move to n8n to its workflow page, which says it once', () => {
     expect(text(render({ ...statuses, moving_to_n8n: true }, ALICE))).not.toContain('Moving to n8n')
@@ -248,6 +286,7 @@ describe('the search box', () => {
 })
 
 const GUESS: ProjectGuess = {
+  kind: 'github',
   repo: 'langchain-ai/langgraph',
   what: 'LangGraph, a Python library for building AI agents',
   why: 'From our list of known projects.',
@@ -385,7 +424,7 @@ describe('add software by name', () => {
     const html = form(run('LangGraph', { type: 'answered', answer: found(GUESS) }, { type: 'change' }))
     expect(html).toContain('id="sw-repo"')
     expect(html).toContain('value="langchain-ai/langgraph"')
-    expect(text(html)).toContain('You’re choosing the project yourself.')
+    expect(text(html)).toContain('You’re choosing where it’s published yourself.')
   })
 
   it('says plainly when the list has no such name, and falls back to the repository field', () => {
@@ -410,10 +449,10 @@ describe('add software by name', () => {
     const none: ProjectGuess = { ...GUESS, repo: 'python/cpython', releases: 'none', newest: null }
     const state = run('Python', { type: 'answered', answer: found(none) })
     const html = form(state)
-    expect(text(html)).toContain('python/cpython doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.')
+    expect(text(html)).toContain('python/cpython doesn’t publish releases on GitHub, and it isn’t a Maven Central or npm package this check knows. It can’t be watched here.')
     expect(buttons(html)).toEqual(['Change', 'Start again'])
     expect(html).not.toContain('id="sw-version"')
-    expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: 'python/cpython doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.' } })
+    expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: 'python/cpython doesn’t publish releases on GitHub, and it isn’t a Maven Central or npm package this check knows. It can’t be watched here.' } })
   })
 
   it('leaves a match with no releases out of the choice, and says why beside it', () => {
@@ -771,5 +810,76 @@ describe('a repository GitHub moved', () => {
     const html = renderItem({ ...(statuses as WatchlistView), software: [older] }, ALICE, String(older['id']))
     expect(text(html)).not.toContain('GitHub now calls')
     expect(text(html)).not.toContain('GitHub can’t find')
+  })
+})
+
+describe('add a Maven Central or npm package (ADR 0025)', () => {
+  const LOG4J: ProjectGuess = {
+    kind: 'maven',
+    repo: 'org.apache.logging.log4j:log4j-core',
+    what: 'Log4j core, the Java logging library from Apache',
+    why: 'From our list of known packages. Your team installs it from Maven Central.',
+    releases: 'published',
+    newest: '2.24.3',
+    already_listed: null,
+  }
+
+  it('shows a known package as itself, links its registry, and says its version is looked up for vulnerabilities', () => {
+    const state = run('Log4j', { type: 'answered', answer: found(LOG4J) })
+    const html = form(state)
+    const words = text(html)
+    expect(words).toContain('Maven Central · org.apache.logging.log4j:log4j-core')
+    expect(html).toContain('href="https://central.sonatype.com/artifact/org.apache.logging.log4j/log4j-core/versions"')
+    expect(words).toContain('(opens Maven Central in a new tab)')
+    expect(words).toContain('Give the version you run, and each check also looks up known vulnerabilities in it.')
+    expect(words).toContain('Give it, and each check also looks up known vulnerabilities in it. The last check’s run says how many there are and names the worst. An upgrade ticket lists each one, linked to NVD or OSV.')
+  })
+
+  it('sends a confirmed package as package, never as repo', () => {
+    const state = run('Log4j', { type: 'answered', answer: found(LOG4J) }, { type: 'typed', field: 'version', value: '2.14.1' })
+    expect(readyToAdd(state, [], [])).toEqual({
+      ok: true,
+      body: { name: 'Log4j', package: { kind: 'maven', ref: 'org.apache.logging.log4j:log4j-core' }, our_version: '2.14.1' },
+    })
+  })
+
+  it('lets the person choose where it is published when nothing was found, and asks for that source’s name', () => {
+    const unknown: FindOut = { status: 'not_known', message: 'I don’t know software called Acme. Choose where it’s published and type its name there.' }
+    const github = run('Acme', { type: 'answered', answer: unknown })
+    expect(text(form(github))).toContain('Published on GitHub Maven Central npm GitHub repository')
+    const npm = addReducer(github, { type: 'kind', kind: 'npm' })
+    const html = form(npm)
+    expect(text(html)).toContain('npm package Type the package name, for example express or @nestjs/core.')
+    expect(html).toContain('placeholder="package-name"')
+  })
+
+  it('checks a typed package the way its registry names it, and refuses one already on the list', () => {
+    const typed = (kind: 'maven' | 'npm', ref: string) => addReducer(addReducer(run('Acme', { type: 'answered', answer: { status: 'not_known', message: '' } }), { type: 'kind', kind }), { type: 'typed', field: 'repo', value: ref })
+    expect(readyToAdd(typed('maven', 'org..evil:x'), [], [])).toEqual({ ok: false, errors: { repo: 'That doesn’t look like Maven coordinates. Type groupId:artifactId, for example org.apache.logging.log4j:log4j-core.' } })
+    expect(readyToAdd(typed('npm', 'Express'), [], [])).toEqual({ ok: false, errors: { repo: 'That doesn’t look like an npm package name. Type it in small letters, for example express or @nestjs/core.' } })
+    expect(readyToAdd(typed('npm', 'express'), [], [{ kind: 'npm', ref: 'express' }])).toEqual({ ok: false, errors: { repo: 'express is already on the list.' } })
+    // The same name on GitHub is another source.
+    expect(readyToAdd(typed('npm', 'express'), [], [{ kind: 'github', ref: 'express' }])).toEqual({ ok: true, body: { name: 'Acme', package: { kind: 'npm', ref: 'express' } } })
+  })
+
+  it('starts the choice from the package when the person changes a package guess', () => {
+    const state = run('Log4j', { type: 'answered', answer: found(LOG4J) }, { type: 'change' })
+    expect(state.repo).toBe('org.apache.logging.log4j:log4j-core')
+    expect(state.kind).toBe('maven')
+    expect(text(form(state))).toContain('Maven coordinates')
+  })
+})
+
+describe('a package’s own page (ADR 0025)', () => {
+  it('names the registry it is read from in its Source fact, as the sketch does', () => {
+    const view = statuses as unknown as WatchlistView
+    const first = view.software[0]
+    if (!first) throw new Error('no software in the fixture')
+    const npm: WatchedSoftwareView = { ...first, name: 'Express', source: { kind: 'npm', ref: 'express', url: 'https://www.npmjs.com/package/express?activeTab=versions' } }
+    const words = text(renderItem({ ...view, software: [npm] }, ALICE, npm.id))
+    expect(words).toContain('Source npmjs.com/package/express (opens npm in a new tab) npm')
+    expect(words).not.toContain('github.com/express')
+    const github = text(renderItem(statuses, ALICE, first.id))
+    expect(github).toContain(`Source github.com/${first.source.ref} (opens GitHub in a new tab) GitHub`)
   })
 })

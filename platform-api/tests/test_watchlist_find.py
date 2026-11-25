@@ -71,6 +71,7 @@ async def test_a_name_gives_the_checked_projects_and_sends_the_watchlists_own_ta
         "status": "found",
         "matches": [
             {
+                "kind": "github",
                 "repo": "langchain-ai/langgraph",
                 "what": "A project",
                 "why": "From our list of known projects.",
@@ -191,3 +192,40 @@ def test_prefixed_tags_compare_by_number_not_by_difference(
     candidate: str, than: str, is_newer: bool
 ):
     assert newer(candidate, than) is is_newer
+
+
+LOG4J = "org.apache.logging.log4j:log4j-core"
+
+
+async def test_a_package_match_keeps_its_kind_and_is_found_listed_only_as_that_package(
+    client: httpx.AsyncClient, finder: FakeFinder
+):
+    package = SoftwareMatch(
+        kind="maven",
+        repo=LOG4J,
+        what="Log4j core",
+        why="From our list of known packages. Your team installs it from Maven Central.",
+        releases="published",
+        newest="2.24.3",
+    )
+    finder.answer = FoundSoftware(matches=[package])
+    reply = await find(client, "Log4j")
+    assert reply.status_code == 200
+    [guess] = reply.json()["matches"]
+    assert (guess["kind"], guess["repo"], guess["already_listed"]) == ("maven", LOG4J, None)
+
+    added = await client.post(
+        "/api/v1/watchlist/software",
+        json={"name": "Log4j", "package": {"kind": "maven", "ref": LOG4J}},
+        headers=ALICE,
+    )
+    assert added.status_code == 201
+    [guess] = (await find(client, "Log4j")).json()["matches"]
+    assert guess["already_listed"] == "Log4j"
+
+
+def test_a_match_must_be_a_name_its_source_could_hold():
+    with pytest.raises(ValueError):
+        SoftwareMatch(
+            kind="maven", repo="owner/name", what="x", why="", releases="none", newest=None
+        )

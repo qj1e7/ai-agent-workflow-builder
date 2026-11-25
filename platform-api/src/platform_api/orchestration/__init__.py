@@ -17,6 +17,7 @@ from platform_api.orchestration.agents import (
     CardDraft,
     CardInput,
     CardSpec,
+    CardToolId,
     CauseFound,
     CheckPartResult,
     CheckWorkflowsAnswer,
@@ -152,6 +153,8 @@ from platform_api.orchestration.n8n import (
 )
 from platform_api.orchestration.n8n_calls import (
     GITHUB_RELEASES,
+    REPO_INPUT,
+    VERSION_CHECKER_ID,
     WATCHLIST_CHECKER,
     WATCHLIST_PLACE,
     AgentToRun,
@@ -165,6 +168,7 @@ from platform_api.orchestration.n8n_calls import (
     ReadFailed,
     ReadItems,
     WriteEntry,
+    release_of,
 )
 from platform_api.orchestration.n8n_credentials import (
     KeyRemoved,
@@ -251,6 +255,7 @@ from platform_api.orchestration.simulation_driver import (
 from platform_api.orchestration.simulation_gateway import PlanOut, ResultOut, SimulationOut
 from platform_api.orchestration.slack_channels import ChannelList, SlackChannels
 from platform_api.orchestration.spec import (
+    PACKAGE_VERSION_PATTERN,
     CardRun,
     CardsTask,
     N8nTarget,
@@ -447,6 +452,8 @@ __all__ = [
     "zone_name",
     "read_flow",
     "GITHUB_RELEASES",
+    "REPO_INPUT",
+    "VERSION_CHECKER_ID",
     "WATCHLIST_CHECKER",
     "WATCHLIST_PLACE",
     "EVENT_SUMMARY_LIMIT",
@@ -473,6 +480,7 @@ __all__ = [
     "RanVersion",
     "ReadFailed",
     "ReadItems",
+    "release_of",
     "Grade",
     "ASK_EXITS",
     "writes",
@@ -596,6 +604,7 @@ __all__ = [
     "WatchPart",
     "RuntimeDown",
     "Stopped",
+    "CardToolId",
     "ToolId",
     "ToolKind",
     "ToolRule",
@@ -632,6 +641,7 @@ __all__ = [
     "ScheduleHold",
     "held_words",
     "SoftwareFacts",
+    "PACKAGE_VERSION_PATTERN",
     "SoftwareSource",
     "Standing",
     "Status",

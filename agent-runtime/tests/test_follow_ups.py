@@ -730,9 +730,14 @@ def test_a_hostile_request_at_the_limit_is_read_in_linear_time(task: str):
     request of repeated marks and words must never backtrack (ReDoS)."""
     assert len(task) == LIMIT
     named = request(task, PreviousTurn(request=task, software="node js", kind="reply"))
+    took = min(_read_once(task, named) for _ in range(3))
+    assert took < 0.1, f"{took:.3f}s"
+
+
+def _read_once(task: str, named: AnswerRequest) -> float:
+    """The best of three runs keeps a busy machine from failing a read that stays linear."""
     begun = time.perf_counter()
     carried(task, "node js")
     carried(task, LONG_READING)
     watch_of_it(None, named)
-    took = time.perf_counter() - begun
-    assert took < 0.1, f"{took:.3f}s"
+    return time.perf_counter() - begun

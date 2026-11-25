@@ -215,7 +215,8 @@ def test_a_cant_with_nothing_close_adds_what_the_app_is_for_and_what_it_can_do()
     )
     assert nothing_close() == (
         "This app runs repetitive work for you. I can only check software for new releases on "
-        "GitHub, create a Jira ticket after a yes, and ask Approvers for a yes in Teams."
+        "GitHub, check Maven Central and npm packages for new versions, create a Jira ticket "
+        "after a yes, and ask Approvers for a yes in Teams."
     )
 
 
