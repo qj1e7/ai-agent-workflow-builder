@@ -57,13 +57,11 @@
   overflow-wrap: anywhere;
 }
 
-/* One line, with an ellipsis, so the preview never grows with the text. */
+/* The gist is cut by code to one sentence's worth, so it fits one line on a wide window and wraps on a narrow one, never cut off. */
 .gist {
-  overflow: hidden;
   color: var(--muted);
   font-size: 0.9rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .more {

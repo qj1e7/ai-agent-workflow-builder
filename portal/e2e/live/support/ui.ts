@@ -73,13 +73,13 @@ export async function expectReadOnly(page: Page, what: string): Promise<void> {
 }
 
 /** "What happened (3 steps)", the run's history, folded once the run needs the person or is over. */
-const HISTORY = /^What happened \(\d+ steps?\)$/
+const HISTORY = /What happened \(\d+ steps?\)/
 
 /** Opens What happened when it is folded, so its steps, its run line and its agent messages can be read. Shut or open, it leaves it open. */
 export async function showHistory(scope: Page | Locator): Promise<void> {
-  const summary = scope.locator('summary', { hasText: HISTORY })
+  const details = scope.locator('details').filter({ hasText: HISTORY }).first()
+  const summary = details.locator('summary').first()
   await summary.waitFor()
-  const details = scope.locator('details', { has: summary })
   if (!(await details.evaluate((element) => (element as HTMLDetailsElement).open))) await summary.click()
   await expect(details).toHaveJSProperty('open', true)
 }
