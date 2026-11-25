@@ -331,6 +331,21 @@ class PlaysForASimulation(unittest.TestCase):
             call(base, "/_admin/mode", {"mode": "not_found"})
             self.assertEqual(call(base, RELEASES_URL)[0], 404)
 
+    def test_search_finds_a_repository_by_a_word_of_its_name_with_its_stars(self) -> None:
+        with running() as base:
+            status, body = call(base, "/search/repositories?q=httpx+archived%3Afalse&per_page=5")
+            self.assertEqual(status, 200)
+            [item] = body["items"]
+            self.assertEqual((item["full_name"], item["stargazers_count"]), (server.HTTPX, 15854))
+            self.assertEqual(item["description"], "A next generation HTTP client for Python.")
+            self.assertEqual(call(base, f"/repos/{server.HTTPX}/releases")[0], 200)
+            self.assertEqual(call(base, "/search/repositories?q=zorblax")[1]["items"], [])
+
+    def test_search_follows_the_mode(self) -> None:
+        with running() as base:
+            call(base, "/_admin/mode", {"mode": "unavailable"})
+            self.assertEqual(call(base, "/search/repositories?q=httpx")[0], 503)
+
     def test_served_releases_are_a_list_of_objects(self) -> None:
         with running() as base:
             for given in ({"releases": "9.9.9"}, {"releases": [1]}, {}):

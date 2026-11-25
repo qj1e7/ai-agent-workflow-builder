@@ -133,9 +133,21 @@ def test_finding_software_by_name_offers_only_projects_github_just_confirmed(api
     two = api.find_software("alice", "Terraform").json()
     assert [m["repo"] for m in two["matches"]] == ["hashicorp/terraform", "opentofu/opentofu"]
 
+    assert (two["matches"][0]["found_by"], two["matches"][0]["stars"]) == ("reviewed_list", None)
+
     unknown = api.find_software("alice", "Zorblax").json()
     assert unknown["status"] == "not_known"
     assert "Zorblax" in unknown["message"]
+
+    searched = api.find_software("alice", "httpx").json()
+    assert searched["status"] == "found"
+    [hit] = searched["matches"]
+    assert (hit["repo"], hit["found_by"], hit["stars"], hit["newest"]) == (
+        "encode/httpx",
+        "github_search",
+        15854,
+        "0.28.1",
+    ), "a name the reviewed list lacks is searched on GitHub and offered only as a choice"
 
     api.add_software("alice", "LangGraph", "langchain-ai/langgraph")
     again = api.find_software("alice", "langgraph").json()

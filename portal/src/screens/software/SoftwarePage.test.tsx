@@ -19,7 +19,7 @@ import { TicketLinksProvider } from '../../api/ticketLinks'
 import { createDevSession } from '../../api/session'
 import type { FindOut, Me, PersonOut, ProjectGuess, ScheduleHold, UseCaseN8nView, UseCaseView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { AddSoftwareForm } from './AddSoftware'
-import { addReducer, readyToAdd, START, type AddAction, type AddState } from './addByName'
+import { addReducer, chooseWords, clearMatch, PICK_ONE, readyToAdd, START, type AddAction, type AddState } from './addByName'
 import { FindSoftware } from './FindSoftware'
 import { MovedNote } from './NewAddress'
 import { SoftwareRoute } from './SoftwarePage'
@@ -296,6 +296,15 @@ const GUESS: ProjectGuess = {
 }
 const TERRAFORM: ProjectGuess = { ...GUESS, repo: 'hashicorp/terraform', what: 'Terraform itself, from HashiCorp', newest: 'v1.9.8' }
 const OPENTOFU: ProjectGuess = { ...GUESS, repo: 'opentofu/opentofu', what: 'OpenTofu, an open-source fork of Terraform', newest: 'v1.8.5' }
+const SEARCHED: ProjectGuess = {
+  ...GUESS,
+  repo: 'encode/httpx',
+  what: 'A next generation HTTP client for Python',
+  why: 'Found by searching GitHub, so make sure it’s the one you mean. It has 15,854 stars.',
+  newest: '0.28.1',
+  found_by: 'github_search',
+  stars: 15854,
+}
 
 const found = (...matches: ProjectGuess[]): FindOut => ({ status: 'found', matches })
 const run = (name: string, ...actions: AddAction[]): AddState =>
@@ -500,6 +509,35 @@ describe('add software by name', () => {
 
   it('shows the Find button as busy while the finder is asked, and stays a button', () => {
     expect(form(START, true)).toContain('aria-busy="true"')
+  })
+
+  it('offers even one match found by searching GitHub only as a choice, never picked for the person', () => {
+    const state = run('httpx', { type: 'answered', answer: found(SEARCHED) })
+    const html = form(state)
+    expect(text(html)).toContain('Which one do you mean?')
+    expect(html.match(/type="radio"/g)).toHaveLength(1)
+    expect(html).not.toContain('checked=""')
+    expect(text(html)).toContain('Found by searching GitHub, so make sure it’s the one you mean. It has 15,854 stars.')
+    expect(buttons(html)).toEqual(['Add httpx', 'None of these', 'Start again'])
+    expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: PICK_ONE } })
+    expect(readyToAdd(addReducer(state, { type: 'picked', index: 0 }), [], [])).toEqual({ ok: true, body: { name: 'httpx', repo: 'encode/httpx' } })
+  })
+
+  it('never carries a search match into the repository field when the person picks None of these', () => {
+    const html = form(run('httpx', { type: 'answered', answer: found(SEARCHED) }, { type: 'change' }))
+    expect(html).toContain('id="sw-repo"')
+    expect(html).not.toContain('value="encode/httpx"')
+  })
+})
+
+describe('Home’s add card', () => {
+  it('confirms only a single match from our list, and sends any match found by searching GitHub to be chosen', () => {
+    expect(clearMatch([GUESS])).toBe(GUESS)
+    expect(clearMatch([TERRAFORM, OPENTOFU])).toBeUndefined()
+    expect(clearMatch([SEARCHED])).toBeUndefined()
+    expect(chooseWords('Terraform', [TERRAFORM, OPENTOFU])).toBe('More than one project could be Terraform.')
+    expect(chooseWords('httpx', [SEARCHED])).toBe('I searched GitHub for httpx and found one project it could be.')
+    expect(chooseWords('httpx', [SEARCHED, { ...SEARCHED, repo: 'projectdiscovery/httpx' }])).toBe('I searched GitHub for httpx and found 2 projects it could be.')
   })
 })
 

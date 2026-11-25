@@ -2,7 +2,7 @@ import httpx
 import pytest
 
 from agent_runtime.github import GitHubReleaseSource
-from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import FoundRepo, Release, SourceRejected, SourceUnavailable
 
 BASE = "https://github.test"
 
@@ -185,3 +185,51 @@ def test_a_releases_read_says_whether_github_sent_it_to_another_address():
     )
     assert moved.fetch_noting_move("old/name").redirected
     assert not source(answering(200, [{"tag_name": "1.0.0"}])).fetch_noting_move("o/r").redirected
+
+
+def hit(full_name: str, **more: object) -> dict[str, object]:
+    return {"id": 1, "full_name": full_name, "stargazers_count": 10, **more}
+
+
+def test_search_asks_githubs_repository_search_with_the_words_and_the_same_token():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"total_count": 0, "items": []})
+
+    assert source(httpx.MockTransport(handler), token="ghp_example").search("fastapi", 5) == []
+    [asked] = seen
+    assert (asked.method, asked.url.path) == ("GET", "/search/repositories")
+    assert asked.url.params["q"] == "fastapi archived:false"
+    assert asked.url.params["per_page"] == "5"
+    assert asked.headers["authorization"] == "Bearer ghp_example"
+
+
+def test_search_reads_each_hits_name_description_and_stars_in_githubs_order():
+    body = {
+        "total_count": 3,
+        "items": [
+            hit("fastapi/fastapi", description="FastAPI framework", stargazers_count=105018),
+            hit("acme/old", description="Archived", archived=True),
+            hit("acme/bare", description=None, stargazers_count=0),
+        ],
+    }
+    assert source(answering(200, body)).search("fastapi", 5) == [
+        FoundRepo("fastapi/fastapi", "FastAPI framework", 105018),
+        FoundRepo("acme/bare", None, 0),
+    ]
+
+
+def test_a_search_github_limits_is_rejected_as_limited():
+    headers = {"x-ratelimit-remaining": "0"}
+    transport = httpx.MockTransport(lambda r: httpx.Response(403, json={}, headers=headers))
+    with pytest.raises(SourceRejected) as raised:
+        source(transport).search("fastapi", 5)
+    assert (raised.value.status, raised.value.limited) == (403, True)
+
+
+@pytest.mark.parametrize("body", [[], {"items": [{"full_name": 3}]}, {"total_count": 1}])
+def test_a_search_answer_in_another_shape_is_unavailable(body: object):
+    with pytest.raises(SourceUnavailable):
+        source(answering(200, body)).search("fastapi", 5)
