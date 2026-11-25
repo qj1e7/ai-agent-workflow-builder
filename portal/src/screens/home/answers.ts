@@ -3,7 +3,7 @@ import { andList, count, type NameOf } from '../run/words'
 import { checksOnItsOwn, clockWords, everyWords, heldWords as heldScheduleWords, PAUSED_WORDS, repeatWords } from '../software/software'
 import { scheduleZoneName } from '../workflows/times'
 import { isRunning, lastRunLine, lifeWords, nextRunWords, RUN_NOW_ONLY, type Row } from '../workflows/workflow'
-import { bareHour, cardFrom, lowerFirst, openParts, readWhen, scheduleOf } from './card'
+import { bareHour, cardFrom, lowerFirst, openPartsFor, readWhen, scheduleOf, type PlanView, type RepoChoice } from './card'
 import { sayChanged } from './changed'
 import { cantOnCard, crossWords, quote, watchlistRuns } from './parts'
 
@@ -277,9 +277,19 @@ export const ideasSay = (places: number): string =>
 
 export const needsSay = (total: number): string => (total === 0 ? SAY.nothingNeeds : `${count(total, 'thing')} ${total === 1 ? 'needs' : 'need'} you.`)
 
+/**
+ * What the card knows that the reply alone does not: its plan and the finder's answer, or the count the card itself works out as it
+ * changes. The lead above the card and the card's footer count with the same function.
+ */
+export interface CardState {
+  readonly plan: PlanView | null
+  readonly matches: readonly RepoChoice[]
+  readonly open?: number
+}
+
 /** The lead above a set-up card says how many parts are still open, as the card's footer counts them (25 Nov). */
-function leadWords(lead: string, reply: { readonly name: string; readonly rows: readonly UnderstoodRowView[]; readonly parts: readonly PartView[] }): string {
-  const open = openParts(cardFrom(reply.name, reply.rows, '', reply.parts))
+function leadWords(lead: string, reply: { readonly name: string; readonly rows: readonly UnderstoodRowView[]; readonly parts: readonly PartView[] }, card?: CardState): string {
+  const open = card?.open ?? openPartsFor(cardFrom(reply.name, reply.rows, '', reply.parts), card?.plan ?? null, card?.matches ?? [])
   return open === 0 ? lead : open === 1 ? `${lead} Pick the missing part.` : `${lead} Pick the ${String(open)} missing parts.`
 }
 
@@ -287,13 +297,13 @@ function leadWords(lead: string, reply: { readonly name: string; readonly rows: 
  * The sentence for an answer the Planner reply alone decides. The state answers, the person’s decisions, the requests to decide,
  * who makes changes and the edit card are filled in from the platform as it is now.
  */
-export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | null {
+export function sayOf(reply: PlannerReply, asker: Asker = 'operator', card?: CardState): string | null {
   switch (reply.answer) {
     case 'setup_card':
       if (reply.similar) return SAY.alreadyHave
-      return leadWords(reply.parts.some((part) => part.mark === 'cant') ? SAY.setupCrossed : SAY.setup_card, reply)
+      return leadWords(reply.parts.some((part) => part.mark === 'cant') ? SAY.setupCrossed : SAY.setup_card, reply, card)
     case 'part':
-      return leadWords(SAY.part, reply)
+      return leadWords(SAY.part, reply, card)
     case 'cant':
       if (cantOnCard(reply)) return SAY.setupCrossed
       // “Something close” only leads a card that sets something up. A watch offer leads with its own sentence.

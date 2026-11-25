@@ -170,12 +170,11 @@ export type PlanView =
 
 const INPUT_KINDS: readonly InputKind[] = ['github_repo', 'jira_project', 'text']
 const PROJECT_IN = /\b(?:project|in)\s+([A-Z][A-Z0-9_]{1,9})\b/
-const REPO_IN = /(?:github\.com\/)?\b([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+)/
 
 function foundIn(rows: readonly Row[], kind: InputKind): string | null {
   const words = rows.filter((row) => row.kind !== 'schedule').map((row) => row.text).join(' \n ')
   if (kind === 'jira_project') return PROJECT_IN.exec(words)?.[1] ?? null
-  if (kind === 'github_repo') return REPO_IN.exec(words)?.[1] ?? null
+  if (kind === 'github_repo') return rows.filter((row) => row.kind === 'look_for').map((row) => repoFrom(RELEASES_OF.exec(row.text.trim())?.[1] ?? row.text)).find((repo) => repo !== null) ?? null
   return null
 }
 
@@ -287,12 +286,21 @@ export function softwareOf(form: Form): string | null {
   return name === undefined || name === '' || name.includes('/') ? null : name
 }
 
-const REPO_WORDS = /(?:github\.com\/)?\b([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+)/
+/** The shape of a GitHub repository: owner/name, or its address. Nothing else with a slash in it is one, such as opened/closed. */
+const REPO_SHAPE = /^(?:https?:\/\/)?(?:www\.)?(?:github\.com\/)?([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/
 
-/** The owner/name the Watch part itself holds, such as langchain-ai/langgraph. */
+/** The owner/name a phrase names whole, or null. */
+function repoFrom(phrase: string): string | null {
+  const match = REPO_SHAPE.exec(phrase.trim().replace(/[.!?]+$/, '').replace(ON_GITHUB, ''))
+  return match === null ? null : `${match[1] ?? ''}/${match[2] ?? ''}`
+}
+
+/** The owner/name the Watch part names: as what the releases are of, as an address, or as the whole phrase. */
 function repoIn(form: Form): string | null {
   const row = form.rows.find((one) => one.kind === 'look_for' && one.state !== 'missing' && one.state !== 'cant_do')
-  return row === undefined ? null : (REPO_WORDS.exec(row.text)?.[1] ?? null)
+  if (row === undefined) return null
+  const said = row.text.trim().replace(/[.!?]+$/, '')
+  return repoFrom(RELEASES_OF.exec(said)?.[1] ?? said)
 }
 
 /** The repository the card holds: the one picked, else the one the Watch part names, else the finder's one clear match. Null while it is still to choose. */
@@ -622,7 +630,20 @@ export function questionsOf(form: Form, plan: PlanView | null, projects: readonl
 export const nextQuestion = (form: Form, plan: PlanView | null, projects: readonly string[] = [], repos: RepoFind | null = null): Question | null => questionsOf(form, plan, projects, repos)[0] ?? null
 
 /** How many parts of the card are open: what the lead line and the footer count. */
-export const openParts = (form: Form, plan: PlanView | null = null): number => setupLeft(form, plan).choices.filter(isQuestion).length
+export const openParts = (form: Form, plan: PlanView | null = null): number => openPartsFor(form, plan, [])
+
+/**
+ * How many parts are open, for the lead above the card and the footer alike: the form, the plan and what the finder answered. The
+ * finder's one clear match fills the repository, so it is not counted, whether or not the card has written it into the form yet.
+ */
+export function openPartsFor(form: Form, plan: PlanView | null, matches: readonly RepoChoice[]): number {
+  const only = matches.length === 1 ? (matches[0]?.repo ?? null) : null
+  const filled = only !== null && repoMissing(form) && form.typed[REPO_CHOICE] === undefined ? chooseRepo(form, only, true) : form
+  return setupLeft(filled, plan).choices.filter(isQuestion).length
+}
+
+/** “Pick 2 more to finish”: the footer's words for a count. Null when nothing is left. */
+export const pickWords = (open: number): string | null => (open === 0 ? null : `Pick ${String(open)} more to finish`)
 
 export const answerWhen = (form: Form, set: Partial<When>): Form => ({ ...form, when: { ...form.when, ...set } })
 
@@ -989,8 +1010,7 @@ export const setUpWords = (): string => 'Turn on'
 
 /** “Pick 1 more to finish”, shown in place of the main button while a question is open. Null when none is. */
 export function answerFirst({ choices }: Left): string | null {
-  const asks = choices.filter(isQuestion).length
-  return asks === 0 ? null : `Pick ${String(asks)} more to finish`
+  return pickWords(choices.filter(isQuestion).length)
 }
 
 /** Resume reopens the card on Home, where the draft's id sits in the address. */

@@ -53,7 +53,8 @@ import {
   secondName,
   setUp,
   setUpWords,
-  answerFirst,
+  openPartsFor,
+  pickWords,
   setupLeft,
   taskWithoutSchedule,
   valueKey,
@@ -460,6 +461,11 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const lookedTooLong = looking && waited === software
   const planning = rowsReady && phase.kind === 'open' && planQuery.isPending
   const questions = questionsOf(form, plan, projects, repos, planning)
+  // One count for the lead above the card and the footer: the form, the plan and what the finder said.
+  const openCount = openPartsFor(form, plan, matches)
+  useEffect(() => {
+    memory.open.set(openCount)
+  }, [memory, openCount])
   const problems = whenProblems(form.when)
   const timeText = whenSaid(form.when)
   const writes = writesOf(plan, kinds)
@@ -954,9 +960,25 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
 
   const repoQuestion = questions.find((q): q is Extract<Question, { kind: 'repo' }> => q.kind === 'repo')
   const chosenRepo = effectiveRepo(form, matches)
+  const repoDone = (repo: string): { readonly mark: Mark; readonly body: ReactNode } => ({
+    mark: 'ok',
+    body: (
+      <>
+        <span>{repo}</span>
+        {form.typed[REPO_FOUND] === '1' || (form.typed[REPO_CHOICE] === undefined && matches.length === 1) ? <span className={styles['pnote']}>Found on GitHub</span> : null}
+        <button type="button" className={styles['link']} onClick={reopenRepo}>
+          Change<span className="visually-hidden"> the repository</span>
+        </button>
+      </>
+    ),
+  })
+  // A repository picked when the words name no software has no software row to show it, so it shows here, with Change.
+  const pickedRepo = form.typed[REPO_CHOICE] ?? ''
   const repoPiece: { readonly mark: Mark; readonly body: ReactNode }[] =
     software === null
-      ? []
+      ? pickedRepo !== ''
+        ? [repoDone(pickedRepo)]
+        : []
       : repoQuestion
         ? [
             {
@@ -982,25 +1004,30 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
             },
           ]
         : chosenRepo !== null
-          ? [
-              {
-                mark: 'ok',
-                body: (
-                  <>
-                    <span>{chosenRepo}</span>
-                    {form.typed[REPO_FOUND] === '1' || (form.typed[REPO_CHOICE] === undefined && matches.length === 1) ? <span className={styles['pnote']}>Found on GitHub</span> : null}
-                    <button type="button" className={styles['link']} onClick={reopenRepo}>
-                      Change<span className="visually-hidden"> the repository</span>
-                    </button>
-                  </>
-                ),
-              },
-            ]
+          ? [repoDone(chosenRepo)]
           : []
+  // A project picked while the Where part already said something has no chosen row to show it, so it shows here, with Change.
+  const pickedProject = form.typed[JIRA_CHOICE] ?? ''
+  const projectPiece: { readonly mark: Mark; readonly body: ReactNode }[] =
+    pickedProject !== '' && !form.rows.some((row) => isChosenProject(row, form))
+      ? [
+          {
+            mark: 'ok',
+            body: (
+              <>
+                <span>{`Create 1 Jira ticket in ${pickedProject}`}</span>
+                <button type="button" className={styles['link']} onClick={reopenProject}>
+                  Change<span className="visually-hidden"> the Jira project</span>
+                </button>
+              </>
+            ),
+          },
+        ]
+      : []
   const parts: Part[] = [
     ...keyed('Watch', [...rowPieces('Watch'), ...repoPiece, ...dayPieces, ...inputPieces('Watch'), ...(youRun ? [{ mark: 'ok' as const, body: <span className={styles['pnote']}>You run {youRun}</span> }] : [])]),
     ...keyed('When', [whenPiece]),
-    ...keyed('Then', [...rowPieces('Then'), ...inputPieces('Then'), ...(writes === false ? [] : [{ mark: 'ok' as const, body: <span className={styles['after']}>{EACH_TICKET_WAITS}</span> }])]),
+    ...keyed('Then', [...rowPieces('Then'), ...projectPiece, ...inputPieces('Then'), ...(writes === false ? [] : [{ mark: 'ok' as const, body: <span className={styles['after']}>{EACH_TICKET_WAITS}</span> }])]),
     ...crosses,
   ]
   const asks = left.choices.length > 0
@@ -1012,14 +1039,14 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
         pill={<DraftPill label={creating ? 'Building' : 'Draft'} tone={creating ? 'new' : 'quiet'} />}
         status={
           <span id={`${id}-left`} role="status">
-            {creating ? 'Starting…' : (answerFirst(left) ?? leftWords(left))}
+            {creating ? 'Starting…' : (pickWords(openCount) ?? leftWords(left))}
           </span>
         }
         actions={
           creating ? undefined : (
             <>
               <Button onClick={neverMind}>Never mind</Button>
-              {answerFirst(left) === null ? (
+              {pickWords(openCount) === null ? (
                 <button type="button" id={`${id}-set-up`} className={buttonClassName(main)} aria-describedby={`${id}-left`} onClick={asks ? pointAtWhatIsLeft : pressSetUp}>
                   {setUpWords()}
                 </button>
