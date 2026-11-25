@@ -283,7 +283,7 @@ test.describe('with the AI model on', () => {
       await expect(card(page), 'the Planner answers with a set-up card').toBeVisible()
       const parts = card(page).getByRole('list', { name: 'Each part of your request' })
       await expect(parts.locator('[data-part]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-part')))).resolves.toEqual(['Watch', 'When', 'Then'])
-      await expect(parts.locator('[data-part="Then"]'), 'what it writes waits for a yes, and says so').toContainText('Each ticket waits for an Approver’s yes in Teams.')
+      await expect(parts.locator('[data-part="Then"]'), 'what it writes waits for a yes, and says so').toContainText('Each ticket needs an Approver’s approval in Teams.')
       await expect(pillOf(page)).toHaveText('Draft')
       await expect(parts.locator('[data-mark="ask"]'), 'only the When part is open').toHaveCount(1)
       await expect(parts.locator('[data-part="When"]'), 'a time is never guessed: it asks how often, and the time beside it').toContainText('How often?')

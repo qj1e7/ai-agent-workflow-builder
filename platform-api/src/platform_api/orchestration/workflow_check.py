@@ -1233,7 +1233,7 @@ FLAG_RULES: Mapping[RuleId, FlagRow] = {
         "Every write waits for a yes.",
         FixedForYou(
             "I added an approval step. Before each change is made, "
-            "an Approver must say yes in Teams."
+            "an Approver must approve it in Teams."
         ),
     ),
     "second_yes": FlagRow(

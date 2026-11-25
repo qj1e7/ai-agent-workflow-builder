@@ -11,7 +11,7 @@ SKETCH_LOG = [
     "Adding blocks in n8n…",
     "The blocks fit together.",
     "Safety checker is checking the write…",
-    "I added an approval step. Before each ticket is made, an Approver must say yes in Teams.",
+    "I added an approval step. Before each ticket is made, an Approver must approve it in Teams.",
     "Every write waits for a yes.",
     "Saved as a draft in n8n.",
 ]

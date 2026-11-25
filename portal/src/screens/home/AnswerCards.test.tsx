@@ -192,7 +192,7 @@ describe('a set-up card', () => {
     expect(html).toContain('You said “the tickets we closed”. I read that as MOCK, the project on your list.')
     expect(html).toContain('Will do: Then Sum them up in one new ticket')
     expect(html).toContain('In the MOCK project')
-    expect(html).toContain('Each ticket waits for an Approver’s yes in Teams.')
+    expect(html).toContain('Each ticket needs an Approver’s approval in Teams.')
     expect(html).not.toContain('After a yes')
     for (const gone of ['Filled in by me', 'Rename', 'How this workflow works', 'What needs a yes']) expect(html).not.toContain(gone)
   })

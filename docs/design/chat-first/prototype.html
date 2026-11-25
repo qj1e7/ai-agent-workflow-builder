@@ -1151,7 +1151,7 @@ const STEP = {
 const stepsFor = (then) => (then === 'tell' ? [STEP.when, STEP.read, STEP.compare, STEP.tell] : [STEP.when, STEP.read, STEP.compare, STEP.yes, STEP.write]);
 /* The Jira projects the platform may write in. The local stack has MOCK. */
 const JIRA_PROJECTS = ['MOCK'];
-const YES_LINE = 'Each ticket waits for an Approver’s yes in Teams.';
+const YES_LINE = 'Each ticket needs an Approver’s approval in Teams.';
 const THEN = { jira: 'Create a Jira ticket, after a yes', tell: 'Tell me here' };
 
 /* ---------- Schedules: a time is never guessed ---------- */
@@ -2656,7 +2656,7 @@ async function setupDraft(c) {
     bstat('Safety checker is checking the write…');
     const note = $('[data-p-note]', c);
     note.hidden = false;
-    note.innerHTML = `${fw('safety', 20, 'working')}<span>I added an approval step. Before each ticket is made, an Approver must say yes in Teams.</span>`;
+    note.innerHTML = `${fw('safety', 20, 'working')}<span>I added an approval step. Before each ticket is made, an Approver must approve it in Teams.</span>`;
     await wait(450);
     nd('yes').classList.remove('off');
     nd('yes').classList.add('added');
@@ -3097,7 +3097,7 @@ function wfFacts(id, ver) {
     rwp: [['Reads', `GitHub, ${c(S.repo)}`, 'Its newest release, with the platform’s GitHub key.'], jira ? ['Writes', `Jira project ${c('MOCK')}`, `1 upgrade ticket${yes ? ', after a yes' : ''}.`] : ['Shows', 'Here, in the chat', 'One line when there’s a new release.', 'in the app']],
     accept: [], accepted: null, answer: 0,
     refused: jira && !yes ? [['“Make approved changes” has no yes before it', 'Our platform refuses the write, so the next run stops before the ticket. Put the yes back to fix it.']] : [],
-    fixed: [...(jira ? ['I added an approval step. Before each ticket is made, an Approver must say yes in Teams.'] : []), 'Set the team’s time zone, Singapore.', 'Added our error workflow, so a stopped run shows here.'],
+    fixed: [...(jira ? ['I added an approval step. Before each ticket is made, an Approver must approve it in Teams.'] : []), 'Set the team’s time zone, Singapore.', 'Added our error workflow, so a stopped run shows here.'],
     passed: ['Every block loads in our n8n.', 'Reads only places the team allows.', 'No key is typed into a block.', 'Runs no code.'],
     who: jira ? [['Make approved changes', yes ? 'Waits for a yes in Teams on each run, from any Approver but the person who started the run.' : 'Can’t write. There’s no yes before it, so our platform refuses the write.', yes ? 'yes' : 'no']] : [],
     sets: [['Run time', long(sched), `Set by ${by.by}, ${by.on}`], ['Software', S.name, 'From Alice’s words'], ...(jira ? [['Jira project', 'MOCK', 'The team’s allowed project'], ['Who says yes', 'Any Approver but the person who started the run', 'The team’s rule']] : [])].map(([label, value, src]) => ({ label, value, mark: 'set', src })),

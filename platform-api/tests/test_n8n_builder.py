@@ -182,7 +182,7 @@ async def test_the_build_log_replays_in_the_sketch_s_words_and_order(n8n_lab: N8
         (
             "note",
             "I added an approval step. Before each ticket is made, "
-            "an Approver must say yes in Teams.",
+            "an Approver must approve it in Teams.",
         ),
         ("check", EVERY_WRITE),
         ("status", SAVED),

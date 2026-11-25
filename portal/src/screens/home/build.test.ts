@@ -132,7 +132,7 @@ describe('the build panel’s status line and checks', () => {
 
   it('gives the card the safety checker’s note once its line has shown', () => {
     expect(notesOf(LOG.slice(0, 3))).toEqual([])
-    expect(notesOf(LOG)).toEqual(['I added an approval step. Before each ticket is made, an Approver must say yes in Teams.'])
+    expect(notesOf(LOG)).toEqual(['I added an approval step. Before each ticket is made, an Approver must approve it in Teams.'])
   })
 })
 

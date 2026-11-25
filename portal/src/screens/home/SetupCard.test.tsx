@@ -198,13 +198,13 @@ describe('the Jira step of the set-up card', () => {
   it('says each ticket waits for an Approver’s yes in Teams under the project question, in place of After a yes', () => {
     const html = render(card(reply, TICKET), { projects: ['MOCK'] })
     expect(text(html)).not.toContain('After a yes')
-    expect(partText(html, 'Then')).toContain('Each ticket waits for an Approver’s yes in Teams.')
+    expect(partText(html, 'Then')).toContain('Each ticket needs an Approver’s approval in Teams.')
   })
 
   it('keeps the same sentence once Set up is pressed', () => {
     const form = cardFrom(reply.name, ROWS, TICKET, [])
     const words = text(renderToStaticMarkup(<PartsList parts={frozenParts(form, null, null, null)} />))
-    expect(words).toContain('Each ticket waits for an Approver’s yes in Teams.')
+    expect(words).toContain('Each ticket needs an Approver’s approval in Teams.')
     expect(words).not.toContain('After a yes')
   })
 
@@ -334,7 +334,7 @@ describe('the set-up card after Set up', () => {
     const html = building(null)
     expect(pill(html)).toBe('Building')
     expect(html).not.toContain('data-off')
-    expect(text(html)).toContain('I added an approval step. Before each ticket is made, an Approver must say yes in Teams.')
+    expect(text(html)).toContain('I added an approval step. Before each ticket is made, an Approver must approve it in Teams.')
     expect(text(html)).toContain('Saved as a draft in n8n.')
     expect(text(html)).not.toContain('Test run…')
     expect(html, 'the yes the safety checker added is ringed').toContain('data-added="true"')

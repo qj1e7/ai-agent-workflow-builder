@@ -145,7 +145,7 @@ def test_the_build_log_reads_as_the_sketch_s_set_up_card() -> None:
         (
             "note",
             "I added an approval step. Before each ticket is made, "
-            "an Approver must say yes in Teams.",
+            "an Approver must approve it in Teams.",
         ),
         ("check", EVERY_WRITE),
     )

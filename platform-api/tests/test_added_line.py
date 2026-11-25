@@ -2,7 +2,7 @@ import pytest
 
 from platform_api.builder.n8n_draft import added_line
 
-STEP = "I added an approval step. Before {} is made, an Approver must say yes in Teams."
+STEP = "I added an approval step. Before {} is made, an Approver must approve it in Teams."
 
 
 @pytest.mark.parametrize(

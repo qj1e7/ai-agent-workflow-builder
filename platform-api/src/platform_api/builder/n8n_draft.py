@@ -88,7 +88,7 @@ def added_line(write: str) -> str:
     return (
         "I added an approval step. "
         f"Before {WHAT_IS_WRITTEN.get(write, 'each change')} is made, "
-        "an Approver must say yes in Teams."
+        "an Approver must approve it in Teams."
     )
 
 

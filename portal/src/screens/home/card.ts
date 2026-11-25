@@ -467,7 +467,7 @@ const ASK_ROW: Readonly<Record<RowKind, string>> = {
   where: 'Where should the result go?',
 }
 /** What the Then part says about a write: who has to say yes, and where. */
-export const EACH_TICKET_WAITS = 'Each ticket waits for an Approver’s yes in Teams.'
+export const EACH_TICKET_WAITS = 'Each ticket needs an Approver’s approval in Teams.'
 export const ASK_PROJECT = 'Create 1 Jira ticket in which project?'
 /** The label of the box a key is typed in, after Another project. */
 export const PROJECT_BOX = 'Which Jira project should the ticket go in?'
