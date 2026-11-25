@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useLocation, useParams, useSearchParams } from
 import { HomePage } from '../screens/home/HomePage'
 import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
-import { ExplainRoute } from '../screens/explain/ExplainPage'
 import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
 import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
 import { useWatchlist } from '../api/queries'
@@ -160,6 +159,14 @@ export function oldAgentsDestination(operator: boolean, agentId: string | null, 
   return operator ? howItWorksPath({ show: tab, agent: agentId }) : PAGES.home.path
 }
 
+/** Where an old Explain address leads: the workflow's own page, since the Explain page is gone. */
+export const oldExplainDestination = (useCaseId: string): string => `${PAGES.workflows.path}/${encodeURIComponent(useCaseId)}`
+
+function OldExplainAddress() {
+  const { useCaseId = '' } = useParams()
+  return <Navigate to={oldExplainDestination(useCaseId)} replace />
+}
+
 function OldAgentsAddress({ operator }: { operator: boolean }) {
   const { agentId = null } = useParams()
   const [search] = useSearchParams()
@@ -175,7 +182,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
         element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} now={context.now} />}
       />
       <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
-      <Route path={`${PAGES.workflows.path}/:useCaseId/explain`} element={<ExplainRoute />} />
+      <Route path={`${PAGES.workflows.path}/:useCaseId/explain`} element={<OldExplainAddress />} />
       <Route path={PAGES.home.path} element={<HomePage greeting={wordsOf(PAGES.home.heading, context)} today={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
       <Route path={`${WATCHLIST_PATH}/*`} element={<OldSoftwareAddress />} />
       <Route

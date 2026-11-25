@@ -3,7 +3,6 @@ import type { UseCaseView, VersionView } from '../../api/types'
 import { useErrorWords } from '../../api/context'
 import { useRollback, useVersions } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
-import { ExplainButton } from '../explain/ExplainButton'
 import { backToVersionToast } from './n8nChange'
 import { versionLine } from './workflow'
 import styles from './Workflows.module.css'
@@ -60,14 +59,13 @@ export function Versions({ useCase, now, nameOf, operator, say }: VersionsProps)
                 </b>
                 <span className={styles['sub']}>{versionLine(version, now, nameOf)}</span>
               </span>
-              <span className={styles['rowBtns']}>
-                <ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} version={version.version} />
-                {operator && !version.running && version.grade && !useCase.held_in_n8n ? (
+              {operator && !version.running && version.grade && !useCase.held_in_n8n ? (
+                <span className={styles['rowBtns']}>
                   <Button loading={rollback.isPending && pressed === version.version} onClick={() => rollBackTo(version)}>
                     Roll back<span className="visually-hidden"> to version {version.version}</span>
                   </Button>
-                ) : null}
-              </span>
+                </span>
+              ) : null}
             </li>
           ))}
         </ol>

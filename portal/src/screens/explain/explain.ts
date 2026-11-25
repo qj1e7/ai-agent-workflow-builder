@@ -43,7 +43,7 @@ export function approvesGist(approves: readonly ExplainWrite[]): string {
   const of = (decides: ExplainWrite['decides']) => approves.filter((write) => write.decides === decides).length
   const each = of('each_run')
   const parts = [
-    each > 0 ? `${String(each)} ${each === 1 ? 'waits' : 'wait'} for a yes on each run` : '',
+    each > 0 ? `${String(each)} ${each === 1 ? 'waits' : 'wait'} for approval on each run` : '',
     of('set_up') > 0 ? `${String(of('set_up'))} on the set-up approval` : '',
     of('refused') > 0 ? `${String(of('refused'))} refused` : '',
     of('cant_run_yet') > 0 ? `${String(of('cant_run_yet'))} can’t run yet` : '',
@@ -61,17 +61,8 @@ export function settingsGist(settings: readonly ExplainSetting[]): string {
 /** The approval's words lead with a short answer. The row shows that, and opens to the rest. */
 export const approvalGist = (approval: string): string => /^[^.]*/.exec(approval)?.[0].trim() ?? approval
 
-export const explainPath = (useCaseId: string, version: number | null): string =>
-  `/workflows/${encodeURIComponent(useCaseId)}/explain${version === null ? '' : `?version=${String(version)}`}`
-
-/** The report's flags, which say what to fix and where. Needs a fix on the workflow's page opens the report on them. */
-export const FLAGS_ANCHOR = 'flags'
-export const explainFlagsPath = (useCaseId: string): string => `${explainPath(useCaseId, null)}#${FLAGS_ANCHOR}`
-
 /** What a choice on “Which workflow?” sends, so the Planner explains the one they picked. */
 export const explainAsk = (name: string): string => `Explain the ${name}`
-
-export const explainTitle = (version: number | null): string => (version === null ? 'Explain' : `Explain, version ${String(version)}`)
 
 /** The one workflow an answer was about, or null when it named none or several. */
 function namedBy(reply: PlannerReply): string | null {
@@ -89,11 +80,11 @@ function namedBy(reply: PlannerReply): string | null {
 }
 
 /**
- * The workflow “explain it” means: the one open in the side panel, whether as the workflow or as its Explain, else the one
- * the newest answer in the conversation named, skipping answers that named none or several.
+ * The workflow “explain it” means: the one open in the side panel, else the one the newest answer in the conversation named,
+ * skipping answers that named none or several.
  */
 export function workflowInFocus(panel: PanelItem | null, replies: readonly PlannerReply[]): string | null {
-  if (panel?.kind === 'workflow' || panel?.kind === 'explain') return panel.id
+  if (panel?.kind === 'workflow') return panel.id
   for (const reply of replies.toReversed()) {
     const named = namedBy(reply)
     if (named !== null) return named

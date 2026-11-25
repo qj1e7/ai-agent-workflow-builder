@@ -4,12 +4,10 @@ import { useRun, useUseCase, useWatchlist } from '../../api/queries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { escapeIsFree } from '../../ui/escape'
 import { IconChevronLeft } from '../../ui/icons'
-import { backTitle, InSidePanel, isWide, panelKey, wrapTab, type PanelHead, type PanelItem } from '../../ui/sidePanel'
+import { backTitle, InSidePanel, isWide, wrapTab, type PanelHead, type PanelItem } from '../../ui/sidePanel'
 import { cx } from '../../ui/cx'
 import { SoftwarePanel } from '../software/SoftwarePanel'
 import { softwareInWorkflow } from '../software/software'
-import { ExplainPanel } from '../explain/ExplainPanel'
-import { explainPath, explainTitle } from '../explain/explain'
 import { workflowPath } from '../workflows/workflow'
 import { WorkflowPanel } from '../workflows/WorkflowPanel'
 import { BuildPanel } from './BuildPanel'
@@ -50,8 +48,6 @@ function useHead(item: PanelItem): PanelHead {
       const shown = useCase.isError ? undefined : useCase.data
       return shown ? { title: shown.name, page: workflowPath(shown) } : { title: 'Workflow', page: null }
     }
-    case 'explain':
-      return { title: explainTitle(item.version ?? null), page: explainPath(item.id, item.version ?? null) }
     case 'run':
     case 'approval': {
       const shown = run.isError ? undefined : run.data
@@ -158,8 +154,6 @@ function View({ item, now, onOpen }: { item: PanelItem; now: Date; onOpen: ((ite
       return beside(item, onOpen, <WatchlistPanel now={now} />)
     case 'workflow':
       return <WorkflowPanel id={item.id} now={now} />
-    case 'explain':
-      return <ExplainPanel key={panelKey(item)} id={item.id} version={item.version ?? null} />
     case 'run':
     case 'approval':
       return (

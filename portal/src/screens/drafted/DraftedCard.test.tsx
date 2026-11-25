@@ -131,7 +131,7 @@ describe('the drafted workflow card', () => {
     expect(flags, 'closed until opened').not.toMatch(/<details[^>]*\bopen/)
     expect(text(flags)).toMatch(/^1 flag\. See them /)
     expect(text(flags)).toContain(flag.what)
-    expect(text(flags)).toContain('In “Open an issue”.')
+    expect(text(flags), 'where, as the block’s own name').toMatch(/In “Open an issue” ?\./)
     expect(buttons(html)).not.toContain('See the report')
     expect(text(html)).not.toMatch(/\bExplain\b/)
   })

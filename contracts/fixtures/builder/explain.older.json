@@ -337,7 +337,7 @@
       "block": "Create ticket",
       "decides": "each_run",
       "approvers": 1,
-      "words": "Waits for a yes in Teams on each run. Nobody who started the run or made the workflow can give it."
+      "words": "Waits for an Approver in Teams on each run. Nobody who started the run or made the workflow can approve it."
     }
   ],
   "settings": [

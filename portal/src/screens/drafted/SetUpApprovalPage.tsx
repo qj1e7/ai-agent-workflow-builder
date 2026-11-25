@@ -6,7 +6,7 @@ import { pressOnce, useLatch } from '../../api/latch'
 import type { SetUpApprovalView, SetUpDeclineReason, SetUpDecisionIn } from '../../api/types'
 import { ApiError } from '../../api/client'
 import { Button, ButtonLink } from '../../ui/Button'
-import { Flag, Report, Touches, Words } from '../explain/Report'
+import { Flag, Touches, WhoApproves, Words } from '../explain/Report'
 import { approvalPill, YOUR_YES } from '../run/approvalWords'
 import { DraftPill } from '../home/Building'
 import { NotFoundPage } from '../../shell/NotFoundPage'
@@ -117,8 +117,8 @@ function Decide({ view }: { view: SetUpApprovalView }) {
 }
 
 /**
- * What an Approver decides on for a draft: In short, what it reads, writes and posts, and the rest of the report under More details.
- * Approve and Decline show only to someone who may decide. Everyone else reads why not, in its place (principle 9).
+ * What an Approver decides on for a draft: In short, the flags, what it reads, writes and posts, and who approves each write, all in
+ * view. Approve and Decline show only to someone who may decide. Everyone else reads why not, in its place (principle 9).
  */
 export function SetUpApproval({ view }: { view: SetUpApprovalView }) {
   const { report } = view
@@ -151,10 +151,10 @@ export function SetUpApproval({ view }: { view: SetUpApprovalView }) {
         <h2 className={styles['kind']}>What it reads, writes and posts</h2>
         <Touches touches={report.touches} />
       </section>
-      <details className={styles['more']}>
-        <summary>More details</summary>
-        <Report report={report} rest />
-      </details>
+      <section className={styles['more']} aria-label="Who approves each write">
+        <h2 className={styles['kind']}>Who approves each write</h2>
+        <WhoApproves approves={report.approves} />
+      </section>
       {waiting ? (
         view.you_can_decide ? (
           <Decide view={view} />

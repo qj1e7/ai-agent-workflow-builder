@@ -23,7 +23,6 @@ import { draftWords } from '../home/home'
 import { NeedRows } from '../home/NeedsSection'
 import { NeedsMore } from '../home/panels/NeedsMore'
 import { usePagedNeeds } from '../home/usePagedNeeds'
-import { ExplainButton } from '../explain/ExplainButton'
 import { useArrivalScroll } from './arrival'
 import { MadeInN8nSection } from './MadeInN8n'
 import { StatusPills } from './Status'
@@ -89,7 +88,7 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
   )
   return (
     <li
-      className={[styles['row'], styles['withExplain'], arrive ? styles['arrive'] : ''].filter(Boolean).join(' ')}
+      className={[styles['row'], arrive ? styles['arrive'] : ''].filter(Boolean).join(' ')}
       style={{ '--i': index } as CSSProperties}
       data-workflow-id={useCase.use_case_id}
       data-paused={useCase.state === 'paused' || undefined}
@@ -97,7 +96,6 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
       <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']} {...link}>
         {inside}
       </OpenLink>
-      <ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />
     </li>
   )
 }
