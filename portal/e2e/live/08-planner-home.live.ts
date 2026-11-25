@@ -1138,7 +1138,7 @@ test.describe('the chat after the first message', () => {
       const card = thread(page).getByRole('region', { name: 'Software to watch' })
       const field = card.getByLabel('Software name')
       await expect(field, 'focus goes to the field').toBeFocused()
-      await expect(card).toContainText('Type the name, such as Kubernetes. I’ll find its GitHub project.')
+      await expect(card).toContainText('I know common software, such as Kubernetes. If I don’t know yours, you can choose where it’s published.')
       const find = card.getByRole('button', { name: 'Find it' })
       await expect(find, 'Find it is never shown dead').toBeEnabled()
       await field.press('Enter')

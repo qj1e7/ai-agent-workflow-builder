@@ -774,7 +774,7 @@ test.describe('what a run didn’t check', () => {
   })
 
   const REDIS_UNREAD = 'Redis couldn’t be read, so no ticket is proposed for it.'
-  const NO_REGISTRIES = 'The platform can’t yet check registries or security advisories.'
+  const NO_REGISTRIES = 'The platform can’t yet check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using.'
   const NO_DETAILS = ['The platform can’t yet see a ticket’s component or priority.', 'The platform can’t yet look past the 50 newest tickets.']
   /** The Not checked section, named by its heading. */
   const unchecked = (scope: Page | Locator) => part(scope, 'Not checked')
