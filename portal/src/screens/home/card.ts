@@ -263,6 +263,16 @@ export const REPO_FOUND = 'github_repo_found'
 export interface RepoChoice {
   readonly repo: string
   readonly what: string
+  /** True for a match found by searching GitHub, which is never picked for the person, even alone. */
+  readonly searched: boolean
+  /** How many stars it has, for a search result. Null for a match from the reviewed list. */
+  readonly stars: number | null
+}
+
+/** The one match the person need not choose: a single match from the reviewed list. */
+export function clearRepo(matches: readonly RepoChoice[]): string | null {
+  const [only, ...others] = matches
+  return only !== undefined && others.length === 0 && !only.searched ? only.repo : null
 }
 
 /** What the finder has said about the card's software so far. A trouble says why in plain words, and is never the same as no match. */
@@ -310,7 +320,7 @@ export function effectiveRepo(form: Form, matches: readonly RepoChoice[] = []): 
   const named = repoIn(form)
   if (named !== null) return named
   if (softwareOf(form) === null) return null
-  return matches.length === 1 ? (matches[0]?.repo ?? null) : null
+  return clearRepo(matches)
 }
 
 /** Whether the card watches software by name and no repository is chosen yet. The finder's one clear match fills it as soon as it answers. */
@@ -637,7 +647,7 @@ export const openParts = (form: Form, plan: PlanView | null = null): number => o
  * finder's one clear match fills the repository, so it is not counted, whether or not the card has written it into the form yet.
  */
 export function openPartsFor(form: Form, plan: PlanView | null, matches: readonly RepoChoice[]): number {
-  const only = matches.length === 1 ? (matches[0]?.repo ?? null) : null
+  const only = clearRepo(matches)
   const filled = only !== null && repoMissing(form) && form.typed[REPO_CHOICE] === undefined ? chooseRepo(form, only, true) : form
   return setupLeft(filled, plan).choices.filter(isQuestion).length
 }

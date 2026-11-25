@@ -2502,7 +2502,7 @@ const okRow = (k, v, s = '', change = '') => `<li class="pt" data-s="ok"><span c
 /* What the software finder says, as the Portal draws it (25 Nov). One clear match fills the row, so it asks nothing. */
 const FINDER = {
   one: { ask: false },
-  several: { ask: true, opts: [['fastapi/fastapi', 'FastAPI web framework'], ['tiangolo/fastapi', 'An older address']], note: '' },
+  several: { ask: true, opts: [['fastapi/fastapi', 'FastAPI web framework'], ['tiangolo/fastapi', 'An older address'], ['someone/fastapi-fork', 'A fork, 1,234 stars, found by searching GitHub']], note: '' },
   none: { ask: true, opts: [], note: '', hint: true },
   looking: { ask: true, opts: [], note: 'Looking for the repository on GitHub…' },
   slow: { ask: true, opts: [], note: 'That is taking a while. Type the repository instead.' },

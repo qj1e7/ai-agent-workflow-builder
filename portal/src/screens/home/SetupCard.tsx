@@ -35,6 +35,7 @@ import {
   cardBlockers,
   chooseProject,
   chooseRepo,
+  clearRepo,
   clearProject,
   effectiveRepo,
   EACH_TICKET_WAITS,
@@ -380,6 +381,10 @@ export function SetupCard({ start, anyBlock = null }: { start: CardStart; anyBlo
 }
 
 const LOOK_LIMIT_MS = 15_000
+
+/** A match as a button: where it is, what it is, how many stars it has and, for a search result, that it was found by searching. */
+const repoLabel = (one: RepoChoice): string =>
+  [one.what === '' ? one.repo : `${one.repo} ${one.what}`, one.stars === null ? null : `${one.stars.toLocaleString('en-US')} stars`, one.searched ? 'found by searching GitHub' : null].filter((part) => part !== null).join(', ')
 const ONLY_OPERATOR = 'Only an Operator can look a repository up.'
 const COULD_NOT_REACH = 'I couldn’t reach GitHub just now.'
 
@@ -392,7 +397,7 @@ function repoFind(software: string | null, notAllowed: boolean, found: ReturnTyp
   if (answer === undefined) return { state: 'checking' }
   if (answer.status === 'not_checked') return { state: 'trouble', words: answer.message }
   if (answer.status === 'not_known') return { state: 'none' }
-  return { state: 'found', matches: answer.matches.map((match) => ({ repo: match.repo, what: match.what })) }
+  return { state: 'found', matches: answer.matches.map((match) => ({ repo: match.repo, what: match.what, searched: match.found_by === 'github_search', stars: match.stars ?? null })) }
 }
 
 function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode }) {
@@ -449,7 +454,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const software = softwareOf(form)
   const operator = me.data?.roles.includes('operator') ?? false
   const found = useSoftwareFind(repoMissing(form) ? software : null, operator)
-  const matches: readonly RepoChoice[] = found.data?.status === 'found' ? found.data.matches.map((match) => ({ repo: match.repo, what: match.what })) : []
+  const matches: readonly RepoChoice[] = found.data?.status === 'found' ? found.data.matches.map((match) => ({ repo: match.repo, what: match.what, searched: match.found_by === 'github_search', stars: match.stars ?? null })) : []
   const repos: RepoFind | null = repoFind(software, me.data !== undefined && !operator, found)
   const [waited, setWaited] = useState<string | null>(null)
   const looking = repos?.state === 'checking'
@@ -477,7 +482,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const settingUp = useRef(false)
   const alive = useRef(true)
   // The finder's one clear match fills the repository, so the agent reads it and nobody looks it up. Change clears it, and it stays cleared.
-  const onlyMatch = matches.length === 1 ? (matches[0]?.repo ?? null) : null
+  const onlyMatch = clearRepo(matches)
   useEffect(() => {
     if (onlyMatch !== null && form.typed[REPO_CHOICE] === undefined && softwareOf(form) !== null) {
       // The finder answers after the card is drawn, so its match comes in as a change to the form.
@@ -965,7 +970,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
     body: (
       <>
         <span>{repo}</span>
-        {form.typed[REPO_FOUND] === '1' || (form.typed[REPO_CHOICE] === undefined && matches.length === 1) ? <span className={styles['pnote']}>Found on GitHub</span> : null}
+        {form.typed[REPO_FOUND] === '1' || (form.typed[REPO_CHOICE] === undefined && clearRepo(matches) !== null) ? <span className={styles['pnote']}>Found on GitHub</span> : null}
         <button type="button" className={styles['link']} onClick={reopenRepo}>
           Change<span className="visually-hidden"> the repository</span>
         </button>
@@ -992,7 +997,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
                     key={`${String(repoQuestion.checking)}-${String(repoQuestion.choices.length)}-${repoQuestion.note ?? ''}`}
                     labelId={`${id}-q-repo`}
                     kind="github_repo"
-                    picks={repoQuestion.choices.map((one) => ({ key: one.repo, label: one.what === '' ? one.repo : `${one.repo} ${one.what}` }))}
+                    picks={repoQuestion.choices.map((one) => ({ key: one.repo, label: repoLabel(one) }))}
                     other="Another repository"
                     boxLabel="Repository, as owner/name"
                     {...(repoQuestion.checking || repoQuestion.note ? {} : { hint: REPO_HINT })}
