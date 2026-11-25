@@ -113,8 +113,14 @@ WHY_SAID: Final[Mapping[str, str]] = {
     "cost_limit": "It reached its cost limit.",
     "time_limit": "It ran out of time.",
     "no_answer": "The drafter didn't answer.",
+    "not_taken": "The AI service didn't start it, so nothing was tried.",
 }
+NOT_TAKEN: Final = "not_taken"
+"""Why a refinement the agent runtime never took ended, kept by platform-api alone: its event is
+the log's hand-back that gave up."""
 OTHERWISE: Final = "Nothing it tried passed every case."
+REFINE_AGAIN: Final = "To refine it again, ask for a change first."
+"""A refined draft is never refined again. A change makes a new draft, which can be."""
 CALL_COLUMNS: Final[Mapping[ModelCall, LiteralString]] = {
     "writer": "writer_calls",
     "explainer": "explainer_calls",
@@ -124,7 +130,7 @@ CALL_COLUMNS: Final[Mapping[ModelCall, LiteralString]] = {
 def refined_said(rounds: int) -> str:
     return (
         f"Refined on practice systems in {rounds} {'round' if rounds == 1 else 'rounds'}. "
-        "It's checked again like any draft."
+        f"It's checked again like any draft. {REFINE_AGAIN}"
     )
 
 
@@ -270,12 +276,15 @@ class Refinements:
             platform_url=self.settings.platform_url,
             token=token,
         )
-        answer = await self._runtime.start_refinement(asked)
-        if not isinstance(answer, FixAccepted):
-            log.warning("refinement %s: the runtime didn't take it: %s", row.fix_id, answer.detail)
-            await self.note(
-                drafted_id, row.fix_id, FixHandedBackData(fix_id=row.fix_id, why="gave_up")
-            )
+        try:
+            answer = await self._runtime.start_refinement(asked)
+            detail = None if isinstance(answer, FixAccepted) else answer.detail
+        except Exception as error:
+            # Only the error's type: its words could quote the draft.
+            detail = type(error).__name__
+        if detail is not None:
+            log.warning("refinement %s: the runtime didn't take it: %s", row.fix_id, detail)
+            await self._not_taken(drafted_id, row.fix_id)
         log.info("%s asked to refine %s at revision %d", person.user_id, drafted_id, revision)
         view = await self._drafted.view(drafted_id, person)
         assert view is not None
@@ -487,6 +496,17 @@ class Refinements:
                 "UPDATE builder.drafted_refinements SET simulated = simulated || %s"
                 " WHERE fix_id = %s",
                 (json({key: kept}), fix_id),
+            )
+
+    async def _not_taken(self, drafted_id: str, fix_id: str) -> None:
+        """Ends a refinement the runtime never took, at once, so it never holds the draft until
+        its deadline, and says why in plain words."""
+        await self.note(drafted_id, fix_id, FixHandedBackData(fix_id=fix_id, why="gave_up"))
+        async with self._db.transaction("builder") as uow:
+            await uow.conn.execute(
+                "UPDATE builder.drafted_refinements SET handed_back_why = %s,"
+                " handed_back_at = coalesce(handed_back_at, %s) WHERE fix_id = %s",
+                (NOT_TAKEN, uow.now, fix_id),
             )
 
     async def _row(self, fix_id: str) -> RefineRow | None:

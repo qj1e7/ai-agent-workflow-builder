@@ -32,9 +32,9 @@ A refinement of a drafted workflow's Check (ADR 0054, section 7) runs the same l
 with what differs for a draft: there is no stopped run, so no troubleshooter and no replay of the
 stop. Round 0 is the draft as the Check tried it. The coordinator simulates it first, and the
 failed part is code's, the blocks where a scenario failed on it. A Scenario writer asked to cover
-blocks must bring a scenario the fix doesn't hold yet, or the fix ends for no progress. Round 0
-may be handed in unchanged only when every scenario passes on it and one reached each block no
-case of the Check reached."""
+blocks that brings only scenarios the fix holds ends it for no progress, and one that brings no
+answer is a refused call, so a fix that can hand in still may. Round 0 may be handed in unchanged
+only when every scenario passes on it and one reached each block no case of the Check reached."""
 
 import contextvars
 import json
@@ -632,10 +632,15 @@ class _Fix:
         found = self._keep(handed.result, bool(args.cover))
         if (stop := self._noted(handed.number, "scenario_writer", found)) is not None:
             return self._end(stop)
-        if args.cover and found != "kept":
-            # An ask to cover blocks that brings nothing the fix doesn't hold yet makes no
-            # progress, so the rounds stop here rather than ask again.
+        if args.cover and found == "refused":
+            # Scenarios that play the version as ones the fix holds bring nothing new, so the
+            # rounds make no progress and stop here rather than ask again.
             return self._end(self._hand_back("no_progress"))
+        if args.cover and found == "no_answer":
+            # No answer, as when the writer timed out, has no calls left or has no model, is a
+            # refused call: a fix that can already hand in still may.
+            self.ledger.refused.append("write_scenarios")
+            return self._then(state, call_id, _NO_COVER, error=True)
         answer = {"found": found, "scenarios": list(self.ledger.scenarios)}
         return self._then(state, call_id, answer)
 
@@ -1153,6 +1158,9 @@ _ONE_AT_A_TIME: Final = "Not used: one hand-off at a time. Ask again after the f
 _NOT_JSON: Final = "Not used: the arguments are not valid JSON."
 _NO_CAUSE: Final = "Not used: there is no confirmed cause yet. Use find_cause first."
 _NO_DRAFT: Final = "Not used: there is no draft inside the failed part yet."
+_NO_COVER: Final = (
+    "Not used: the Scenario writer brought no scenario for those blocks, so none was added."
+)
 _NOTHING_FAILED: Final = (
     "Not used: no scenario has failed on the draft yet, so there is nothing to change. Use "
     "simulate first."
