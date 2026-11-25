@@ -204,9 +204,9 @@ describe('two Approvers, one after the other', () => {
 
   it('tells the second Approver who said yes first, and that theirs is the second', () => {
     const html = text(draw(SECOND, { page: true }))
-    expect(html).toContain('Step 2 of 2. Carol said yes first.')
+    expect(html).toContain('Step 2 of 2. Carol approved first.')
     expect(html).toContain('Why you No one can approve their own work. Your yes is the second of two.')
-    expect(html.match(/Carol said yes/g), 'who said yes first is said once').toHaveLength(1)
+    expect(html.match(/Carol approved/g), 'who approved first is said once').toHaveLength(1)
     expect(buttons(draw(SECOND))).toEqual(['Ask Alice', 'Approve', 'Decline'])
   })
 
@@ -214,7 +214,7 @@ describe('two Approvers, one after the other', () => {
     const after = stepsAfter(TWO.steps, { step: 0, by: 'bob', verdict: 'approve', at: AT, reason: null })
     const now = draw(TWO, { decision: { ...idle, recorded: 'approve', steps: after } })
     expect(buttons(now)).toEqual([])
-    expect(text(now)).toContain('Step 2 of 2. Bob said yes first.')
+    expect(text(now)).toContain('Step 2 of 2. Bob approved first.')
     expect(text(now)).toContain('Waiting for another Approver. You said yes to the step before, and no one says yes twice.')
     const read = draw({ ...SECOND, steps: [{ ...SECOND.steps[0]!, decided_by: 'bob' }, SECOND.steps[1]!], you_can_decide: false, why_not: 'decided_earlier_step' })
     expect(buttons(read)).toEqual([])

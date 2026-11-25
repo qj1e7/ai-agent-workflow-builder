@@ -320,16 +320,13 @@ describe('the Step by step', () => {
       return `${row.match(/<time[^>]*>([^<]*)<\/time>/)?.[1] ?? '-'} ${text(row.replace(/<time[\s\S]*?<\/time>/, ''))}`
     })
 
-  it('tells a done run one sentence a row, with the gate’s words, and never repeats the ticket the settled line names', () => {
+  it('tells a done run in plain steps, with the gate’s words, and never repeats the ticket the settled line names or the agents’ words', () => {
     expect(rowsOf(steps(replay(success).chat))).toEqual([
-      '10:14:00 Alice started the run.',
-      '10:14:02 Planner Please check LangGraph for new releases.',
-      '10:14:05 Version checker LangGraph has a new release: 1.2.16. I suggest one ticket.',
-      "10:14:05 Planner Agreed. I'll draft one ticket for an Approver to check.",
-      '10:14:05 LangGraph has a new release: 1.2.16.',
-      '10:14:08 Asked an Approver for a yes in Teams.',
-      '10:20:23 Bob said yes.',
-      '10:20:26 Created MOCK-142 in Jira.',
+      '10:14:04 Checked GitHub: found 1.2.16',
+      '10:14:05 Drafted 1 Jira ticket',
+      '10:14:08 Asked an Approver in Teams',
+      '10:20:23 Bob approved',
+      '10:20:26 Created MOCK-142',
     ])
     expect(steps(replay(success).chat)).not.toMatch(/n8n|execution|workflow step|room lead|release checker|use case/i)
   })
@@ -348,10 +345,10 @@ describe('the Step by step', () => {
   })
 
   it('animates only what arrived while the page watched', () => {
-    const model = replay(success, 9)
+    const model = replay(success, 10)
     const animated = (html: string) => (html.match(/class="[^"]*_in_[^"]*"/g) ?? []).length
     expect(animated(steps(model.chat, model.seq))).toBe(0)
-    expect(animated(steps(model.chat, 7))).toBe(2)
+    expect(animated(steps(model.chat, 7))).toBe(1)
   })
 
   it('says the day again on a row from another day', () => {
@@ -388,7 +385,7 @@ describe('the pill', () => {
   it('says where the run stands, in the same words as a list’s row', () => {
     const pill = (model: RunModel) => runPill(stageFactsOf(model))
     expect(pill(replay(success, 6))).toEqual({ label: 'Running', tone: 'new' })
-    expect(pill(replay(success, 15))).toEqual({ label: 'Waiting for a yes', tone: 'wait' })
+    expect(pill(replay(success, 15))).toEqual({ label: 'Waiting for approval', tone: 'wait' })
     expect(pill(replay(success))).toEqual({ label: 'Done', tone: 'ok' })
     expect(pill(replay(rejected))).toEqual({ label: 'Declined', tone: 'quiet' })
     expect(pill(replay(failure))).toEqual({ label: 'Stopped', tone: 'bad' })

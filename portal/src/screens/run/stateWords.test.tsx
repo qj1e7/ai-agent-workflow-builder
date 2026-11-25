@@ -82,7 +82,7 @@ const CASES: readonly Case[] = [
   { state: 'pending', model: replay(success, 1), view: view(pendingView), decision: { run_state: 'pending', written: 0 }, pill: 'Running', words: /\bRunning\b/ },
   { state: 'working', model: replay(success, 6), view: view(workingView), decision: { run_state: 'working', written: 0 }, pill: 'Running', words: /\bRunning\b/ },
   { state: 'proposed', model: replay(success, 10), view: view(workingView, { state: 'proposed' }), decision: { run_state: 'proposed', written: 0 }, pill: 'Running', words: /\bRunning\b/ },
-  { state: 'awaiting_approval', model: replay(success, 15), view: view(waitingView), decision: { run_state: 'awaiting_approval', written: 0 }, pill: 'Waiting for a yes', words: /Waiting for a yes/ },
+  { state: 'awaiting_approval', model: replay(success, 15), view: view(waitingView), decision: { run_state: 'awaiting_approval', written: 0 }, pill: 'Waiting for approval', words: /Waiting for a yes/ },
   { state: 'acting', model: replay(success, 18), view: view(waitingView, { state: 'acting' }), decision: { run_state: 'acting', written: 0 }, pill: 'Running', words: /Creating the ticket/ },
   { state: 'succeeded', model: replay(success), view: view(doneView), decision: { run_state: 'succeeded', written: 1 }, pill: 'Done', words: /\b(1 ticket|MOCK-142) created\b/ },
   {
@@ -115,10 +115,15 @@ const CASES: readonly Case[] = [
 ]
 
 describe('one run state, the same words on the card, the panel, the chat’s decided card and Recent runs', () => {
-  it('gives the run page one pill: Needs your yes for someone who may say yes, else the run’s own', () => {
+  it('gives the run page one pill, the same for everyone: the run’s own, in approval words', () => {
     const waiting = stageFactsOf(replay(success, 15))
-    expect(pills(wrap(<RunPill facts={waiting} yours />))).toEqual(['Needs your yes'])
-    expect(pills(wrap(<RunPill facts={waiting} />))).toEqual(['Waiting for a yes'])
+    expect(pills(wrap(<RunPill facts={waiting} />))).toEqual(['Waiting for approval'])
+  })
+
+  it('names who approved once the run is writing, on the page and the panel, which name people', () => {
+    const writing = stageFactsOf(replay(success, 18))
+    expect(pills(wrap(<RunPill facts={writing} nameOf={nameOf} />))).toEqual(['Approved by Bob'])
+    expect(pills(wrap(<RunPill facts={writing} />))).toEqual(['Running'])
   })
 
   it('covers every state a run can be in', () => {

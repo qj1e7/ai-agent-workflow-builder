@@ -430,3 +430,30 @@ describe('a run n8n waits on that ends with no answer, or that n8n lost after th
     expect([ended(model, 'gate'), ended(model, 'write')]).toEqual(['done', 'skip'])
   })
 })
+
+describe('what a run found, for the page’s found line and plain steps', () => {
+  const checker = { kind: 'agent', id: 'version_checker', display: 'Version checker' }
+
+  it('keeps the newest release a card’s GitHub read found, and when it came out when the event says', () => {
+    const read = event(1, 'agent_step_finished', { step: 'github_read_releases', result: { releases: 2, tags: ['0.165.0', '0.164.0'], newest_published_at: '2026-11-18T08:00:00Z' } }, checker)
+    const model = foldAll(emptyModel, [read])
+    expect(model.release).toEqual({ version: '0.165.0', at: '2026-11-18T08:00:00Z' })
+    expect(model.chat.map((item) => item.kind)).toEqual(['checked'])
+  })
+
+  it('leaves the day out when the event carries none, and reads the software check’s newest release the same way', () => {
+    expect(replay(card).release).toEqual({ version: '1.2.16', at: null })
+    expect(replay(success).release).toEqual({ version: '1.2.16', at: null })
+  })
+
+  it('has no release before the run read one, or when the read found none', () => {
+    expect(replay(success, 5).release).toBeNull()
+    const none = event(1, 'agent_step_finished', { step: 'github_read_releases', result: { releases: 0, tags: [] } }, checker)
+    expect(foldAll(emptyModel, [none]).release).toBeNull()
+  })
+
+  it('adds a row for what the agents drafted, with how many and what they write', () => {
+    const drafted = replay(success).chat.filter((item) => item.kind === 'drafted')
+    expect(drafted).toMatchObject([{ kind: 'drafted', count: 1, connector: 'jira', operation: 'create_ticket' }])
+  })
+})

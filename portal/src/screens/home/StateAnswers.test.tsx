@@ -147,7 +147,7 @@ describe('the requests an approve is sent to (approve the upgrade tickets)', () 
 describe('a request that waits for someone else’s yes (approve, asked by the person whose run it is)', () => {
   it('shows Alice their own request as its card, led by who it waits for, with Open and no way to decide', () => {
     const html = draw(answered(decide as PlannerReply), { me: ALICE })
-    expect(text(html)).toContain('This waits for Bob’s yes. Create 1 Jira ticket Waiting for a yes Upgrade LangGraph from 1.2.14 to 1.2.16 Open')
+    expect(text(html)).toContain('This waits for Bob’s yes. Create 1 Jira ticket Waiting for approval Upgrade LangGraph from 1.2.14 to 1.2.16 Open')
     expect(html).toMatch(/<button[^>]*data-opens="approval:run_01JB8"[^>]*>Open<\/button>/)
     expect(text(html)).not.toMatch(/Review and decide|\bApprove\b|Nothing is waiting/)
   })

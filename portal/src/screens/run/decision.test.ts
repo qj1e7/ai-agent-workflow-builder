@@ -135,7 +135,7 @@ describe('the request’s words', () => {
   it('keeps the two Approvers’ words: step 1 of 2, then step 2 of 2 after the first yes', () => {
     expect(turnWords(open, nameOf)).toBeNull()
     expect(turnWords(first, nameOf)).toBe('Step 1 of 2. It needs two Approvers, one after the other.')
-    expect(turnWords(second, nameOf)).toBe('Step 2 of 2. Carol said yes first.')
+    expect(turnWords(second, nameOf)).toBe('Step 2 of 2. Carol approved first.')
     expect(whyYouWords(open)).toBe('No one can approve their own work.')
     expect(whyYouWords(first)).toBe('No one can approve their own work. Your yes is the first of two.')
     expect(whyYouWords(second)).toBe('No one can approve their own work. Your yes is the second of two.')

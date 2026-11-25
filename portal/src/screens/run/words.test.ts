@@ -3,12 +3,13 @@ import { PRODUCT } from '../../shell/product'
 import rejectedView from '@contracts/fixtures/views/rejected.final.json'
 import type { ApprovalStepView, RunViewOf } from '../../api/types'
 import type { LiveRun } from './liveRun'
+import card from '@contracts/fixtures/runs/card.json'
 import failure from '@contracts/fixtures/runs/failure.json'
 import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { emptyModel, foldWire, type ChatItem, type RunModel } from './runModel'
 import { stageAnswers } from './stageAnswers'
-import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, runKind, runPill, scheduleShort, speakerName, stageFactsOf, stageWords, type StageFacts } from './words'
+import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, messageRowsOf, runKind, runPill, scheduleShort, speakerName, stageFactsOf, stageWords, type StageFacts } from './words'
 
 describe('the run chat', () => {
   it('names the app by its full name', () => {
@@ -183,25 +184,28 @@ describe('the first line over a run', () => {
   })
 })
 
-describe('the Step by step log', () => {
+describe('What happened, in plain steps', () => {
   const rows = (model: RunModel) => logRowsOf(model.chat, named, QUICK).map((row) => `${row.time} ${row.agent ? `${row.agent.display}: ` : ''}${row.text}`)
 
-  it('tells an approved run in one sentence a row, with the time to the second and no row for who joined or that it finished', () => {
-    const told = rows(replay(success))
-    expect(told[0]).toBe('10:14:00 Alice started the run.')
-    expect(told).toContain('10:14:08 Asked an Approver for a yes in Teams.')
-    expect(told).toContain('10:20:23 Bob said yes.')
-    expect(told.at(-1)).toBe('10:20:26 Created MOCK-142 in Jira.')
-    expect(told.join(' ')).not.toMatch(/joined|Done\./)
+  it('tells an approved run in plain steps, each with its time to the second, built from the events and not from the agents’ words', () => {
+    expect(rows(replay(success))).toEqual([
+      '10:14:04 Checked GitHub: found 1.2.16',
+      '10:14:05 Drafted 1 Jira ticket',
+      '10:14:08 Asked an Approver in Teams',
+      '10:20:23 Bob approved',
+      '10:20:26 Created MOCK-142',
+    ])
   })
 
-  it('keeps what the agents found as its own row, after they spoke and before the ask, once the run is decided too', () => {
-    for (const told of [rows(replay(success)), rows(replay(rejected))]) {
-      const found = told.indexOf('10:14:05 LangGraph has a new release: 1.2.16.')
-      expect(found).toBeGreaterThan(0)
-      expect(found).toBeLessThan(told.indexOf('10:14:08 Asked an Approver for a yes in Teams.'))
+  it('has no row for who started the run, who joined, that it finished, or what the agents said or reported', () => {
+    for (const model of [replay(success), replay(rejected), replay(card)]) {
+      const told = rows(model).join(' ')
+      expect(told).not.toMatch(/started the run|joined|Done\.|Planner|Version checker|Please |I suggest|LangGraph has a new release/)
     }
-    expect(rows(replay(failure)).join(' '), 'a run that stopped before the agents finished found nothing').not.toMatch(/new release: 1\.2\.16\.$/)
+  })
+
+  it('never says yes as a noun', () => {
+    for (const model of [replay(success), replay(rejected)]) expect(rows(model).join(' ')).not.toMatch(/\bsaid yes\b|\ba yes\b|\byour yes\b/i)
   })
 
   it('ends a declined run on the one row that says who declined and that nothing was written', () => {
@@ -213,6 +217,33 @@ describe('the Step by step log', () => {
 
   it('says a stopped run stopped before anything was written', () => {
     expect(rows(replay(failure)).at(-1)).toMatch(/The run stopped\. Nothing was written\.$/)
+  })
+
+  it('reads a card run’s releases and its drafted ticket the same way', () => {
+    expect(rows(replay(card))).toContain('10:14:04 Checked GitHub: found 1.2.16')
+    expect(rows(replay(card))).toContain('10:14:09 Drafted 1 Jira ticket')
+  })
+})
+
+describe('the agents’ own words, for support', () => {
+  const messages = (model: RunModel) => messageRowsOf(model.chat, named).map((row) => `${row.time} ${row.agent ? `${row.agent.display}: ` : ''}${row.text}`)
+
+  it('gives what each agent said, with its name, in order, and nothing the plain steps already say', () => {
+    expect(messages(replay(success))).toEqual([
+      '10:14:02 Planner: Please check LangGraph for new releases.',
+      '10:14:05 Version checker: LangGraph has a new release: 1.2.16. I suggest one ticket.',
+      "10:14:05 Planner: Agreed. I'll draft one ticket for an Approver to check.",
+    ])
+  })
+
+  it('never repeats the agents’ report as an unlabelled line', () => {
+    for (const model of [replay(success), replay(rejected)]) {
+      for (const row of messageRowsOf(model.chat, named)) expect(row.agent, row.text).not.toBeNull()
+    }
+  })
+
+  it('has nothing when no agent spoke', () => {
+    expect(messages(replay(success, 1))).toEqual([])
   })
 })
 
@@ -271,7 +302,7 @@ describe('the stage words, one function for the row, the banner, the strip and R
   it('has one pill for each run state, in the sketch’s words', () => {
     expect(runPill({ ...base, state: 'failed' })).toEqual({ label: 'Stopped', tone: 'bad' })
     expect(runPill({ ...base, state: 'working' })).toEqual({ label: 'Running', tone: 'new' })
-    expect(runPill({ ...base, state: 'awaiting_approval' })).toEqual({ label: 'Waiting for a yes', tone: 'wait' })
+    expect(runPill({ ...base, state: 'awaiting_approval' })).toEqual({ label: 'Waiting for approval', tone: 'wait' })
     expect(runPill({ ...base, count: 1 })).toEqual({ label: 'Done', tone: 'ok' })
     expect(runPill(base)).toEqual({ label: 'Nothing new', tone: 'quiet' })
     expect(runPill({ ...base, state: 'rejected' })).toEqual({ label: 'Declined', tone: 'quiet' })

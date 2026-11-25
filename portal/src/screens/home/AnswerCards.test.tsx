@@ -855,7 +855,7 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
 
   it('waiting: what it found and that it waits for a yes, and nothing written yet', () => {
     const html = card(replay(runSuccess, 15))
-    expect(pill(html)).toBe('Waiting for a yes')
+    expect(pill(html)).toBe('Waiting for approval')
     expect(labels(html)).toEqual(['Found', 'Now'])
     expect(text(html)).toContain('Waiting for a yes.')
     expect(html).not.toMatch(/MOCK-142/)
@@ -947,7 +947,7 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
       const said = text(html)
       if (pill(html) === 'Stopped') return 'stopped'
       if (said.includes('Now Retrying after a short wait…')) return 'retrying'
-      if (pill(html) === 'Waiting for a yes' && said.includes('Now Waiting for a yes.')) return 'waiting'
+      if (pill(html) === 'Waiting for approval' && said.includes('Now Waiting for a yes.')) return 'waiting'
       if (said.includes('Now Bob said yes. Creating the ticket…')) return 'writing'
       if (pill(html) === 'Done' && said.includes('MOCK-142 created after Bob’s yes')) return 'done'
       return `unexpected: ${said}`
