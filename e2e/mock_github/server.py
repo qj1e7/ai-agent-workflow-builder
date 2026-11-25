@@ -14,6 +14,8 @@ N8N = "n8n-io/n8n"
 TERRAFORM = "hashicorp/terraform"
 OPENTOFU = "opentofu/opentofu"
 CPYTHON = "python/cpython"
+HTTPX = "encode/httpx"
+"""Not on the runtime's reviewed list, so only GitHub's search finds it."""
 MODES = ("ok", "unavailable", "not_found", "drop")
 """drop takes a request and closes the connection without a word, as a source that stops answering
 does. A simulation plays a timeout with it (ADR 0054, spike S5)."""
@@ -46,6 +48,7 @@ FASTAPI_TAGS = [
 TERRAFORM_TAGS = ["v1.9.8", "v1.9.7", "v1.9.6"]
 OPENTOFU_TAGS = ["v1.8.5", "v1.8.4", "v1.8.3"]
 N8N_TAGS = ["n8n@2.4.2", "n8n@2.4.1", "n8n@2.4.0", "n8n@2.3.9"]
+HTTPX_TAGS = ["0.28.1", "0.28.0", "0.27.2"]
 LATEST_PUBLISHED = datetime(2026, 10, 28, 9, 0, tzinfo=UTC)
 
 GOOD_TOKEN = "ghp_mock_good_token"
@@ -121,11 +124,19 @@ RELEASES_BY_REPO: dict[str, list[dict[str, Any]]] = {
     OPENTOFU: build_releases(OPENTOFU, OPENTOFU_TAGS, LATEST_PUBLISHED - timedelta(days=5)),
     CPYTHON: [],
     PLANTED: planted_releases(),
+    HTTPX: build_releases(HTTPX, HTTPX_TAGS, LATEST_PUBLISHED - timedelta(days=6)),
 }
 """The repositories the mock knows. Any other repository answers 404, as GitHub does."""
 RELEASES = RELEASES_BY_REPO[REPO]
 RENAMED = {"tiangolo/fastapi": FASTAPI}
 """Old names GitHub redirects to the repository's new name, as it does after a rename."""
+SEARCHABLE: dict[str, tuple[str, int]] = {
+    REPO: ("Build resilient language agents as graphs.", 25012),
+    FASTAPI: ("FastAPI framework, high performance, easy to learn, fast to code.", 105018),
+    HTTPX: ("A next generation HTTP client for Python.", 15854),
+    REDIS: ("For developers, who are building real-time data-driven applications.", 73010),
+}
+"""What GitHub's repository search finds: each repository's description and stars."""
 RELEASES_PATH = re.compile(r"^/repos/([^/]+)/([^/]+)/releases/?$")
 REPO_PATH = re.compile(r"^/repos/([^/]+)/([^/]+)/?$")
 BY_ID_PATH = re.compile(r"^/repositories/(\d+)(/releases)?/?$")
@@ -208,6 +219,27 @@ def page_of(releases: list[dict[str, Any]], query: dict[str, list[str]]) -> list
     return releases[start : start + per_page]
 
 
+def search_items(query: str) -> list[dict[str, Any]]:
+    """The searchable repositories whose name or description holds every plain word of the query,
+    most stars first. A qualifier such as archived:false is not a word to match."""
+    words = [w.lower() for w in query.split() if ":" not in w]
+    found = [
+        (repo, description, stars)
+        for repo, (description, stars) in SEARCHABLE.items()
+        if words and all(w in f"{repo} {description}".lower() for w in words)
+    ]
+    found.sort(key=lambda hit: -hit[2])
+    return [
+        {
+            **repo_body(repo),
+            "description": description,
+            "stargazers_count": stars,
+            "archived": False,
+        }
+        for repo, description, stars in found
+    ]
+
+
 def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def send_json(self, status: int, body: Any, headers: dict[str, str] | None = None) -> None:
@@ -267,6 +299,14 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                 self.send_user()
             elif url.path == "/rate_limit":
                 self.send_rate_limit()
+            elif url.path == "/search/repositories":
+                if state.mode == "unavailable":
+                    self.send_json(503, {"message": "Service Unavailable"})
+                    return
+                items = search_items(parse_qs(url.query).get("q", [""])[0])
+                self.send_json(
+                    200, {"total_count": len(items), "incomplete_results": False, "items": items}
+                )
             elif url.path == "/_admin/mode":
                 repo = parse_qs(url.query).get("repo", [None])[0]
                 if repo is None:

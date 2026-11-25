@@ -218,4 +218,7 @@ NPM_PACKAGE_PATTERN = r"^(?:@[a-z0-9~-][a-z0-9._~-]{0,100}/)?[a-z0-9~-][a-z0-9._
 type MavenCoordinate = Annotated[str, Field(pattern=MAVEN_COORDINATE_PATTERN)]
 type NpmPackage = Annotated[str, Field(pattern=NPM_PACKAGE_PATTERN)]
 type SourceKind = Literal["github", "maven", "npm"]
+type FoundBy = Literal["reviewed_list", "github_search"]
+"""Where the runtime found a software's match: our reviewed list, or GitHub's public repository
+search. A search match is only ever a choice for the person (ADR 0025)."""
 type PackageKind = Literal["maven", "npm"]

@@ -71,11 +71,14 @@ def _full(limit: int) -> HTTPException:
 @router.post(
     "/watchlist/find",
     description=(
-        "Finds the GitHub projects a software's plain name could mean. The agent runtime looks "
-        "the name up in a reviewed list, never through a model, and asks GitHub about each "
-        "match with the watchlist's own tag rule before offering it. Nothing is saved: the "
-        "person picks a match, then adds it with POST /watchlist/software. A match that is "
-        "already watched says so."
+        "Finds where a software's plain name is published. The agent runtime looks the name "
+        "up in a reviewed list, never through a model. When the list has no such name, it "
+        "searches GitHub's public repositories through the platform's GitHub connection and "
+        "offers at most 3 (found_by github_search, with stars). It asks GitHub about each match "
+        "with the watchlist's own tag rule before offering it. Nothing is saved: the person "
+        "picks a match, then adds it with POST /watchlist/software. Only a single match from "
+        "the reviewed list may be confirmed as it is; a search match is always a choice. A "
+        "match that is already watched says so."
     ),
     responses=OPERATORS_ONLY,
 )

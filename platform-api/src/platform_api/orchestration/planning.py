@@ -196,8 +196,9 @@ class CapabilityRegistry:
 
 
 class ProjectFinding:
-    """Finds the GitHub project of a software's name. The runtime does it from a reviewed list
-    and checks each match on GitHub. No model and no model key are involved."""
+    """Finds where a software's name is published. The runtime does it from a reviewed list, or
+    else GitHub's repository search, and checks each match on GitHub. No model and no model key
+    are involved."""
 
     def __init__(self, agents: HttpAgentRuntime) -> None:
         self._agents = agents
