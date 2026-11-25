@@ -324,7 +324,13 @@ def finished_task() -> TaskFinished:
         "Version checker read LangGraph. 2 releases newer than 1.2.14.",
         AgentStepFinishedData(
             step="read_source",
-            result={"software_id": LANGGRAPH_ID, "state": "behind", "newest": NEWEST},
+            result={
+                "software_id": LANGGRAPH_ID,
+                "state": "behind",
+                "newest": NEWEST,
+                "software": "LangGraph",
+                "source": "GitHub",
+            },
         ),
     )
     rec.add(
@@ -386,6 +392,7 @@ def _read(
     state: str,
     newest: str | None,
     said: str,
+    problem: str | None = None,
 ) -> None:
     rec.add(
         AgentStepStartedEvent,
@@ -401,7 +408,14 @@ def _read(
         f"Version checker {said}",
         AgentStepFinishedData(
             step="read_source",
-            result={"software_id": software_id, "state": state, "newest": newest},
+            result={
+                "software_id": software_id,
+                "state": state,
+                "newest": newest,
+                "software": name,
+                "source": "GitHub",
+                **({"problem": problem} if problem else {}),
+            },
         ),
     )
 
@@ -446,7 +460,16 @@ def watchlist_finished() -> TaskFinished:
         "8.2.1",
         "read Redis. Nothing is newer than 8.2.1.",
     )
-    _read(rec, 4.3, "FastAPI", FASTAPI_ID, "cant_check", None, "could not read FastAPI.")
+    _read(
+        rec,
+        4.3,
+        "FastAPI",
+        FASTAPI_ID,
+        "cant_check",
+        None,
+        "could not read FastAPI.",
+        "GitHub answered 404 Not Found.",
+    )
     rec.add(
         AgentMessageEvent,
         4.8,
@@ -550,7 +573,14 @@ def failed_task() -> TaskFailed:
         "Version checker could not read LangGraph.",
         AgentStepFinishedData(
             step="read_source",
-            result={"software_id": LANGGRAPH_ID, "state": "cant_check", "newest": None},
+            result={
+                "software_id": LANGGRAPH_ID,
+                "state": "cant_check",
+                "newest": None,
+                "software": "LangGraph",
+                "source": "GitHub",
+                "problem": "GitHub returned 503 Service Unavailable three times.",
+            },
         ),
     )
     rec.add(
@@ -704,7 +734,16 @@ def card_finished() -> TaskFinished:
         4.2,
         checker,
         f"Version checker read 8 releases of {REPO}. The newest is 1.2.16.",
-        AgentStepFinishedData(step="github_read_releases", result={"releases": 8, "tags": tags}),
+        AgentStepFinishedData(
+            step="github_read_releases",
+            result={
+                "releases": 8,
+                "tags": tags,
+                "source": "GitHub",
+                "repo": REPO,
+                "newest_published_at": "2026-11-12T08:00:00Z",
+            },
+        ),
     )
     rec.add(
         AgentStepStartedEvent,

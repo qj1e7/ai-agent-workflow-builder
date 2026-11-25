@@ -132,7 +132,11 @@ def tool_answers(chat: ScriptedChat) -> list[dict[str, Any]]:
 
 
 def test_a_card_run_tells_the_story_the_contract_fixture_records():
-    room = Room(ScriptedChat(script=releases_then_search_then_create()), jira=FakeJira())
+    source = FakeSource(langgraph_tags()[:8])
+    source.releases[0] = Release(tag="1.2.16", published_at="2026-11-12T08:00:00Z")
+    room = Room(
+        ScriptedChat(script=releases_then_search_then_create()), source=source, jira=FakeJira()
+    )
     result = room.run()
     assert isinstance(result, TaskFinished)
     assert without_timestamps(result) == without_timestamps(card_finished())
@@ -373,7 +377,7 @@ def test_releases_github_cannot_serve_stop_the_agent_before_it_can_propose():
     assert source.calls == [REPO] * 3
     assert steps_started(result) == [READ]
     finished = [e.data.result for e in result.events if isinstance(e, AgentStepFinishedEvent)]
-    assert finished == [{"problem": gave_up}]
+    assert finished == [{"problem": gave_up, "source": "GitHub", "repo": REPO}]
     failed = result.events[-1]
     assert isinstance(failed, AgentFailedEvent)
     assert failed.summary == f"Version checker failed: {REPO} could not be checked."
@@ -900,7 +904,7 @@ def test_the_read_names_where_it_read_and_which_repository():
 
 def test_a_read_that_failed_says_so_with_its_source_repository_and_problem():
     script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
-    source = FakeSource(langgraph_tags(), failures=[404])
+    source = FakeSource(langgraph_tags(), failures=[503] * 3)
     result = Room(ScriptedChat(script=script), source=source).run()
     read = _read_result(result)
     assert read["source"] == "GitHub"

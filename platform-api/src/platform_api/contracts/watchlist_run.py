@@ -328,7 +328,14 @@ def _read_sources(tl: Timeline, base: float) -> float:
             else f"Version checker read {w.name}. {_detail(w)}",
             AgentStepFinishedData(
                 step="read_source",
-                result={"software_id": w.id, "state": w.state, "newest": w.newest},
+                result={
+                    "software_id": w.id,
+                    "state": w.state,
+                    "newest": w.newest,
+                    "software": w.name,
+                    "source": "GitHub",
+                    **({"problem": "GitHub answered 404 Not Found."} if unreadable else {}),
+                },
             ),
         )
         at += 0.5

@@ -264,7 +264,16 @@ def card_run_events() -> Timeline:
         4.2,
         AGENT_CARD,
         f"Version checker read 8 releases of {REPO}. The newest is 1.2.16.",
-        AgentStepFinishedData(step="github_read_releases", result={"releases": 8, "tags": TAGS}),
+        AgentStepFinishedData(
+            step="github_read_releases",
+            result={
+                "releases": 8,
+                "tags": TAGS,
+                "source": "GitHub",
+                "repo": REPO,
+                "newest_published_at": "2026-11-12T08:00:00Z",
+            },
+        ),
     )
     tl.add(
         AgentStepStarted,

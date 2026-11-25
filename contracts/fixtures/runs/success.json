@@ -124,7 +124,9 @@
       "result": {
         "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
         "state": "behind",
-        "newest": "1.2.16"
+        "newest": "1.2.16",
+        "software": "LangGraph",
+        "source": "GitHub"
       }
     }
   },

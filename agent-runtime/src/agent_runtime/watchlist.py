@@ -459,7 +459,11 @@ def _read_finished(item: SoftwareToCheck, finding: Finding) -> Draft:
         "software_id": item.id,
         "state": finding.state,
         "newest": finding.newest,
+        "software": item.name,
+        "source": source_name(item),
     }
+    if finding.state == "cant_check":
+        result["problem"] = finding.detail
     return finished("read_source", what, result)
 
 
