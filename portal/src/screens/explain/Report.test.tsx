@@ -25,7 +25,7 @@ describe('the report, as layout B draws it', () => {
       ['Step by step', '8 blocks'],
       ['What it reads, writes and posts', 'Reads GitHub and Jira · Writes Jira'],
       ['Flags', `${REPORT.fixed.length} fixed for you · ${REPORT.passed.length} passed`],
-      ['Who approves each write', '1 waits for a yes on each run'],
+      ['Who approves each write', '1 waits for approval on each run'],
       ['Settings', `${REPORT.settings.length} settings`],
       ['Approval', 'None needed'],
     ])
@@ -83,7 +83,7 @@ describe('the report, as layout B draws it', () => {
   })
 
   it('says who decides each write, and that a workflow that writes nothing needs nobody', () => {
-    expect(text(draw(REPORT))).toContain('“Create ticket” Waits for a yes in Teams on each run.')
+    expect(text(draw(REPORT))).toContain('“Create ticket” Waits for an Approver in Teams on each run. Nobody who started the run or made the workflow can approve it.')
     expect(text(draw({ ...REPORT, approves: [] }))).toContain('It writes nothing, so nobody approves a write.')
   })
 

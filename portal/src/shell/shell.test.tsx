@@ -17,7 +17,7 @@ import { needsTotal } from '../screens/home/home'
 import { focusMovedOutside } from './PersonChip'
 import { TEAMS_TITLE } from './TeamsPanel'
 import { TEST_NOTE } from './TestControls'
-import { oldAgentsDestination, PAGES, railCountFor, railCurrent, RAIL_PAGE_IDS, softwareDestination } from './routes'
+import { oldAgentsDestination, oldExplainDestination, PAGES, railCountFor, railCurrent, RAIL_PAGE_IDS, softwareDestination } from './routes'
 
 const ORIGIN = 'http://portal.test'
 const MORNING = new Date('2026-10-29T03:00:00Z')
@@ -113,6 +113,16 @@ describe('the rail', () => {
       const html = render({ path })
       expect(html, path).toContain('<main')
       expect(text(mainOf(html)), path).not.toContain('Page not found')
+    }
+  })
+
+  it('sends an old Explain address to the workflow’s page, never to a blank page or an Explain page', () => {
+    expect(oldExplainDestination('uc_1')).toBe('/workflows/uc_1')
+    expect(oldExplainDestination('uc a')).toBe('/workflows/uc%20a')
+    for (const path of ['/workflows/uc_1/explain', '/workflows/uc_1/explain?version=2', '/workflows/uc_1/explain#flags']) {
+      const html = render({ path })
+      expect(html, path).toContain('<main')
+      expect(text(mainOf(html)), path).not.toMatch(/Page not found|Explain|Reading the workflow/)
     }
   })
 
