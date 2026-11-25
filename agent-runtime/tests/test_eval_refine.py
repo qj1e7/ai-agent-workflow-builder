@@ -7,15 +7,19 @@ from typing import get_args
 
 import pytest
 from evals.checks import Check
-from evals.fix import REFINE, FixCase, replay, run_case, score
+from evals.fix import FIX, REFINE, FixCase, replay, run_case, score
 from evals.runner import JOBS
 
-from agent_runtime.fixing.coordinator import DRAFT_BRIEFING, HandedIn, RefineRequest
+from agent_runtime.fixing.coordinator import DRAFT_BRIEFING, HandedBack, HandedIn, RefineRequest
 from agent_runtime.fixing.events import FixWidening
 from agent_runtime.fixing.ledger import NEEDS_A_CHANGE, NEEDS_THE_GAPS
 
 CASES = {case.id: case for case in REFINE.cases()}
-REFINED = ("refined-in-one-round", "gap-covered-unchanged")
+REFINED = (
+    "refined-in-one-round",
+    "gap-covered-unchanged",
+    "refine-cover-no-answer-still-hands-in",
+)
 
 
 def failed(checks: list[Check]) -> dict[str, str]:
@@ -126,3 +130,26 @@ def test_a_refinement_names_only_blocks_of_its_draft():
 
 def test_the_refine_job_is_not_in_the_paid_runner():
     assert REFINE.name not in {job.name for job in JOBS}
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        CASES["refine-cover-no-answer-still-hands-in"],
+        next(c for c in FIX.cases() if c.id == "cover-no-answer-still-hands-in"),
+    ],
+    ids=["refinement", "fix"],
+)
+def test_a_cover_ask_with_no_answer_is_a_refused_call_and_the_draft_still_goes_in(case: FixCase):
+    """A writer that times out, has no calls left or has no model brings no answer. That is a
+    refused call, so a fix or a refinement that can hand in still does. Only an answer that
+    brings nothing new ends the rounds for no progress."""
+    run = run_case(case)
+    assert isinstance(run.fixing.outcome, HandedIn)
+    assert run.fixing.ledger.refused == ["write_scenarios"]
+    assert run.fakes.scenario_writer.covers[-1] == ["Make the ticket"]
+
+
+def test_a_cover_ask_that_brings_nothing_new_still_ends_for_no_progress():
+    outcome = replay(CASES["refine-writer-brings-nothing-new"]).value
+    assert isinstance(outcome, HandedBack) and outcome.why == "no_progress"

@@ -23,8 +23,10 @@ from platform_api.builder.fix_parts import (
 )
 from platform_api.builder.fixes import NotStored
 from platform_api.builder.refinements import (
+    NOT_TAKEN,
     NOTHING_TO_REFINE,
     OUTSIDE,
+    REFINE_AGAIN,
     REFINING,
     SETTING,
     TRIED,
@@ -96,11 +98,14 @@ class Runtime:
 
     started: list[RefineStartRequest] = field(default_factory=list[RefineStartRequest])
     answer: FixAccepted | AgentUnavailable | AgentRejected | None = None
+    raises: bool = False
 
     async def start_refinement(
         self, request: RefineStartRequest
     ) -> FixAccepted | AgentUnavailable | AgentRejected:
         self.started.append(request)
+        if self.raises:
+            raise httpx.ConnectError("the runtime is down")
         return self.answer or FixAccepted(fix_id=request.request.fix_id, started=True)
 
 
@@ -275,12 +280,21 @@ async def test_only_an_operator_starts_a_refinement(lab: Lab):
     assert lab.runtime.started == []
 
 
-async def test_a_runtime_that_does_not_take_it_gives_up_at_once(lab: Lab):
+@pytest.mark.parametrize("raises", [False, True], ids=["refused", "raised"])
+async def test_a_runtime_that_does_not_take_it_gives_up_at_once_with_a_plain_reason(
+    lab: Lab, raises: bool
+):
+    """Whether the runtime answers that it can't, or the call to it breaks, the refinement ends
+    at once and says nothing was tried, never holding the draft for 20 minutes."""
     lab.runtime.answer = AgentUnavailable("down")
+    lab.runtime.raises = raises
     view = await lab.checked()
-    shown = (await lab.refine(view)).json()["refinement"]
-    assert shown["state"] == "gave_up"
-    assert shown["said"] == "I couldn't refine it. Nothing it tried passed every case."
+    answer = await lab.refine(view)
+    assert answer.status_code == 200, answer.text
+    shown = answer.json()["refinement"]
+    assert (shown["state"], shown["ends_by"]) == ("gave_up", None)
+    assert shown["said"] == f"I couldn't refine it. {WHY_SAID[NOT_TAKEN]}"
+    assert WHY_SAID[NOT_TAKEN] == "The AI service didn't start it, so nothing was tried."
 
 
 # The refined draft
@@ -311,6 +325,8 @@ async def test_a_refined_plan_a_simulation_here_passed_is_the_next_revision(lab:
     shown = after["refinement"]
     assert (shown["state"], shown["revision"]) == ("refined", kept.version)
     assert shown["said"] == refined_said(1)
+    assert shown["said"].endswith(REFINE_AGAIN)
+    assert REFINE_AGAIN == "To refine it again, ask for a change first."
     assert shown["rounds"] == [{"round": 1, "passed": 2, "scenarios": 2}]
     assert len(lab.bench.driver.versions) == 2
 
