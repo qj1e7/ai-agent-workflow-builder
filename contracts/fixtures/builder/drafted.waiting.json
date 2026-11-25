@@ -125,7 +125,7 @@
         "quoted": true
       },
       {
-        "text": ", each after a yes",
+        "text": ", each after approval",
         "quoted": false
       },
       {
@@ -167,13 +167,13 @@
         "name": "Ask for a yes",
         "ours": true,
         "block_type": null,
-        "tag": "Waits for a yes"
+        "tag": "Waits for approval"
       },
       {
         "name": "Make the ticket",
         "ours": true,
         "block_type": null,
-        "tag": "Writes after a yes"
+        "tag": "Writes after approval"
       }
     ],
     "touches": [
@@ -213,7 +213,7 @@
             "quoted": true
           },
           {
-            "text": ", each after a yes",
+            "text": ", each after approval",
             "quoted": false
           }
         ],

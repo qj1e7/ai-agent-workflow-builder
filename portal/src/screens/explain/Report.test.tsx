@@ -99,18 +99,6 @@ describe('the report, as layout B draws it', () => {
   })
 })
 
-describe('an older version', () => {
-  it('says which version it is, that today’s rules checked it again, and the grade it had then', () => {
-    const html = text(draw(OLDER))
-    expect(html).toContain('Version 1. Checked again under today’s rules.')
-    expect(html).toContain('Graded Safe when it was published, and Needs a fix today.')
-  })
-
-  it('says nothing of the sort for the version in use', () => {
-    expect(text(draw(REPORT))).not.toContain('Checked again')
-  })
-})
-
 describe('Reworded and code’s wording', () => {
   it('shows In short in code’s words, with no label and no button, when nothing was reworded', () => {
     const html = draw(REPORT, { onWording: () => undefined })

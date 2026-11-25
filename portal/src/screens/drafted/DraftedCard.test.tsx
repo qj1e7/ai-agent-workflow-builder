@@ -20,7 +20,7 @@ import { ApiProvider } from '../../api/context'
 import { draftedKey, stillMoving } from '../../api/draftedQueries'
 import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
-import type { CantReply, DraftedWorkflowView, Me, PartReply, PlannerReply, RefinementView, SetupCardReply, SetUpApprovalView, UseCaseView } from '../../api/types'
+import type { CantReply, DraftedWorkflowView, ExplainSetting, Me, PartReply, PlannerReply, RefinementView, SetupCardReply, SetUpApprovalView, UseCaseView } from '../../api/types'
 import { holdTurnOn } from '../../api/workflowQueries'
 import { Answer, type Page } from '../home/AnswerCards'
 import { ChatProvider } from '../home/ChatProvider'
@@ -422,9 +422,9 @@ describe('the set-up approval page', () => {
 
   it('shows each setting with where it came from, the key for each write block, a guess marked as guessed, and code’s checks, in view', () => {
     const base = bobSetUp as SetUpApprovalView
-    const key = { label: [{ text: 'Write key for ', quoted: false }, { text: 'Close it', quoted: true }], value: [{ text: 'GitLab ops', quoted: true }], mark: 'filled', said: 'Chosen by Alice' } as const
-    const guess = { label: [{ text: 'The Jira project', quoted: true }], value: [{ text: 'MOCK', quoted: true }], mark: 'guessed', said: 'Guessed, and can be changed' } as const
-    const view = { ...base, report: { ...base.report, settings: [key, guess] } } as SetUpApprovalView
+    const key: ExplainSetting = { label: [{ text: 'Write key for ', quoted: false }, { text: 'Close it', quoted: true }], value: [{ text: 'GitLab ops', quoted: true }], mark: 'filled', said: 'Chosen by Alice' }
+    const guess: ExplainSetting = { label: [{ text: 'The Jira project', quoted: true }], value: [{ text: 'MOCK', quoted: true }], mark: 'guessed', said: 'Guessed, and can be changed' }
+    const view: SetUpApprovalView = { ...base, report: { ...base.report, settings: [key, guess] } }
     const html = render(<SetUpApproval view={view} />)
     const shown = text(html)
     expect(shown).toContain('Settings')

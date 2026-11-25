@@ -6760,7 +6760,7 @@
             "type": "boolean"
           },
           "tag": {
-            "description": "What it does, such as Reads Jira or Writes after a yes.",
+            "description": "What it does, such as Reads Jira or Writes after approval.",
             "title": "Tag",
             "type": "string"
           }
@@ -6886,7 +6886,7 @@
             "type": "string"
           },
           "decides": {
-            "description": "each_run: Approvers say yes on each run. set_up: it runs on the set-up approval, with no yes on each run. refused: no yes comes before it, so the platform refuses the write. cant_run_yet: no approval lets it run on this platform yet.",
+            "description": "each_run: Approvers approve it on each run. set_up: it runs on the set-up approval, with no approval on each run. refused: nothing asks for approval before it, so the platform refuses the write. cant_run_yet: no approval lets it run on this platform yet.",
             "enum": [
               "each_run",
               "set_up",
@@ -18707,7 +18707,7 @@
             "description": "The safety checker's grade under today's rules."
           },
           "in_short": {
-            "description": "One or two sentences in code's own words: when it runs, what it reads, what it changes or posts, and what waits for a yes.",
+            "description": "One or two sentences in code's own words: when it runs, what it reads, what it changes or posts, and what waits for approval.",
             "items": {
               "$ref": "#/components/schemas/Segment"
             },

@@ -58,7 +58,7 @@
       "quoted": true
     },
     {
-      "text": ", each after a yes",
+      "text": ", each after approval",
       "quoted": false
     },
     {
@@ -106,13 +106,13 @@
       "name": "Ask for a yes",
       "ours": true,
       "block_type": null,
-      "tag": "Waits for a yes"
+      "tag": "Waits for approval"
     },
     {
       "name": "Create ticket",
       "ours": true,
       "block_type": null,
-      "tag": "Writes after a yes"
+      "tag": "Writes after approval"
     },
     {
       "name": "Nothing to change",
@@ -192,7 +192,7 @@
           "quoted": true
         },
         {
-          "text": ", each after a yes",
+          "text": ", each after approval",
           "quoted": false
         }
       ],
@@ -438,6 +438,6 @@
       "said": "Set in the Portal"
     }
   ],
-  "approval": "None needed. The Planner laid it out, and each write through our blocks waits for a yes.",
+  "approval": "None needed. The Planner laid it out, and each write through our blocks waits for approval.",
   "needs_an_answer": 0
 }

@@ -568,10 +568,13 @@ const sentence = (words: string): string => (/[.!?]$/.test(words) ? words : `${w
 
 export const OWNER_WARNING = 'Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.'
 
+/** Who can clear a version that needs a fix when the page offers no fix of its own. A change in n8n is graded again as a new version. */
+export const WHO_FIXES = 'Anyone with n8n access can fix it in n8n.'
+
 /**
  * A version that needs a fix, with what to fix in the safety checker's words, so both roles read it on the page. A schedule on another
  * zone than the team's is saved again (ADR 0046), and saving makes the presser its owner, so the banner says so, as the schedule editor
- * does. Else Undo goes back to the version before. While neither can be pressed, the findings stand alone.
+ * does. Else Undo goes back to the version before. While neither can be pressed, the banner says who can clear it.
  */
 function needsFixOf(useCase: BannerFacts['useCase'], viewer: Viewer, version: number): Banner {
   const schedule = useCase.schedule
@@ -579,7 +582,7 @@ function needsFixOf(useCase: BannerFacts['useCase'], viewer: Viewer, version: nu
   const text = needsFixBanner(useCase.findings ?? [])
   if (mayPublish && mayChangeSchedule(useCase, viewer) && schedule && schedule.time_zone !== teamZone()) return { tone: 'bad', text: `${text} ${OWNER_WARNING}`, action: { kind: 'resave', day: schedule.day, at: schedule.at } }
   if (mayPublish && version > 1) return { tone: 'bad', text, action: { kind: 'undo', to: version - 1, inUse: version } }
-  return { tone: 'bad', text, action: null }
+  return { tone: 'bad', text: `${text} ${WHO_FIXES}`, action: null }
 }
 
 /** Every change that publishes again, which the platform refuses while anyone has the workflow open in n8n (ENGINE-PLAN 11). */

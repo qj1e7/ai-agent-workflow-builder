@@ -115,7 +115,7 @@ The team lead reviewed the drafter screens (ADR 0051) and the thumbs (ADR 0050) 
 10. **Two new state words:** "Drafting" while the drafter works, and "In n8n" while a draft is open in the person's own n8n space. A sent draft is "Waiting for a yes", and an approved one is a "Draft" on Workflows until someone turns it on.
 11. **In the sketch, Dan approves first and Bob second,** because "View as" has no second Approver. If Bob approves first, the card says "You approved it. A second Approver decides next."
 12. **"What I can do" lists drafting and Explain,** because the sketch shows them working. In the Portal they stay Planned until their pull requests land (ADR 0051).
-13. **The set-up approval shows what the Approver decides on:** In short, the line about the steps that won't ask for approval on each run, the flags to tick, what it reads, writes and posts, and who approves each write. All of it is in view. Since 25 Nov 2026 there is no More details with the rest of the report.
+13. **The set-up approval shows what the Approver decides on:** In short, the line about the steps that won't ask for approval on each run, the flags to tick, what it reads, writes and posts, who approves each write, its settings (the key for each write block among them, and every guess marked as guessed), and the safety checks, as Fixed for you and Passed. All of it is in view. Since 25 Nov 2026 there is no More details, and the steps and Approval rows of the report are not on it.
 
 ## The n8n login line
 

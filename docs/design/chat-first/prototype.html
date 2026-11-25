@@ -1004,7 +1004,7 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
       <li>Send for approval appears only when nothing is still needed. Until then the card says how many questions are left.</li>
       <li>The report is code’s own words. In short comes first, then one row per section with a short gist. A row opens on a click, and Settings opens by itself while anything is still needed. Since 25 Nov it shows only in the chat’s Explain answer. The draft card lists its flags under See them, and has no See the report.</li>
       <li>Where something can’t go on yet, the reason sits where its button would be, such as “Answer 1 question first”. No button is ever shown dead. The Planner’s set-up card and the change card follow the same rule.</li>
-      <li>Bob ticks each flag and says why. Approve appears only when every flag has a tick and a reason. A write by n8n’s own blocks won’t ask on each run, and the page says so. What it reads, writes and posts and who approves each write are in view, with no More details. Play “Bob approves a draft”, then “Second Approver” for a workflow that changes who can use GitLab.</li>
+      <li>Bob ticks each flag and says why. Approve appears only when every flag has a tick and a reason. A write by n8n’s own blocks won’t ask on each run, and the page says so. What it reads, writes and posts, who approves each write, the settings and the safety checks are in view, with no More details. Play “Bob approves a draft”, then “Second Approver” for a workflow that changes who can use GitLab.</li>
       <li>“Explain the FastAPI release check” answers in the chat, with a Reworded label and code’s own wording one tap away. Play “Explain”. Since 25 Nov there is no Explain page: no Explain on a row of Workflows, the workflow page, a version or the side panel.</li>
       <li>A thumbs up or down sits under each Planner answer, only while tracing is on. Switch “Tracing” to compare.</li>
     </ul>
@@ -3285,6 +3285,8 @@ function setupView(k, full) {
     <div class="pv-sec"><h4>Flags to accept</h4><p class="small muted" data-live="s-hint"></p><ul class="fls" data-live="s-flags"></ul></div>
     <div class="pv-sec"><h4>What it reads, writes and posts</h4>${RSEC.rwp(F)[1]}</div>
     <div class="pv-sec"><h4>Who approves each write</h4>${RSEC.who(F)[1]}</div>
+    <div class="pv-sec"><h4>Settings</h4>${RSEC.set(F)[1]}</div>
+    <div class="pv-sec"><h4>Safety checks</h4><p class="rp-sub">Fixed for you</p><ul class="caps rp-ok">${F.fixed.map((x) => `<li>${x}</li>`).join('')}</ul><p class="rp-sub">Passed</p><ul class="caps rp-ok">${F.passed.map((x) => `<li>${x}</li>`).join('')}</ul></div>
     <div class="pv-foot" data-live="s-foot"></div>
   </div>`;
 }

@@ -746,7 +746,10 @@ def test_a_write_whose_card_names_no_place_says_so() -> None:
         {"name": "GitHub repository", "value": "fastapi/fastapi"}
     ]
     [write] = [t for t in report_of(document).touches if t.action == "writes"]
-    assert (write.place, text(write.phrase)) == (None, "can create Jira tickets, each after approval")
+    assert (write.place, text(write.phrase)) == (
+        None,
+        "can create Jira tickets, each after approval",
+    )
 
 
 def test_a_write_with_no_card_before_it_asks_one_approver_and_makes_what_was_approved() -> None:

@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import type { ExplainFlag, ExplainSetting, ExplainTouch, ExplainWrite, Segment, WorkflowExplained } from '../../api/types'
-import { gradePill } from '../workflows/n8nChange'
+import type { ExplainCleared, ExplainFlag, ExplainSetting, ExplainTouch, ExplainWrite, Segment, WorkflowExplained } from '../../api/types'
 import { approvalGist, approvesGist, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist } from './explain'
 import styles from './Report.module.css'
 
@@ -120,6 +119,41 @@ function Setting({ setting }: { setting: ExplainSetting }) {
   )
 }
 
+/** Each value it runs with, a write block's key among them, with where it came from or its mark, so a guess never reads as given. */
+export function Settings({ settings }: { settings: readonly ExplainSetting[] }) {
+  return (
+    <ul className={styles['rows']}>
+      {settings.map((setting, index) => (
+        <Setting key={index} setting={setting} />
+      ))}
+    </ul>
+  )
+}
+
+function Cleared({ title, items }: { title: string; items: readonly ExplainCleared[] }) {
+  if (items.length === 0) return null
+  return (
+    <>
+      <p className={styles['sub']}>{title}</p>
+      <ul className={styles['ok']}>
+        {items.map((item) => (
+          <li key={item.rule}>{item.words}</li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
+/** What code made sure of when it laid the workflow out, then every other rule no block breaks, in the safety checker's words. */
+export function Checks({ report }: { report: Pick<WorkflowExplained, 'fixed' | 'passed'> }) {
+  return (
+    <>
+      <Cleared title="Fixed for you" items={report.fixed} />
+      <Cleared title="Passed" items={report.passed} />
+    </>
+  )
+}
+
 interface ReportProps {
   readonly report: WorkflowExplained
   readonly code?: boolean
@@ -133,7 +167,6 @@ interface ReportProps {
  */
 export function Report({ report, code = false, onWording }: ReportProps) {
   const rewordedShown = report.reworded !== null && !code
-  const thenGrade = report.then === null ? null : gradePill(report.then.grade).label
   return (
     <div className={styles['report']}>
       <p className={styles['short']} data-in-short>
@@ -145,11 +178,6 @@ export function Report({ report, code = false, onWording }: ReportProps) {
           <button type="button" className={styles['linkButton']} onClick={onWording}>
             {rewordedShown ? 'Show code’s wording' : 'Show the reworded one'}
           </button>
-        </p>
-      ) : null}
-      {report.then !== null && thenGrade !== null ? (
-        <p className={styles['version']}>
-          Version {report.then.number}. Checked again under today’s rules. Graded {thenGrade} when it was published, and {gradePill(report.grade).label} today.
         </p>
       ) : null}
       <div className={styles['sections']}>
@@ -173,36 +201,13 @@ export function Report({ report, code = false, onWording }: ReportProps) {
         </Section>
         <Section title="Flags" gist={flagsGist(report)} startOpen={false}>
           {report.flags.length === 0 ? <p>No flags.</p> : <ul className={styles['rows']}>{report.flags.map((flag, index) => <Flag key={index} flag={flag} />)}</ul>}
-          {report.fixed.length > 0 ? (
-            <>
-              <p className={styles['sub']}>Fixed for you</p>
-              <ul className={styles['ok']}>
-                {report.fixed.map((item) => (
-                  <li key={item.rule}>{item.words}</li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {report.passed.length > 0 ? (
-            <>
-              <p className={styles['sub']}>Passed</p>
-              <ul className={styles['ok']}>
-                {report.passed.map((item) => (
-                  <li key={item.rule}>{item.words}</li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+          <Checks report={report} />
         </Section>
         <Section title="Who approves each write" gist={approvesGist(report.approves)} startOpen={false}>
           <WhoApproves approves={report.approves} />
         </Section>
         <Section title="Settings" gist={settingsGist(report.settings)} startOpen={report.needs_an_answer > 0}>
-          <ul className={styles['rows']}>
-            {report.settings.map((setting, index) => (
-              <Setting key={index} setting={setting} />
-            ))}
-          </ul>
+          <Settings settings={report.settings} />
         </Section>
         <Section title="Approval" gist={approvalGist(report.approval)} startOpen={false}>
           <p>{report.approval}</p>

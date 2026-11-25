@@ -33,7 +33,7 @@ interface Held {
 function draw(reply: ExplainReply, { focus = null, held = [], memory = NO_MEMORY }: { focus?: string | null; held?: readonly Held[]; memory?: CardMemory } = {}): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
-  for (const { id, report } of held) queryClient.setQueryData(['use-case', session.cacheScope(), id, 'explain', null, true], report)
+  for (const { id, report } of held) queryClient.setQueryData(['use-case', session.cacheScope(), id, 'explain'], report)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">

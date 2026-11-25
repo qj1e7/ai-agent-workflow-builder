@@ -274,27 +274,23 @@ export function useVersions(useCaseId: string, version: number) {
   })
 }
 
-interface ExplainOptions {
-  readonly version?: number | null
-  readonly reworded?: boolean
-  readonly enabled?: boolean
-}
-
-/** One version of a workflow, explained from the report the platform builds. A refusal (404, 409) carries words to show, so it is not tried again. */
-export function useExplain(useCaseId: string, { version = null, reworded = false, enabled = true }: ExplainOptions = {}) {
+/**
+ * The chat's Explain answer: the report of the version in use, with In short as the AI smoothed it when it passed every check. A refusal
+ * (404, 409) carries words to show, so it is not tried again.
+ */
+export function useExplain(useCaseId: string) {
   const client = useApiClient()
   const user = useCacheScope()
   return useQuery({
-    queryKey: keys.explained(user, useCaseId, version, reworded),
+    queryKey: keys.explained(user, useCaseId),
     queryFn: async () =>
       unwrap(
         await client.GET('/api/v1/use-cases/{use_case_id}/explain', {
-          params: { path: { use_case_id: useCaseId }, query: { ...(version === null ? {} : { version }), reworded } },
+          params: { path: { use_case_id: useCaseId }, query: { reworded: true } },
         }),
       ),
-    enabled,
-    staleTime: reworded ? 5 * 60_000 : 30_000,
-    refetchOnWindowFocus: !reworded,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   })
 }
 
