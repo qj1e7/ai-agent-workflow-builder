@@ -785,8 +785,8 @@ describe('the Planner’s set-up card', () => {
     const missing = (kind: RowKind, text = '') => ({ kind, text, state: (text === '' ? 'missing' : 'understood') as RowState, note: null })
     const fastapi = () => answerWhen(cardFrom('x', [missing('schedule', 'Every weekday at 9am'), missing('look_for', 'New releases of FastAPI'), missing('do', 'Tell me here'), missing('where', 'Here in the chat')], ''), { often: 'weekdays', at: '09:00' })
     const MATCHES = [
-      { repo: 'fastapi/fastapi', what: 'FastAPI web framework' },
-      { repo: 'tiangolo/fastapi', what: 'An older address' },
+      { repo: 'fastapi/fastapi', what: 'FastAPI web framework', searched: false, stars: null },
+      { repo: 'tiangolo/fastapi', what: 'An older address', searched: false, stars: null },
     ]
 
     it('names the software the card watches, and no software when the row already holds owner/name', () => {
@@ -817,7 +817,7 @@ describe('the Planner’s set-up card', () => {
     })
 
     it('is filled by the one clear match, and again by Change after a choice', () => {
-      const one = [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework' }]
+      const one = [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework', searched: false, stars: null }]
       expect(effectiveRepo(fastapi(), one)).toBe('fastapi/fastapi')
       expect(questionsOf(fastapi(), null, [], { state: 'found', matches: one })).toEqual([])
       const cleared = { ...fastapi(), typed: { [REPO_CHOICE]: '' } }
@@ -940,10 +940,29 @@ describe('the Planner’s set-up card', () => {
     })
   })
 
+  describe('a match found by searching GitHub is never picked for the person', () => {
+    const missing = (kind: RowKind, text = '') => ({ kind, text, state: (text === '' ? 'missing' : 'understood') as RowState, note: null })
+    const fastapi = () => answerWhen(cardFrom('x', [missing('schedule', 'Every weekday at 9am'), missing('look_for', 'New releases of FastAPI'), missing('do', 'Tell me here'), missing('where', 'Here in the chat')], ''), { often: 'weekdays', at: '09:00' })
+    const SEARCHED = [{ repo: 'someone/fastapi-fork', what: 'A fork', searched: true, stars: 1234 }]
+    const REVIEWED = [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework', searched: false, stars: null }]
+
+    it('fills the repository only for exactly one match from the reviewed list', () => {
+      expect(effectiveRepo(fastapi(), REVIEWED)).toBe('fastapi/fastapi')
+      expect(effectiveRepo(fastapi(), SEARCHED), 'one search result alone is still a choice').toBeNull()
+      expect(effectiveRepo(fastapi(), [...REVIEWED, ...SEARCHED])).toBeNull()
+    })
+
+    it('asks with the search result as a choice, and counts it as open', () => {
+      expect(questionsOf(fastapi(), null, [], { state: 'found', matches: SEARCHED })[0]).toMatchObject({ kind: 'repo', choices: SEARCHED })
+      expect(openPartsFor(fastapi(), null, SEARCHED)).toBe(1)
+      expect(openPartsFor(fastapi(), null, REVIEWED)).toBe(0)
+    })
+  })
+
   describe('what the Watch words may name as a repository, and one count for the lead and the footer', () => {
     const missing = (kind: RowKind, text = '') => ({ kind, text, state: (text === '' ? 'missing' : 'understood') as RowState, note: null })
     const rows = (look: string, when = 'Every weekday at 9am') => cardFrom('x', [missing('schedule', when), missing('look_for', look), missing('do', 'Tell me here'), missing('where', 'Here in the chat')], '')
-    const ONE = [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework' }]
+    const ONE = [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework', searched: false, stars: null }]
 
     it('reads owner/name only as the release target, a GitHub address or the whole phrase, never any a/b in the words', () => {
       expect(effectiveRepo(rows('Tickets opened/closed this week'))).toBeNull()

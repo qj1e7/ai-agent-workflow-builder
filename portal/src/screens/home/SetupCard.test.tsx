@@ -279,7 +279,7 @@ describe('the repository row of the set-up card', () => {
   ]
   const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
   const TYPED_WORDS = 'Every weekday at 9am, check FastAPI for new releases'
-  const match = (repo: string, what: string) => ({ kind: 'github' as const, repo, what, why: 'On the reviewed list.', releases: 'published' as const, newest: '0.121.0', already_listed: null })
+  const match = (repo: string, what: string) => ({ kind: 'github' as const, repo, what, why: 'On the reviewed list.', releases: 'published' as const, newest: '0.121.0', already_listed: null, found_by: 'reviewed_list' as const, stars: null })
   const partText = (html: string) => text((html.split('data-part="Watch"')[1] ?? '').split('data-part=')[0]?.replace(/^[^>]*>/, '').replace(/<[^>]*$/, '') ?? '')
 
   it('fills the repository with the one clear match, with a tick, Change and where it was found', () => {
@@ -295,6 +295,15 @@ describe('the repository row of the set-up card', () => {
     const html = render(card(reply, TYPED_WORDS), { found: { name: 'FastAPI', answer: { status: 'found', matches: [match('fastapi/fastapi', 'FastAPI web framework'), match('tiangolo/fastapi', 'An older address')] } } })
     expect(partText(html)).toContain('Which repository should I watch?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['fastapi/fastapi FastAPI web framework', 'tiangolo/fastapi An older address', 'Another repository']))
+    expect(text(html)).toContain('Pick 1 more to finish')
+  })
+
+  it('never fills the row from one match found by searching GitHub: it is a button with its stars, marked as found by searching', () => {
+    const searched = { ...match('someone/fastapi-fork', 'A fork'), found_by: 'github_search' as const, stars: 1234 }
+    const html = render(card(reply, TYPED_WORDS), { found: { name: 'FastAPI', answer: { status: 'found', matches: [searched] } } })
+    expect(partText(html)).toContain('Which repository should I watch?')
+    expect(buttons(html).some((one) => one.includes('someone/fastapi-fork') && one.includes('1,234 stars') && one.includes('found by searching GitHub'))).toBe(true)
+    expect(partText(html)).not.toContain('Found on GitHub')
     expect(text(html)).toContain('Pick 1 more to finish')
   })
 
@@ -397,7 +406,7 @@ describe('the lead and the footer say the same count', () => {
   ]
   const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
   const WORDS = 'Every weekday, check FastAPI for new releases'
-  const match = (repo: string, what: string) => ({ kind: 'github' as const, repo, what, why: 'On the reviewed list.', releases: 'published' as const, newest: '0.121.0', already_listed: null })
+  const match = (repo: string, what: string) => ({ kind: 'github' as const, repo, what, why: 'On the reviewed list.', releases: 'published' as const, newest: '0.121.0', already_listed: null, found_by: 'reviewed_list' as const, stars: null })
   const ONE = { status: 'found' as const, matches: [match('fastapi/fastapi', 'FastAPI web framework')] }
   const leadCount = (sentence: string | null): number => {
     if (sentence === null || !sentence.includes('Pick')) return 0
@@ -406,7 +415,7 @@ describe('the lead and the footer say the same count', () => {
   const footerCount = (html: string): number => Number(/Pick (\d+) more to finish/.exec(text(html))?.[1] ?? 0)
 
   it('with one clear match and no time, both say 1', () => {
-    const lead = sayOf(reply, 'operator', { plan: null, matches: [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework' }] })
+    const lead = sayOf(reply, 'operator', { plan: null, matches: [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework', searched: false, stars: null }] })
     const html = render(card(reply, WORDS), { found: { name: 'FastAPI', answer: ONE } })
     expect(footerCount(html)).toBe(1)
     expect(leadCount(lead)).toBe(footerCount(html))
