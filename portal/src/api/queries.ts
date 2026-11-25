@@ -15,6 +15,7 @@ import type {
   RefusalOut,
   SaveIn,
   ScheduleSaveIn,
+  ToolList,
   WatchlistView,
 } from './types'
 
@@ -135,14 +136,20 @@ export function useTemplates() {
   })
 }
 
-export function useTools() {
+function useToolList<T>(select: (list: ToolList) => T) {
   const client = useApiClient()
   return useQuery({
     queryKey: keys.tools(),
-    queryFn: async () => unwrap(await client.GET('/api/v1/tools')).tools,
+    queryFn: async () => unwrap(await client.GET('/api/v1/tools')),
     staleTime: Infinity,
+    select,
   })
 }
+
+export const useTools = () => useToolList((list) => list.tools)
+
+/** The Jira projects the platform may write in, for the card's "Which Jira project should the ticket go in?". */
+export const useJiraProjects = () => useToolList((list) => list.jira_projects)
 
 export function useAgentCards() {
   const client = useApiClient()

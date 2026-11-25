@@ -229,8 +229,12 @@ export function planView(answer: PlanOut, rows: readonly Row[]): PlanView {
 
 export const valueKey = (agent: number, input: string) => `${agent}:${input}`
 
+/** The Jira project picked on the card for the whole request, kept in `typed` beside each agent's own values. */
+export const JIRA_CHOICE = 'jira_project'
+
 export function valueOf(form: Form, agent: PlanAgent, input: string): string {
-  return form.typed[valueKey(agent.index, input)] ?? agent.found[input] ?? ''
+  const kind = agent.inputs.find((one) => one.name === input)?.kind
+  return form.typed[valueKey(agent.index, input)] ?? (kind === 'jira_project' ? form.typed[JIRA_CHOICE] : undefined) ?? agent.found[input] ?? ''
 }
 
 // Jira's own shape (ADR 0035): a capital letter, then capital letters, digits or underscores.
@@ -400,7 +404,9 @@ export type Question =
   | { readonly kind: 'when'; readonly field: WhenField; readonly words: string; readonly choices: readonly WhenChoice[] }
   | { readonly kind: 'row'; readonly index: number; readonly words: string }
   | { readonly kind: 'days'; readonly words: string }
-  | { readonly kind: 'input'; readonly agent: number; readonly input: string; readonly words: string }
+  | { readonly kind: 'input'; readonly agent: number; readonly input: string; readonly words: string; readonly choices?: readonly string[] }
+  /** Which Jira project the ticket goes in, asked in place of where the result goes. One click on a project answers it. */
+  | { readonly kind: 'project'; readonly index: number; readonly words: string; readonly choices: readonly string[] }
 
 const OFTEN_CHOICES: readonly WhenChoice[] = (Object.entries(OFTEN_NAMES) as [Exclude<Often, ''>, string][]).map(([often, label]) => ({ label, set: { often } }))
 const DAY_CHOICES: readonly WhenChoice[] = DAY_NAMES.map((day) => ({ label: DAY_WORD(day), set: { day } }))
@@ -411,6 +417,9 @@ const ASK_ROW: Readonly<Record<RowKind, string>> = {
   do: 'What should it do with them?',
   where: 'Where should the result go?',
 }
+/** What the Then part says about a write: who has to say yes, and where. */
+export const EACH_TICKET_WAITS = 'Each ticket waits for an Approver’s yes in Teams.'
+export const ASK_PROJECT = 'Which Jira project should the ticket go in?'
 export const ASK_DAYS = 'Your words don’t say how many days. Change which tickets it finds to say.'
 
 function clashQuestion(form: Form, reason: PartReason, field: WhenField): Question | null {
@@ -443,20 +452,37 @@ export function secondName(name: string): string {
   return numbered ? `${numbered[1] ?? ''} ${String(Number(numbered[2]) + 1)}` : `${name.trim()} 2`
 }
 
-function inputQuestion(form: Form, plan: PlanView | null, first: boolean): Question | null {
+function inputQuestion(form: Form, plan: PlanView | null, first: boolean, projects: readonly string[]): Question | null {
   if (plan?.kind !== 'agents') return null
   for (const agent of plan.agents)
     for (const input of agent.inputs) {
       if ((input.kind === 'jira_project') !== first || valueProblem(input.kind, valueOf(form, agent, input.name)) === null) continue
-      const words = input.kind === 'jira_project' ? 'Which Jira project should it use?' : input.kind === 'github_repo' ? 'Which GitHub repository should it read?' : `What should the ${lowerFirst(input.name)} be?`
-      return { kind: 'input', agent: agent.index, input: input.name, words }
+      const words = input.kind === 'jira_project' ? ASK_PROJECT : input.kind === 'github_repo' ? 'Which GitHub repository should it read?' : `What should the ${lowerFirst(input.name)} be?`
+      return { kind: 'input', agent: agent.index, input: input.name, words, ...(input.kind === 'jira_project' ? { choices: projects } : {}) }
     }
   return null
 }
 
-function rowQuestion(form: Form, kind: RowKind): Question | null {
+function rowQuestion(form: Form, kind: RowKind, projects: readonly string[]): Question | null {
   const index = form.rows.findIndex((row) => row.kind === kind && row.state === 'missing')
-  return index < 0 ? null : { kind: 'row', index, words: ASK_ROW[kind] }
+  if (index < 0) return null
+  return kind === 'where' && makesTickets(form) ? { kind: 'project', index, words: ASK_PROJECT, choices: projects } : { kind: 'row', index, words: ASK_ROW[kind] }
+}
+
+const TICKET_WORDS = /\b(?:jira|tickets?)\b/i
+
+/** What it does, or what they typed, names a Jira ticket, so where the result goes is the Jira project. */
+function makesTickets(form: Form): boolean {
+  return TICKET_WORDS.test([...textsOf(form.rows, 'do'), form.text].join(' '))
+}
+
+/** A project picked from the buttons or typed: it fills the part about where the result goes, and the agent's Jira project. */
+export function chooseProject(form: Form, key: string): Form {
+  const rows = form.rows.map((row): Row => {
+    if (row.kind !== 'where' || row.state !== 'missing') return row
+    return { kind: 'where', text: `In the ${key} project`, state: 'edited', note: null, planner: row.planner ?? { text: row.text, state: 'missing', note: row.note } }
+  })
+  return { ...form, rows, typed: { ...form.typed, [JIRA_CHOICE]: key } }
 }
 
 /**
@@ -464,18 +490,18 @@ function rowQuestion(form: Form, kind: RowKind): Question | null {
  * project, then what it does. Two days or two times from the runtime ask which one, and a bare hour asks morning or evening.
  * Null when nothing is left to ask. What the footer counts still comes from setupLeft.
  */
-export function nextQuestion(form: Form, plan: PlanView | null): Question | null {
+export function nextQuestion(form: Form, plan: PlanView | null, projects: readonly string[] = []): Question | null {
   const { often, day } = form.when
   if (often === '') return clashQuestion(form, 'one_frequency', 'often') ?? { kind: 'when', field: 'often', words: 'How often?', choices: OFTEN_CHOICES }
   if (often === 'week' && day === '') return clashQuestion(form, 'one_day', 'day') ?? { kind: 'when', field: 'day', words: 'Which day?', choices: DAY_CHOICES }
   if (whenProblems(form.when).at !== undefined) return clashQuestion(form, 'one_time', 'at') ?? timeQuestion(form)
   return (
-    rowQuestion(form, 'look_for') ??
+    rowQuestion(form, 'look_for', projects) ??
     (form.marked.some((part) => part.reason === 'how_many_days') ? { kind: 'days', words: ASK_DAYS } : null) ??
-    inputQuestion(form, plan, true) ??
-    rowQuestion(form, 'do') ??
-    rowQuestion(form, 'where') ??
-    inputQuestion(form, plan, false)
+    inputQuestion(form, plan, true, projects) ??
+    rowQuestion(form, 'do', projects) ??
+    rowQuestion(form, 'where', projects) ??
+    inputQuestion(form, plan, false, projects)
   )
 }
 

@@ -56,6 +56,7 @@ export type BlockKind = Schemas['BlockKind']
 export type ParamSpec = Schemas['ParamSpec']
 
 export type ToolView = Schemas['ToolView']
+export type ToolList = Schemas['ToolList']
 export type ToolId = Schemas['ToolId']
 /** The tools an agent card can use. The two package tools run only in the Software watchlist check. */
 export type CardToolId = Schemas['CardToolId']

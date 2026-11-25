@@ -30,6 +30,7 @@ from platform_api.orchestration import (
     DraftResult,
     Given,
     LibraryCard,
+    NodeOption,
     NoModel,
     RunSpec,
     RunStarted,
@@ -38,7 +39,6 @@ from platform_api.orchestration import (
     ScheduleBook,
     SoftwareFacts,
     Standing,
-    NodeOption,
     WatchlistStanding,
     WriteEntry,
 )

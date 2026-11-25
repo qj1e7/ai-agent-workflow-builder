@@ -430,7 +430,7 @@ def card_run_events() -> Timeline:
 
 def card_fixtures() -> dict[str, WireModel | list[WireModel]]:
     return {
-        "cards/tools.json": tool_list(),
+        "cards/tools.json": tool_list(["MOCK"]),
         "cards/list.json": CardList(cards=sorted_for_library([VERSION_CHECKER], [WEEKLY])),
         "cards/check.json": check_card(BROKEN),
         "cards/plan.use-one.json": plan_use_one(),

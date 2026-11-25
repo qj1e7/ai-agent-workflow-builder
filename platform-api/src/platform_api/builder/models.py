@@ -830,6 +830,11 @@ class ToolView(WireModel):
 
 class ToolList(WireModel):
     tools: list[ToolView]
+    jira_projects: list[str] = Field(
+        description="The Jira projects the platform may write in, as the Planner reads them, "
+        'sorted. The set-up card shows them as buttons for "Which Jira project should the '
+        'ticket go in?". Empty when the platform names none.',
+    )
 
 
 class CardInput(WireIn):

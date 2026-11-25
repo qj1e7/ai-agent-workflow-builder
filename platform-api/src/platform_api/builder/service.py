@@ -1301,9 +1301,8 @@ class Builder:
     async def delete_draft(self, principal: Principal, draft_id: str) -> bool:
         return await self._drafts.delete(principal.user_id, draft_id)
 
-    @staticmethod
-    def tools() -> ToolList:
-        return tool_list()
+    def tools(self) -> ToolList:
+        return tool_list(self._jira_projects)
 
     @staticmethod
     def check_card(card: CardDefinition) -> CardChecked:

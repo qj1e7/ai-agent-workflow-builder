@@ -115,6 +115,7 @@ The team lead reviewed the drafter screens (ADR 0051) and the thumbs (ADR 0050) 
 11. **In the sketch, Dan approves first and Bob second,** because "View as" has no second Approver. If Bob approves first, the card says "You approved it. A second Approver decides next."
 12. **"What I can do" lists drafting and Explain,** because the sketch shows them working. In the Portal they stay Planned until their pull requests land (ADR 0051).
 13. **The set-up approval in the side panel shows what the Approver decides on:** In short, the line about the steps that won't ask for a yes on each run, the flags to tick, and what it reads, writes and posts. More details adds the rest of the report.
+14. **The Jira step of the Planner's set-up card asks one clear question** (the team lead chose these words on 25 Nov 2026). "Which Jira project should the ticket go in?" shows the Jira projects the platform may use as buttons (MOCK on the local stack), so one click answers it, and a small "Another project" link opens a box for a key. The Then part says "Each ticket waits for an Approver's yes in Teams." where it used to say "After a yes", on the card and once Set up is pressed.
 
 ## The n8n login line
 

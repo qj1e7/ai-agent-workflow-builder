@@ -714,7 +714,7 @@ describe('the Planner’s set-up card', () => {
       const chosen = chooseProject(asked, 'MOCK')
       expect(chosen.rows[3]).toMatchObject({ kind: 'where', text: 'In the MOCK project', state: 'edited' })
       expect(cardBlockers(chosen.rows)).toEqual([])
-      expect(taskWithoutSchedule(chosen.rows)).toContain('Where it goes: in the MOCK project.')
+      expect(taskWithoutSchedule(chosen.rows)).toContain('Where it goes: In the MOCK project.')
       const plan = planView({ ...(NEW_AGENT as object), project: null } as PlanOut, chosen.rows)
       const agent = plan.kind === 'agents' ? plan.agents[0] : undefined
       expect(agent && valueOf(chosen, agent, 'Jira project')).toBe('MOCK')

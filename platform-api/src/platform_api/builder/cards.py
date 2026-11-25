@@ -69,8 +69,9 @@ OLD_NAMES = re.compile(
 )
 
 
-def tool_list() -> ToolList:
+def tool_list(jira_projects: Iterable[str] = ()) -> ToolList:
     return ToolList(
+        jira_projects=sorted(set(jira_projects)),
         tools=[
             ToolView(
                 id=rule.id,
@@ -83,7 +84,7 @@ def tool_list() -> ToolList:
                 min_approvers=rule.min_approvers,
             )
             for rule in TOOL_RULES
-        ]
+        ],
     )
 
 

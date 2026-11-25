@@ -5,7 +5,7 @@ import { useErrorWords, useSession } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { refusedWords, useCheckPart, useDeleteDraft, usePlanFor, useReadAgentCards, useSaveDraft } from '../../api/plannerQueries'
-import { useAgentCards, useMe, useSaveCard, useTools, useWatchlist } from '../../api/queries'
+import { useAgentCards, useJiraProjects, useMe, useSaveCard, useTools, useWatchlist } from '../../api/queries'
 import { useMadeBySetUp, useSetUpOff } from '../../api/workflowQueries'
 import type { DraftView, InputKind, SimilarWorkflow, ToolId, ToolView } from '../../api/types'
 import { Button, buttonClassName } from '../../ui/Button'
@@ -32,6 +32,8 @@ import {
   planView,
   reusedAgents,
   cardBlockers,
+  chooseProject,
+  EACH_TICKET_WAITS,
   savedCopyOf,
   secondName,
   setUp,
@@ -165,6 +167,91 @@ function Editor({ id, label, row, onSave, onCancel }: { id: string; label: strin
   )
 }
 
+/**
+ * Which Jira project the ticket goes in: the projects the platform may use are buttons, so one click answers it, and "Another
+ * project" opens a box for a key. With no project listed the box is open already. A key is checked the way the card checks one.
+ */
+function ProjectAsk({ labelId, choices, onChoose }: { labelId: string; choices: readonly string[]; onChoose: (key: string) => void }) {
+  const [typing, setTyping] = useState(choices.length === 0)
+  const [typed, setTyped] = useState('')
+  const [tried, setTried] = useState(false)
+  const field = useRef<HTMLInputElement>(null)
+  const opened = useRef(false)
+  const id = useId()
+  // The box takes the keyboard when Another project opens it, never on its own at the start.
+  useEffect(() => {
+    if (typing && opened.current) field.current?.focus()
+  }, [typing])
+  const problem = tried ? valueProblem('jira_project', typed) : null
+  const submit = () => {
+    if (valueProblem('jira_project', typed) !== null) {
+      setTried(true)
+      field.current?.focus()
+      return
+    }
+    onChoose(typed.trim().toUpperCase())
+  }
+  const keys = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      submit()
+    } else if (event.key === 'Escape' && choices.length > 0) {
+      event.preventDefault()
+      setTyping(false)
+    }
+  }
+  return (
+    <>
+      <span className={styles['pick']} role="group" aria-labelledby={labelId}>
+        {choices.map((key) => (
+          <button key={key} type="button" className={styles['choice']} onClick={() => onChoose(key)}>
+            {key}
+          </button>
+        ))}
+        {choices.length > 0 ? (
+          <button
+            type="button"
+            className={styles['link']}
+            aria-expanded={typing}
+            onClick={() => {
+              opened.current = true
+              setTyping(!typing)
+              setTried(false)
+            }}
+          >
+            Another project
+          </button>
+        ) : null}
+      </span>
+      {typing ? (
+        <span className={styles['editor']} role="group" aria-label="Another Jira project">
+          <label className={styles['valueLabel']} htmlFor={`${id}-key`}>
+            Jira project key
+          </label>
+          <input
+            ref={field}
+            id={`${id}-key`}
+            className={styles['value']}
+            type="text"
+            value={typed}
+            maxLength={255}
+            aria-invalid={problem ? true : undefined}
+            aria-describedby={problem ? `${id}-error` : undefined}
+            onChange={(event) => setTyped(event.target.value)}
+            onKeyDown={keys}
+          />
+          <Button onClick={submit}>Use it</Button>
+          {problem ? (
+            <span className={styles['problem']} id={`${id}-error`}>
+              {problem}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+    </>
+  )
+}
+
 function WhenPicker({ when, problems, focus, onWhen, onDone }: { when: When; problems: Partial<Record<WhenField, string>>; focus: boolean; onWhen: (when: When) => void; onDone: () => void }) {
   const id = useId()
   const first = useRef<HTMLSelectElement>(null)
@@ -241,7 +328,7 @@ export function frozenParts(form: Form, plan: PlanView | null, writes: boolean |
   return [
     ...keyed('Watch', line('Watch', youRun ? [`You run ${youRun}`] : [])),
     ...keyed('When', [{ mark: 'ok', body: whenSaid(form.when) ?? '' }]),
-    ...keyed('Then', line('Then', writes === false ? [] : ['After a yes'])),
+    ...keyed('Then', line('Then', writes === false ? [] : [EACH_TICKET_WAITS])),
   ]
 }
 
@@ -292,6 +379,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const library = useAgentCards()
   const me = useMe()
   const tools = useTools()
+  const projects = useJiraProjects().data ?? []
   const latch = useLatch()
   const words = useErrorWords()
   const queryClient = useQueryClient()
@@ -306,7 +394,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const kinds: ToolKinds = useMemo(() => new Map((tools.data ?? []).map((tool) => [tool.id, tool.kind])), [tools.data])
   const reused = reusedAgents(plan, library.data, me.data?.id)
   const left = setupLeft(form, plan)
-  const question = nextQuestion(form, plan)
+  const question = nextQuestion(form, plan, projects)
   const problems = whenProblems(form.when)
   const timeText = whenSaid(form.when)
   const writes = writesOf(plan, kinds)
@@ -629,7 +717,14 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
           ),
         }
 
+  const chooseJira = (key: string) => {
+    focusNext.current = true
+    edit((before) => chooseProject(before, key))
+  }
+
   const rowPiece = (row: Row, index: number): { readonly mark: Mark; readonly body: ReactNode } => {
+    if (row.state === 'missing' && question?.kind === 'project' && question.index === index)
+      return { mark: 'ask', body: asked(question.words, <ProjectAsk labelId={`${id}-q`} choices={question.choices} onChoose={chooseJira} />) }
     if (row.state === 'missing')
       return askedRow(question, index) ? { mark: 'ask', body: asked(question.words, <>{chipOf(row, index)}{editorOf(index)}</>) } : { mark: 'later', body: <span className="muted">{ASKED_NEXT}</span> }
     const note = noteOf(row)
@@ -681,6 +776,8 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
     const said = shown || value !== '' ? problem : null
     const now = question?.kind === 'input' && question.agent === agent.index && question.input === input.name ? question : null
     if (problem !== null && now === null) return { mark: 'later', body: <span className="muted">{`${input.name}: ${ASKED_NEXT.toLowerCase()}`}</span> }
+    if (now?.words !== undefined && input.kind === 'jira_project')
+      return { mark: 'ask', body: asked(now.words, <ProjectAsk labelId={`${id}-q`} choices={now.choices ?? []} onChoose={(key) => { focusNext.current = true; edit((before) => ({ ...before, typed: { ...before.typed, [valueKey(agent.index, input.name)]: key } })) }} />) }
     const field = (
       <>
         <label className={styles['valueLabel']} htmlFor={fieldId}>
@@ -714,7 +811,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const parts: Part[] = [
     ...keyed('Watch', [...rowPieces('Watch'), ...dayPieces, ...inputPieces('Watch'), ...(youRun ? [{ mark: 'ok' as const, body: <span className={styles['pnote']}>You run {youRun}</span> }] : [])]),
     ...keyed('When', [whenPiece]),
-    ...keyed('Then', [...rowPieces('Then'), ...inputPieces('Then'), ...(writes === false ? [] : [{ mark: 'ok' as const, body: <span className={styles['after']}>After a yes</span> }])]),
+    ...keyed('Then', [...rowPieces('Then'), ...inputPieces('Then'), ...(writes === false ? [] : [{ mark: 'ok' as const, body: <span className={styles['after']}>{EACH_TICKET_WAITS}</span> }])]),
     ...crosses,
   ]
   const asks = left.choices.length > 0

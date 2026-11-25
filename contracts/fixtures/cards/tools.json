@@ -70,5 +70,8 @@
       "target_input": "jira_project",
       "min_approvers": 1
     }
+  ],
+  "jira_projects": [
+    "MOCK"
   ]
 }
