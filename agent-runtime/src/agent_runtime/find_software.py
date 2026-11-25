@@ -122,7 +122,11 @@ KNOWN_PROJECTS = (
         ("argo cd", "argocd"),
     ),
     KnownProject("keycloak/keycloak", "Keycloak, for sign-in and user access", ("keycloak",)),
-    KnownProject("ansible/ansible", "Ansible, which automates setting up servers", ("ansible",)),
+    KnownProject(
+        "ansible/ansible",
+        "ansible-core, the base of Ansible, which automates setting up servers",
+        ("ansible", "ansible core"),
+    ),
     # Libraries a team installs from Maven Central or npm (ADR 0025). Reviewed like the projects:
     # each is the package its own project page names.
     KnownProject(
@@ -154,6 +158,8 @@ KNOWN_PROJECTS = (
 )
 
 MAX_MATCHES = 5
+MAX_NAME_LENGTH: Final = 80
+"""The longest name a request may give (FindSoftwareRequest). A longer one is not read at all."""
 
 SEARCH_CHARACTERS: Final = frozenset(string.ascii_letters + string.digits + " .-_+#")
 """The only characters a name may hold to be searched. Any other, as a colon, a quote or a letter
@@ -247,6 +253,8 @@ class SoftwareFinder:
         return None if registry is None else check_package(registry, guess)
 
     def find(self, name: str, tag_pattern: str) -> FindSoftwareResult:
+        if len(name) > MAX_NAME_LENGTH:
+            return SoftwareNotKnown(message=f"That name is too long to look up. {TYPE_IT}")
         name = name.strip()
         guesses = known_for(name)
         unknown = SoftwareNotKnown(message=f"I don't know software called {name}. {TYPE_IT}")
@@ -283,9 +291,9 @@ class SoftwareFinder:
         try:
             hits = self._source.search(words, SEARCH_HITS)
         except SourceRejected as refused:
-            if refused.status != 422:
-                return _search_trouble(name, refused)
-            hits = []
+            if refused.status == 422:
+                return SoftwareNotChecked(message=f"GitHub couldn't search for {name}. {TYPE_IT}")
+            return _search_trouble(name, refused)
         except SourceUnavailable as unavailable:
             return _search_trouble(name, unavailable)
         matches: list[SoftwareMatch] = []
@@ -297,9 +305,11 @@ class SoftwareFinder:
             try:
                 newest = highest(candidates(self._source.fetch(hit.repo), tag_pattern))
             except SourceRejected as refused:
-                if refused.status in NOT_FOUND_STATUSES:
-                    continue
-                return _search_trouble(name, refused)
+                # Only a limit ends the search. A hit GitHub won't show, as one gone (404) or held
+                # back (451, or a 403 that is no limit), is left out.
+                if refused.limited:
+                    return _search_trouble(name, refused)
+                continue
             except SourceUnavailable as unavailable:
                 return _search_trouble(name, unavailable)
             if newest is not None:

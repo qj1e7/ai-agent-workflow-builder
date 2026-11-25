@@ -3,7 +3,7 @@ import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useAddSoftware, useFindSoftware, useSaveSchedule, useWatchlist } from '../../api/queries'
-import type { ScheduleView } from '../../api/types'
+import type { FindOut, ScheduleView } from '../../api/types'
 import { stillChecksWords, watchlistRunsWords, watchSavedWords } from './answers'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -86,13 +86,7 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
       </p>,
     )
   }
-  if (answer.status !== 'found') {
-    return unmoved(
-      <p>
-        I couldn’t find where {name} is published. <Link to={WATCHLIST}>Add it on the Software watchlist</Link> and choose GitHub, Maven Central or npm.
-      </p>,
-    )
-  }
+  if (answer.status !== 'found') return unmoved(<NothingFound name={name} answer={answer} />)
   // Only a single match from our reviewed list is offered here. A match found by searching GitHub is always the person's choice.
   const only = clearMatch(answer.matches)
   if (only === undefined) {
@@ -174,6 +168,25 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
       ) : null}
       {add.isError && still ? <p>{still}</p> : null}
     </>
+  )
+}
+
+/**
+ * The finder offered nothing. When GitHub could not be asked, as when its search is busy, the answer says what went wrong, as the
+ * Software page does, and never that nothing was found. Either way the person can add it on the Software watchlist by hand.
+ */
+export function NothingFound({ name, answer }: { name: string; answer: Exclude<FindOut, { status: 'found' }> }) {
+  if (answer.status === 'not_checked') {
+    return (
+      <p role="alert">
+        {answer.message} <Link to={WATCHLIST}>Add it on the Software watchlist</Link>
+      </p>
+    )
+  }
+  return (
+    <p>
+      I couldn’t find where {name} is published. <Link to={WATCHLIST}>Add it on the Software watchlist</Link> and choose GitHub, Maven Central or npm.
+    </p>
   )
 }
 

@@ -147,7 +147,7 @@ class GitHubReleaseSource:
         )
         return [
             FoundRepo(hit.full_name, hit.description, hit.stargazers_count)
-            for hit in answer.items
+            for hit in answer.items[:limit]
             if not hit.archived
         ]
 

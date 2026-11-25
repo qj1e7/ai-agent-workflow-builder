@@ -519,6 +519,7 @@ class ProjectGuess(WireModel):
     )
     stars: int | None = Field(
         default=None,
+        ge=0,
         description="How many stars the repository has on GitHub, for a search match. Null for "
         "a match from the reviewed list.",
     )
