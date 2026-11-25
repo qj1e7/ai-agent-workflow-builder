@@ -16,6 +16,20 @@
 - The lists under the window say what each flow is meant to show. The first, "Redrawn on 22 Nov 2026", covers the new look. "What's new in version 3" covers the flows, and its second part covers the workflow drafter screens from ADR 0051, added on 16 Nov 2026.
 - The sketch uses sample data only. The demo bar, Play, Speed, Tracing and New words are for the sketch, not the app.
 
+## A run's page, decision first, 25 Nov 2026
+
+The team lead chose this layout on 25 Nov 2026. A run's page and its side panel lead with the decision and fold the history.
+
+- **Top line.** The workflow name and who ran it on the left, the status on the right in approval words: "Waiting for approval", "Approved by Bob", "Declined", "Stopped", "Done".
+- **What was found.** One line built from the run's own facts, such as "FastAPI 0.121.0 is out (18 Nov).", never the agents' words.
+- **What it wants to do.** "This run wants to create 1 Jira ticket in MOCK:", then the ticket as a small preview, its title and a one-line gist. "Show full text" opens the whole ticket exactly as it will be written.
+- **Who decides.** "An Approver decides in Teams (asked 9:01)." The person who started the run reads "You can't approve your own run." An Approver gets Approve, Decline and "Ask Alice" in the same block.
+- **What happened (n steps).** Folded. Plain steps with their times: "Checked GitHub: found 0.121.0", "Drafted 1 Jira ticket", "Asked an Approver in Teams", "Bob approved", "Created MOCK-22". "Show agent messages" opens the agents' own words, for support.
+- **Gone from this page.** "Summary by AI" and "Not checked". The AI's words live only under "Show agent messages".
+- **A stopped run** keeps "What happened", "Affected", "Safe to retry" and Retry.
+
+New words, for the team lead to confirm: "Waiting for approval", "Approved by Bob", "Show full text", "What happened (3 steps)", "Show agent messages", "Hide agent messages", "An Approver decides in Teams (asked 9:01).", "You can't approve your own run." and the found and wants lines above. Switch "New words" to Show to see them in place.
+
 ## Mission control, light, 22 Nov 2026
 
 The team lead chose this look on 22 Nov 2026 (ADR 0052). These are the Portal's style rules from now on. The earlier Calm look, on the branch `docs/sketch-calm-look`, was not merged.
