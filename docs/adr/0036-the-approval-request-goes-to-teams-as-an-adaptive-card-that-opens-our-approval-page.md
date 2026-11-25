@@ -8,6 +8,8 @@ The Operator asked that every practice copy be built as if it links to the real 
 
 So the platform builds one Adaptive Card for each approval request, and both the practice copy and a real channel get that same card. The card has one button, **Open in AI Workflow Builder**, an `Action.OpenUrl` to the approval page. The Approver decides there, under their own sign-in, as ADR 0009 and ADR 0015 describe. The practice Teams panel draws the stored card and has no Approve or Decline buttons, because the real channel will not have them either.
 
+**Changed 26 Nov 2026.** The practice panel now shows Approve and Decline under a card, but only to an Approver the platform says may decide that request. They post the same decision as the approval page, with the same digest, so the same rules decide. Anyone else, including the person who started the run, sees only the card's link. The card itself, and so what a real channel gets, is unchanged. The team lead asked for it after a walk-through on 25 Nov, where an Approver could read the request in the drawer but had to leave it to decide. A real channel still has no buttons until a bot exists.
+
 ## The card
 
 - One function, `approval_card(notice)` in `platform-api/src/platform_api/orchestration/teams.py`, builds it. It shows the workflow's name, each write as the approval page lists it (at most 10, then "And 5 more"), what the agents found, who can decide each step, and who can't because the run is their own work.
@@ -45,7 +47,7 @@ The approval gate. `Orchestrator.decide()` is unchanged, so the same rules decid
 ## Considered options
 
 - **A Teams bot with `Action.Execute` buttons now.** Approvers could decide inside Teams, and the bot could edit the card and mention the person asked. It needs an Azure Bot, a Teams app that NCS lets us upload, and a sign-in check on every button press, so it waits until NCS confirms. The port is ready for it: `update` and `MessageRef` exist, and the notice carries the digest that a decision must send back.
-- **Keep the panel's Approve and Decline buttons.** The demo would show something the real channel cannot do, and the move to real Teams would remove a feature.
+- **Keep the panel's Approve and Decline buttons.** The demo would show something the real channel cannot do, and the move to real Teams would remove a feature. Chosen after all on 26 Nov 2026, for an Approver who may decide (see Changed above), because the panel is a practice copy and the decision is the platform's.
 - **An Adaptive Cards renderer library in the Portal.** It would need its own ADR, and the card uses only 4 kinds of part, so a small hand-written renderer draws them.
 - **Escape markdown and use a `FactSet`.** Microsoft does not fully document Teams' markdown subset, so we cannot be sure an escape works. A `TextRun` has no markdown at all.
 - **An Office 365 Incoming Webhook.** Microsoft retired these in May 2026 in favour of Workflows.

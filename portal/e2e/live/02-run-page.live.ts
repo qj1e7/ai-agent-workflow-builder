@@ -121,9 +121,9 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
   await teams.click()
   const drawer = page.getByRole('dialog', { name: 'Teams, practice copy' })
   const card = drawer.locator(`li[data-approval-id="${approvalId}"]`)
-  // The card a real Teams channel gets: one link to the approval page at its full address, and no Approve or Decline.
+  // The card a real Teams channel gets: one link to the approval page at its full address. Bob may decide, so the drawer also gives him Approve and Decline.
   await expect(card.getByRole('link', { name: 'Open in AI Workflow Builder' })).toHaveAttribute('href', new RegExp(`^https?://[^/]+/approvals/${approvalId}$`))
-  await expect(card.getByRole('button', { name: /^(Approve|Decline)/ })).toHaveCount(0)
+  await expect(card.getByRole('button', { name: /^(Approve|Decline)$/ })).toHaveText(['Approve', 'Decline'])
   await shot(page, info, 'p5-02-teams-drawer')
   await card.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
   await expect(page).toHaveURL(new RegExp(`/approvals/${approvalId}$`))
@@ -139,6 +139,30 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId)).toEqual([])
   assertClean(watch)
   await context.close()
+})
+
+test('the Teams drawer gives the person who started the run no Approve or Decline, and Bob’s Decline there ends the run as on the page', async ({ browser, backend }) => {
+  const { runId, approvalId } = await backend.waitingRun('alice')
+
+  const aliceContext = await devContext(browser, 'alice')
+  const alice = await aliceContext.newPage()
+  await alice.goto('/')
+  await alice.getByRole('button', { name: /^Teams, practice copy/ }).click()
+  const aliceCard = alice.getByRole('dialog', { name: 'Teams, practice copy' }).locator(`li[data-approval-id="${approvalId}"]`)
+  await expect(aliceCard.getByRole('link', { name: 'Open in AI Workflow Builder' })).toBeVisible({ timeout: 15_000 })
+  await expect(aliceCard.getByRole('button', { name: /^(Approve|Decline)$/ })).toHaveCount(0)
+  await aliceContext.close()
+
+  const bobContext = await devContext(browser, 'bob')
+  const bob = await bobContext.newPage()
+  await bob.goto('/')
+  await bob.getByRole('button', { name: /^Teams, practice copy, \d+ (or more )?approvals? waiting for you$/ }).click()
+  const bobCard = bob.getByRole('dialog', { name: 'Teams, practice copy' }).locator(`li[data-approval-id="${approvalId}"]`)
+  await bobCard.getByRole('button', { name: 'Decline', exact: true }).click()
+  await expect(bobCard).toContainText('You declined this.', { timeout: 30_000 })
+  await expect.poll(async () => (await backend.get<{ steps: { status: string }[] }>('bob', `/api/v1/approvals/${approvalId}`)).steps.map((step) => step.status), { timeout: 60_000 }).toEqual(['declined'])
+  expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId)).toEqual([])
+  await bobContext.close()
 })
 
 for (const phone of [false, true]) {
