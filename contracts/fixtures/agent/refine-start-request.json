@@ -1,0 +1,66 @@
+{
+  "drafted_id": "dw_01JB8DRAFTED",
+  "request": {
+    "fix_id": "fix_01JB8REFINE",
+    "asked_by": "alice",
+    "ends_by": "2026-11-25T06:20:00Z",
+    "version": {
+      "name": "FastAPI release check",
+      "blocks": [
+        {
+          "name": "Read releases",
+          "type": "CUSTOM.wabRead",
+          "version": 1.0,
+          "parameters": {
+            "source": "github_releases",
+            "place": "<<repository>>"
+          }
+        }
+      ],
+      "wires": [],
+      "settings": [
+        {
+          "id": "repository",
+          "kind": "repository",
+          "label": "repository",
+          "fills": [
+            {
+              "block": "Read releases",
+              "parameter": "place"
+            }
+          ],
+          "value": "fastapi/fastapy",
+          "mark": "filled"
+        }
+      ]
+    },
+    "failed": [
+      {
+        "kind": "source_not_found",
+        "step": "Read releases",
+        "why": "no_reason"
+      }
+    ],
+    "not_reached": []
+  },
+  "facts": {
+    "jira_projects": [
+      "MOCK"
+    ],
+    "confluence_pages": [],
+    "repositories": [
+      "fastapi/fastapi"
+    ],
+    "channels": [],
+    "agent_cards": [],
+    "write_keys": []
+  },
+  "model": {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-sonnet-5-5",
+    "api_key": "example-key-not-a-secret"
+  },
+  "platform_url": "http://platform-api:8000",
+  "token": "1999999999.0000000000000000000000000000000000000000000000000000000000000000"
+}

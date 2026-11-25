@@ -2,7 +2,12 @@
 
 Code fills the ledger from what each hand-off brought back, once it has checked it. The model
 never writes here, and its "done" counts for nothing: `done_needs` decides when a fix is done,
-and `made_progress` decides when the rounds stop."""
+and `made_progress` decides when the rounds stop.
+
+A refinement of a drafted workflow's Check (ADR 0054, section 7) is a fix of a draft. Its ledger
+starts with round 0, the draft as the Check tried it, which the coordinator may simulate before
+any change. There is no stopped run, so no replay of the stop. Its failed part is code's: the
+blocks where a scenario failed on that draft, which grows as more scenarios run on it."""
 
 from dataclasses import dataclass, field
 from typing import Final, Literal
@@ -13,6 +18,8 @@ from agent_runtime.fixing.ports import Scenario, ScenarioResult
 from agent_runtime.fixing.replay import REPLAY
 
 NEEDS_A_REPLAY: Final = "a replay of the stop that fails on the stopped version"
+NEEDS_A_CHANGE: Final = "a draft that changes the failed part"
+NEEDS_THE_GAPS: Final = "a scenario that reaches each block no scenario reached"
 
 
 @dataclass
@@ -31,6 +38,8 @@ class DraftTried:
     results: dict[str, ScenarioResult] = field(default_factory=dict[str, ScenarioResult])
     """Each scenario's latest grade on this draft."""
     checker: bool | None = None
+    not_reached: frozenset[str] | None = None
+    """The blocks no scenario reached, from the last simulation that ran every scenario."""
 
     def passed(self) -> set[str]:
         return {name for name, result in self.results.items() if result.verdict == "passed"}
@@ -89,30 +98,49 @@ class Ledger:
     refused: list[str] = field(default_factory=list[str])
     """Each call code refused, by the tool's name."""
     unlogged: list[Unlogged] = field(default_factory=list[Unlogged])
+    of_a_draft: bool = False
+    """A refinement of a drafted workflow's Check: round 0 is the draft as the Check tried it."""
+    gaps: frozenset[str] = frozenset()
+    """For a refinement, the blocks no case of the Check reached."""
 
     def current(self) -> DraftTried | None:
         """The draft the fix stands on: the last one, when it stayed inside the failed part of
-        the cause as it stands now."""
-        if not self.drafts or self.cause is None:
+        the cause as it stands now. A refinement's failed part only grows, as more scenarios run
+        on round 0, and the scope check held each draft to the blocks it was asked to change."""
+        if not self.drafts:
             return None
         last = self.drafts[-1]
+        if self.of_a_draft:
+            return last if last.found == "inside" else None
+        if self.cause is None:
+            return None
         if last.found != "inside" or last.failed_part != tuple(self.cause.failed_part):
             return None
         return last
+
+    def drafted(self) -> list[DraftTried]:
+        """The rounds the Fix drafter drafted, round 0 of a refinement left out."""
+        return [draft for draft in self.drafts if draft.round >= 1]
 
     def done_needs(self) -> list[str]:
         """What code still needs before the fix is done, or nothing when it is: a confirmed
         cause, a draft that changes the failed part and stays inside it, every scenario run on
         that draft, at least one that applies, every one that applies passing, code's replay of
-        the stop failing on the stopped version, and the checker's pass."""
-        if self.cause is None:
+        the stop failing on the stopped version, and the checker's pass.
+
+        A refinement needs no confirmed cause and no replay. Its round 0, the draft unchanged,
+        is done only when no scenario failed on it and a scenario reached each block no case of
+        the Check reached. Any later round must change a block where a scenario failed."""
+        if self.cause is None and not self.of_a_draft:
             return ["a confirmed cause"]
         draft = self.current()
         if draft is None:
             return ["a draft that stays inside the failed part"]
         needs: list[str] = []
-        if not draft.changed:
-            needs.append("a draft that changes the failed part")
+        if draft.round >= 1 and not draft.changed or draft.round == 0 and self.cause is not None:
+            needs.append(NEEDS_A_CHANGE)
+        elif draft.round == 0 and (draft.not_reached is None or self.gaps & draft.not_reached):
+            needs.append(NEEDS_THE_GAPS)
         if not self.scenarios:
             needs.append("scenarios")
         elif any(name not in draft.results for name in self.scenarios):
@@ -121,7 +149,8 @@ class Ledger:
             needs.append("a scenario that applies")
         elif draft.failed():
             needs.append("every scenario that applies to pass")
-        if REPLAY not in self.baseline or self.baseline[REPLAY].verdict != "failed":
+        replayed = REPLAY in self.baseline and self.baseline[REPLAY].verdict == "failed"
+        if not self.of_a_draft and not replayed:
             needs.append(NEEDS_A_REPLAY)
         if draft.checker is not True:
             needs.append("the checker's pass")
@@ -143,7 +172,7 @@ class Ledger:
                 scenarios=len(draft.applies()) if draft.results else None,
                 failed=draft.failed(),
             )
-            for draft in self.drafts
+            for draft in self.drafted()
         )
 
 

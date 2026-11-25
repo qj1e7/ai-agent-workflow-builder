@@ -1,0 +1,103 @@
+{
+  "model": {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-sonnet-5-5",
+    "api_key": "example-key-not-a-secret"
+  },
+  "blocks": [
+    {
+      "name": "Start from the Portal",
+      "role": "start",
+      "answer": null,
+      "plays": [],
+      "varies": []
+    },
+    {
+      "name": "Read releases",
+      "role": "read",
+      "answer": "read.release",
+      "plays": [
+        "recorded",
+        "varied",
+        "empty",
+        "not_found",
+        "too_slow"
+      ],
+      "varies": [
+        "suffix",
+        "empty_field",
+        "long_text"
+      ]
+    },
+    {
+      "name": "Compare",
+      "role": "agent",
+      "answer": null,
+      "plays": [
+        "recorded",
+        "too_slow"
+      ],
+      "varies": []
+    },
+    {
+      "name": "Propose a change",
+      "role": "propose",
+      "answer": null,
+      "plays": [],
+      "varies": []
+    },
+    {
+      "name": "Ask for a yes",
+      "role": "ask",
+      "answer": null,
+      "plays": [],
+      "varies": []
+    },
+    {
+      "name": "Make the approved changes",
+      "role": "write",
+      "answer": null,
+      "plays": [],
+      "varies": []
+    }
+  ],
+  "kinds": [
+    "happy_path",
+    "nothing_new",
+    "source_not_found",
+    "timeout",
+    "approver_says_no",
+    "odd_data"
+  ],
+  "samples": [
+    {
+      "id": "made_up.read.release",
+      "answer": "read.release",
+      "block": null,
+      "items": [
+        {
+          "kind": "release",
+          "id": "1.2.16",
+          "name": "1.2.16",
+          "published_at": "2026-10-28"
+        },
+        {
+          "kind": "release",
+          "id": "1.2.15",
+          "name": "1.2.15",
+          "published_at": "2026-10-27"
+        }
+      ]
+    }
+  ],
+  "cover": [
+    {
+      "name": "Ask for a yes",
+      "after": [
+        "Propose a change"
+      ]
+    }
+  ],
+  "within_seconds": 30.0
+}

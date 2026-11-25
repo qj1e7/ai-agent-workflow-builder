@@ -18,6 +18,7 @@ a failure with no note keeps code's own words.
 A simulation asks each at most once, and each call's prompt and answer are capped in the runtime,
 so one simulation costs at most the runtime's SIMULATION_COST_CAP_USD."""
 
+import hashlib
 import logging
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Final, Protocol
@@ -33,6 +34,7 @@ from platform_api.orchestration.agents import (
     STOP_MESSAGE_LIMIT,
     AgentRejected,
     AgentUnavailable,
+    CoverBlock,
     FailedScenario,
     FailureNote,
     ModelAccess,
@@ -100,10 +102,12 @@ class ScenarioAgents(Protocol):
     ) -> ScenarioExplainResult | AgentUnavailable | AgentRejected: ...
 
 
-def specs_of(written: ScenariosWritten) -> list[ScenarioSpec]:
+def specs_of(written: ScenariosWritten, reaching: bool = False) -> list[ScenarioSpec]:
     """The writer's picks as scenarios in PR 5's schema, each named by its kind. A read or Agent
-    block it leaves out is served as its kind's template serves it."""
-    return [
+    block it leaves out is served as its kind's template serves it. Scenarios written to reach
+    blocks no scenario reached are named by how they play, so the same plays get the same name,
+    which a fix or a refinement already holds (ADR 0054, section 7)."""
+    specs = [
         ScenarioSpec(
             kind=w.kind,
             name=w.kind,
@@ -112,6 +116,15 @@ def specs_of(written: ScenariosWritten) -> list[ScenarioSpec]:
         )
         for w in written.scenarios
     ]
+    if not reaching:
+        return specs
+    return [spec.model_copy(update={"name": reach_name(spec)}) for spec in specs]
+
+
+def reach_name(spec: ScenarioSpec) -> str:
+    """A scenario written to reach blocks, named by its plays: reach_ and twelve hex digits."""
+    plays = spec.model_dump_json(include={"kind", "reads", "agents"})
+    return f"reach_{hashlib.sha256(plays.encode()).hexdigest()[:12]}"
 
 
 def _joined(parts: Sequence[str]) -> str:
@@ -159,14 +172,18 @@ class SimulationModel:
         self._agents = agents
         self._access = access
 
-    async def write(self, plan: PlanOut) -> list[ScenarioSpec] | None:
+    async def write(
+        self, plan: PlanOut, cover: Sequence[CoverBlock] = ()
+    ) -> list[ScenarioSpec] | None:
         """The scenarios the model wrote for the plan, or None for code's templates: no model,
-        a failed call, or an answer a check kept back."""
+        a failed call, or an answer a check kept back. With `cover`, one to three scenarios that
+        reach those blocks, or None when it wrote none."""
         model = await self._access()
         if model is None:
             return None
         try:
             request = ScenarioWriteRequest(
+                cover=list(cover),
                 model=model,
                 blocks=[
                     ScenarioBlock(
@@ -189,7 +206,7 @@ class SimulationModel:
         match await self._agents.write_scenarios(request):
             case ScenariosWritten() as written:
                 try:
-                    return specs_of(written)
+                    return specs_of(written, reaching=bool(cover))
                 except ValidationError:
                     log.warning("The written scenarios don't parse here, so the templates run")
                     return None

@@ -106,6 +106,35 @@ class DraftedInN8nView(WireModel):
     )
 
 
+type RefinementState = Literal["offered", "refining", "refined", "unchanged", "gave_up"]
+
+
+class RefinementRoundView(WireModel):
+    """One round of a refinement, as code counted it: the cases that apply, and how many passed."""
+
+    round: int
+    passed: int
+    scenarios: int
+
+
+class RefinementView(WireModel):
+    """A drafted revision's Check refined on practice systems (ADR 0054, section 7). The same
+    coordinator as Fix it for me drafts a change, and code decides when it is done. A refined
+    draft is a new revision that goes through the same Check. Nothing turns on and nothing is
+    written."""
+
+    state: RefinementState = Field(
+        description="offered: an Operator can start it, as a case failed or no case reached a "
+        "block. refining: under way. refined: a new revision, checked again. unchanged: every "
+        "case passed, so nothing changed. gave_up: it ended with no refined draft, with said."
+    )
+    said: str = Field(description="What happened, in words to show.")
+    rounds: list[RefinementRoundView] = Field(description="Each round so far, oldest first.")
+    revision: int | None = Field(description="The refined revision, once refined.")
+    ends_by: datetime | None = Field(description="When it counts as given up, while refining.")
+    can_start: bool = Field(description="Whether this person can start it now.")
+
+
 class DraftedWorkflowView(WireModel):
     drafted_id: str
     revision: int = Field(description="The newest revision.")
@@ -114,9 +143,9 @@ class DraftedWorkflowView(WireModel):
         "the chat, or a read-back from n8n. An answer makes a revision on the same card. A card "
         "for an older revision settles."
     )
-    made_by: Literal["drafter", "answer", "n8n"] = Field(
+    made_by: Literal["drafter", "answer", "n8n", "refined"] = Field(
         description="How the newest revision was made: by the drafter, by code from an answer, "
-        "or read back from n8n."
+        "read back from n8n, or refined on practice systems."
     )
     name: str | None = Field(description="The plan's name. Null until the first plan.")
     state: DraftedState = Field(
@@ -170,6 +199,12 @@ class DraftedWorkflowView(WireModel):
     simulation: SimulationView | None = Field(
         description="The newest revision tried on practice systems. Null while drafting or when "
         "not drafted. Waiting while a setting is still needed."
+    )
+    refinement: RefinementView | None = Field(
+        default=None,
+        description="Refining the newest revision's Check on practice systems (ADR 0054, "
+        "section 7): offered to an Operator, under way, refined, or given up with why. Null when "
+        "there is nothing to refine, or refining isn't turned on here.",
     )
 
 

@@ -35,6 +35,7 @@ from platform_api.builder.fix_parts import (
 from platform_api.monitoring import FixData, FixHandedBackData, FixRefused
 from platform_api.orchestration import (
     DIDNT_ANSWER,
+    CoverBlock,
     FailureNote,
     KnownOptions,
     NotSimulated,
@@ -44,6 +45,7 @@ from platform_api.orchestration import (
     SimulationOut,
     WorkflowPlan,
 )
+from platform_api.orchestration.simulation_model import reach_name
 from platform_api.shared import RunId
 from tests.test_drafted_layout import ERROR_WORKFLOW, KNOWN, ZONE, release_check
 
@@ -119,10 +121,17 @@ class FakeGateway:
 class FakeModel:
     def __init__(self) -> None:
         self.wrote: list[PlanOut] = []
+        self.covered: list[tuple[PlanOut, list[CoverBlock]]] = []
         self.noted: list[list[str]] = []
 
-    async def write(self, plan: PlanOut) -> list[ScenarioSpec] | None:
+    async def write(
+        self, plan: PlanOut, cover: Sequence[CoverBlock] = ()
+    ) -> list[ScenarioSpec] | None:
         self.wrote.append(plan)
+        if cover:
+            self.covered.append((plan, list(cover)))
+            spec = ScenarioSpec(kind="approver_says_no", reads={})
+            return [spec.model_copy(update={"name": reach_name(spec)})]
         return [ScenarioSpec(kind="happy_path", name="happy_path", reads={})]
 
     async def notes(self, results: Sequence[ResultOut]) -> dict[str, FailureNote]:
@@ -255,8 +264,23 @@ async def test_the_stopped_version_is_laid_out_before_the_gateway_reads_it() -> 
 
 
 @pytest.mark.anyio
-async def test_an_ask_to_cover_blocks_finds_nothing_new_yet() -> None:
+async def test_an_ask_to_cover_blocks_aims_the_writer_at_them_with_what_leads_there() -> None:
+    """ADR 0054, section 7: the writer can now aim at a block, which closes #375's gap."""
     parts = Parts(model=True)
+    asked = asked_scenarios(cover=["Make the ticket"], may_ask_model=True)
+    covered = await parts.parts.scenarios(FIX, asked)
+    assert not isinstance(covered, NotSimulated) and covered.asked_model is True
+    assert parts.model is not None
+    [(_, cover)] = parts.model.covered
+    assert cover == [CoverBlock(name="Make the ticket", after=["Ask for a yes"])]
+    [written] = covered.scenarios
+    assert written.name.startswith("reach_")
+
+
+@pytest.mark.anyio
+async def test_without_the_model_an_ask_to_cover_blocks_brings_nothing() -> None:
+    """Code's templates can't aim at a block, so the coordinator finds nothing new."""
+    parts = Parts()
     covered = await parts.parts.scenarios(FIX, asked_scenarios(cover=["Make the ticket"]))
     assert not isinstance(covered, NotSimulated)
     assert (covered.scenarios, covered.asked_model) == ([], False)
@@ -521,17 +545,23 @@ def test_a_simulation_runs_at_most_20_scenarios_as_the_coordinator_holds_at_most
 
 
 @pytest.mark.anyio
-async def test_the_writer_is_asked_once_in_a_fix_whatever_the_runtime_says_it_can_pay() -> None:
+async def test_the_writer_is_asked_a_few_times_in_a_fix_whatever_the_runtime_says_it_can_pay() -> (
+    None
+):
+    """Once for the first scenarios and twice more to reach blocks no scenario reached."""
     parts = Parts(model=True)
-    first = await parts.parts.scenarios(FIX, asked_scenarios(may_ask_model=True))
-    again = await parts.parts.scenarios(FIX, asked_scenarios(may_ask_model=True))
+    asked = [
+        await parts.parts.scenarios(FIX, asked_scenarios(may_ask_model=True))
+        for _ in range(MOST_CALLS["writer"] + 1)
+    ]
     other = await parts.parts.scenarios("fix_01OTHER", asked_scenarios(may_ask_model=True))
-    assert not isinstance(first, NotSimulated) and first.asked_model is True
-    assert not isinstance(again, NotSimulated) and again.asked_model is False
-    assert [s.name for s in again.scenarios] == KINDS
+    written = [a.asked_model for a in asked if not isinstance(a, NotSimulated)]
+    assert written == [True] * MOST_CALLS["writer"] + [False]
+    last = asked[-1]
+    assert not isinstance(last, NotSimulated) and [s.name for s in last.scenarios] == KINDS
     assert not isinstance(other, NotSimulated) and other.asked_model is True
-    assert parts.model is not None and len(parts.model.wrote) == 2
-    assert MOST_CALLS["writer"] == 1
+    assert parts.model is not None and len(parts.model.wrote) == MOST_CALLS["writer"] + 1
+    assert MOST_CALLS["writer"] == 3
 
 
 @pytest.mark.anyio

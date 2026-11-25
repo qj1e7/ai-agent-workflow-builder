@@ -1936,7 +1936,14 @@ type SampleId = Annotated[
     str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 ]
 type ScenarioCheck = Literal[
-    "call", "too_big", "key_shape", "not_the_kinds", "not_a_read", "not_a_sample", "not_an_agent"
+    "call",
+    "too_big",
+    "key_shape",
+    "not_the_kinds",
+    "not_a_read",
+    "not_a_sample",
+    "not_an_agent",
+    "too_many",
 ]
 type NoteKind = Literal["stopped", "went_on", "ended_early", "changes", "no_end", "unknown"]
 type NoteCheck = Literal[
@@ -1981,8 +1988,21 @@ class ScenarioSample(WireModel):
     items: list[dict[str, JsonValue]] = Field(max_length=MOST_SAMPLE_ITEMS)
 
 
+MOST_COVER: Final = 3
+"""The most scenarios a request to reach blocks may bring back."""
+
+
+class CoverBlock(WireModel):
+    """A block no scenario reached yet, with the blocks whose exits lead straight to it."""
+
+    name: RunBlockName
+    after: list[RunBlockName] = Field(default_factory=list[str], max_length=MOST_RUN_BLOCKS)
+
+
 class ScenarioWriteRequest(WireModel):
-    """A version's plan, for the model to write one scenario for each kind that applies."""
+    """A version's plan, for the model to write one scenario for each kind that applies. With
+    `cover`, it writes one to three scenarios, each of a kind that applies, that reach the blocks
+    no scenario reached yet (ADR 0054, section 7)."""
 
     model: ModelAccess
     blocks: list[ScenarioBlock] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
@@ -1991,6 +2011,11 @@ class ScenarioWriteRequest(WireModel):
     )
     samples: list[ScenarioSample] = Field(
         default_factory=list[ScenarioSample], max_length=MOST_SAMPLES
+    )
+    cover: list[CoverBlock] = Field(
+        default_factory=list[CoverBlock],
+        max_length=MOST_RUN_BLOCKS,
+        description="Blocks no scenario reached yet, to reach. Empty for one scenario a kind.",
     )
     within_seconds: float = Field(
         gt=0, le=30, description="How long the runtime has, counted from when it gets the request."

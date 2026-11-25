@@ -22,6 +22,7 @@ from platform_api.builder.drafted_workflows import (
     Unavailable,
 )
 from platform_api.builder.http import operators_only
+from platform_api.builder.refinements import OFF
 from platform_api.shared import Principal
 from platform_api.wire import error_response
 
@@ -218,6 +219,29 @@ async def simulate_drafted_again(
     drafted_id: str, body: DraftSimulationIn, principal: Drafter, drafted: CurrentDrafted
 ) -> DraftedWorkflowView:
     answer = await drafted.simulate_again(drafted_id, principal, body.revision)
+    _refused(answer)
+    assert isinstance(answer, DraftedWorkflowView)
+    return answer
+
+
+@router.post(
+    "/drafted-workflows/{drafted_id}/refinements",
+    description="Starts refining the newest revision's Check on practice systems (ADR 0054, "
+    "section 7), once its simulation failed a case or no case reached a block. The coordinator "
+    "of Fix it for me drafts a change, and code decides when it is done. A refined draft is a new "
+    "revision that goes through the normal Check. Nothing turns on and nothing is written. Only "
+    "where Simulation mode's model is on and a model is connected. It answers at once with the "
+    "refinement under way. 409, with words to show, when there is nothing to refine, one is "
+    "under way, this revision was refined already, or the revision named is not the newest.",
+    responses={**OPERATORS_ONLY, 404: error_response(NO_SUCH_DRAFT)},
+)
+async def refine_drafted(
+    drafted_id: str, body: DraftSimulationIn, principal: Drafter, request: Request
+) -> DraftedWorkflowView:
+    refinements = getattr(request.app.state, "refinements", None)
+    if refinements is None:
+        raise HTTPException(409, OFF)
+    answer = await refinements.start(drafted_id, principal, body.revision)
     _refused(answer)
     assert isinstance(answer, DraftedWorkflowView)
     return answer

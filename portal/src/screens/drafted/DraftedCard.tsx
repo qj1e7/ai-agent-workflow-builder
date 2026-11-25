@@ -34,6 +34,7 @@ import {
   WAITING_FOR_CHECK,
 } from './drafted'
 import { DraftedSettings } from './DraftedSettings'
+import { Refinement } from './Refinement'
 import { SimulationResult } from './SimulationResult'
 import styles from './Drafted.module.css'
 
@@ -263,6 +264,7 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
         </p>
       ) : null}
       {view.simulation ? <DraftedSimulation view={view} simulation={view.simulation} /> : null}
+      {view.refinement ? <Refinement view={view} refinement={view.refinement} /> : null}
       {added ? <p className={styles['note']}>{added}</p> : null}
       {view.flags > 0 ? (
         <p className={styles['said']}>

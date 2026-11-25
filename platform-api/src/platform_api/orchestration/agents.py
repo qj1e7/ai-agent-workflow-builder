@@ -1059,7 +1059,14 @@ type SampleId = Annotated[
     str, StringConstraints(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 ]
 type ScenarioCheck = Literal[
-    "call", "too_big", "key_shape", "not_the_kinds", "not_a_read", "not_a_sample", "not_an_agent"
+    "call",
+    "too_big",
+    "key_shape",
+    "not_the_kinds",
+    "not_a_read",
+    "not_a_sample",
+    "not_an_agent",
+    "too_many",
 ]
 type NoteKind = Literal["stopped", "went_on", "ended_early", "changes", "no_end", "unknown"]
 type NoteCheck = Literal[
@@ -1093,6 +1100,13 @@ class ScenarioSample(WireModel):
     items: list[dict[str, JsonValue]] = Field(max_length=MOST_SAMPLE_ITEMS)
 
 
+class CoverBlock(WireModel):
+    """A block no scenario reached yet, with the blocks whose exits lead straight to it."""
+
+    name: RunBlockName
+    after: list[RunBlockName] = Field(default_factory=list[str], max_length=MOST_RUN_BLOCKS)
+
+
 class ScenarioWriteRequest(WireModel):
     model: ModelAccess
     blocks: list[ScenarioBlock] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
@@ -1101,6 +1115,7 @@ class ScenarioWriteRequest(WireModel):
         default_factory=list[ScenarioSample], max_length=MOST_SAMPLES
     )
     within_seconds: float = Field(gt=0, le=30)
+    cover: list[CoverBlock] = Field(default_factory=list[CoverBlock], max_length=MOST_RUN_BLOCKS)
 
 
 class WrittenRead(WireModel):
@@ -1319,6 +1334,35 @@ class FixStartRequest(WireModel):
     token: str
 
 
+class CheckedCase(WireModel):
+    """One case a drafted revision's Check failed, as code graded it."""
+
+    kind: ScenarioKind
+    step: RunBlockName | None = None
+    why: str | None = Field(default=None, max_length=40)
+
+
+class RefineAsked(WireModel):
+    """A drafted workflow's Check to refine (ADR 0054, section 7), as the coordinator takes it.
+    Its id has a fix's shape: the coordinator runs it as a fix of a draft."""
+
+    fix_id: FixIdText
+    asked_by: str = Field(min_length=1)
+    ends_by: AwareDatetime
+    version: WorkflowPlan = Field(description="The draft as the Check tried it.")
+    failed: list[CheckedCase] = Field(default_factory=list[CheckedCase], max_length=10)
+    not_reached: list[RunBlockName] = Field(default_factory=list[str], max_length=10)
+
+
+class RefineStartRequest(WireModel):
+    drafted_id: str
+    request: RefineAsked
+    facts: DrafterFacts
+    model: ModelAccess
+    platform_url: str
+    token: str
+
+
 class FixAccepted(WireModel):
     fix_id: FixIdText
     started: bool
@@ -1485,6 +1529,13 @@ class HttpAgentRuntime:
     ) -> FixAccepted | AgentUnavailable | AgentRejected:
         return await self._model_call(
             "/v1/fixes", request, fix_accepted_adapter, FIX_START_WAIT_SECONDS
+        )
+
+    async def start_refinement(
+        self, request: RefineStartRequest
+    ) -> FixAccepted | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/refinements", request, fix_accepted_adapter, FIX_START_WAIT_SECONDS
         )
 
     async def capabilities(self) -> CapabilityList | AgentUnavailable | AgentRejected:

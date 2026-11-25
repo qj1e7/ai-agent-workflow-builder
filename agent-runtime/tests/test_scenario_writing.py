@@ -13,6 +13,7 @@ from pydantic import JsonValue, ValidationError
 
 from agent_runtime.api import create_app
 from agent_runtime.contract import (
+    MOST_COVER,
     ModelAccess,
     ScenarioBlock,
     ScenarioCheck,
@@ -29,7 +30,11 @@ from agent_runtime.scenario_explaining import (
     EXPLAIN_MOST_TOKENS,
 )
 from agent_runtime.scenario_writing import (
+    COVER_SYSTEM,
+    ONE_EACH,
     SIMULATION_COST_CAP_USD,
+    SYSTEM,
+    TO_REACH,
     WRITE_MOST_PROMPT_CHARS,
     WRITE_MOST_TOKENS,
     WRITE_TIMEOUT_SECONDS,
@@ -332,3 +337,54 @@ def test_the_route_answers_in_the_contract(script: tuple[object, ...], kind: str
     answered = client_with(ScriptedChat(structured=list(script))).post(ROUTE, json=body())
     result = scenario_write_result_adapter.validate_python(answered.json())
     assert isinstance(result, ScenariosWritten | ScenariosKept) and result.kind == kind
+
+
+# Aimed at blocks no scenario reached yet (ADR 0054, section 7, closing #375's gap)
+
+COVER = [{"name": "Tell", "after": ["Make the approved changes"]}]
+DECLINED = {"kind": "approver_says_no", "reads": []}
+
+
+def test_the_writer_can_be_aimed_at_blocks_no_scenario_reached():
+    shown, chat = written({"scenarios": [DECLINED]}, cover=COVER)
+    assert isinstance(shown, ScenariosWritten)
+    assert [s.kind for s in shown.scenarios] == ["approver_says_no"]
+    system, user = scenario_messages(request(cover=COVER))
+    assert system == COVER_SYSTEM and TO_REACH in system and ONE_EACH not in system
+    assert user.startswith('The blocks to reach:\n- "Tell", after "Make the approved changes".')
+    assert chat.asked == [ModelScenarios]
+
+
+def test_without_blocks_to_reach_the_writer_writes_one_scenario_a_kind_as_before():
+    system, user = scenario_messages(request())
+    assert system == SYSTEM and ONE_EACH in system
+    assert "The blocks to reach" not in user
+
+
+@pytest.mark.parametrize(
+    ("bad", "why"),
+    [
+        ({"scenarios": []}, "too_many"),
+        ({"scenarios": [DECLINED] * (MOST_COVER + 1)}, "too_many"),
+        ({"scenarios": [{"kind": "odd_data", "reads": []}]}, "not_the_kinds"),
+        (
+            {
+                "scenarios": [
+                    {"kind": "approver_says_no", "reads": [{"block": "Tell", "serve": "recorded"}]}
+                ]
+            },
+            "not_a_read",
+        ),
+    ],
+    ids=[
+        "none",
+        "more-than-the-most",
+        "a-kind-that-does-not-apply",
+        "the-block-to-reach-as-a-read",
+    ],
+)
+def test_an_aimed_reply_still_names_only_what_it_was_offered(
+    bad: dict[str, Any], why: ScenarioCheck
+):
+    shown, _ = written(bad, cover=COVER, kinds=["happy_path", "approver_says_no"])
+    assert shown == ScenariosKept(why=why)

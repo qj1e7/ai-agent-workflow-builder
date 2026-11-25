@@ -9,10 +9,11 @@ export const draftedKey = (user: string, draftedId: string) => ['drafted', user,
 export const setUpApprovalKey = (user: string, approvalId: string) => ['setup-approval', user, approvalId] as const
 
 /** True while the platform moves a drafted workflow on its own: the drafter works, it is tried on practice systems, a yes is awaited, or n8n is taking it. */
-export function stillMoving(view: (Pick<DraftedWorkflowView, 'state' | 'set_up'> & Partial<Pick<DraftedWorkflowView, 'simulation'>>) | undefined): boolean {
+export function stillMoving(view: (Pick<DraftedWorkflowView, 'state' | 'set_up'> & Partial<Pick<DraftedWorkflowView, 'simulation' | 'refinement'>>) | undefined): boolean {
   if (view === undefined) return false
   if (view.state === 'drafting' || view.state === 'waiting') return true
   if (view.simulation?.state === 'running') return true
+  if (view.refinement?.state === 'refining') return true
   return view.state === 'approved' && (view.set_up === null || view.set_up.state === 'setting_up')
 }
 
@@ -129,6 +130,18 @@ export function useSimulateAgain(draftedId: string) {
   const keep = useKeepDrafted()
   return useMutation({
     mutationFn: async (revision: number) => unwrap(await client.POST('/api/v1/drafted-workflows/{drafted_id}/simulation', { params: { path: { drafted_id: draftedId } }, body: { revision } })),
+    onSuccess: keep,
+    onSettled: reread,
+  })
+}
+
+/** Starts refining the newest revision's Check on practice systems, once a case failed or no case reached a block (ADR 0054, section 7). */
+export function useRefine(draftedId: string) {
+  const client = useApiClient()
+  const reread = useRereadDrafted()
+  const keep = useKeepDrafted()
+  return useMutation({
+    mutationFn: async (revision: number) => unwrap(await client.POST('/api/v1/drafted-workflows/{drafted_id}/refinements', { params: { path: { drafted_id: draftedId } }, body: { revision } })),
     onSuccess: keep,
     onSettled: reread,
   })

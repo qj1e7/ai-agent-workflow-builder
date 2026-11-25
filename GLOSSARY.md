@@ -417,6 +417,9 @@ One pass of draft, check and simulate in a fix. A round makes progress only when
 **Hand back**:
 How a fix ends without a fix: the person gets the cause and what was tried, and the workflow is as it was (ADR 0055).
 
+**Refinement**:
+The coordinator's loop run on a drafted workflow's Check, once its simulation failed a case or no case reached a block. Code names the blocks where a case failed, and the Fix drafter may change only those. A refined draft is a new revision that goes through the same Check, and an Approver still checks it before it first runs. An Operator asks for it with Refine it, only where Simulation mode's model is on (ADR 0054, section 7).
+
 **Turn back on**:
 What an Operator presses once an Approver said yes to a fix. Code tries the fixed version with the one real test run, which writes nothing, and only then puts it live (ADR 0055).
 _Avoid_: Resume (that is a paused workflow's)

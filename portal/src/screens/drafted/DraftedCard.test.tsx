@@ -17,16 +17,17 @@ import cant from '../../../../contracts/fixtures/planner/answer.cant.json'
 import part from '../../../../contracts/fixtures/planner/answer.part.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import { ApiProvider } from '../../api/context'
-import { draftedKey } from '../../api/draftedQueries'
+import { draftedKey, stillMoving } from '../../api/draftedQueries'
 import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
-import type { CantReply, DraftedWorkflowView, Me, PartReply, PlannerReply, SetupCardReply, SetUpApprovalView, UseCaseView } from '../../api/types'
+import type { CantReply, DraftedWorkflowView, Me, PartReply, PlannerReply, RefinementView, SetupCardReply, SetUpApprovalView, UseCaseView } from '../../api/types'
 import { holdTurnOn } from '../../api/workflowQueries'
 import { Answer, type Page } from '../home/AnswerCards'
 import { ChatProvider } from '../home/ChatProvider'
 import { CardLive } from '../home/primary'
 import { DraftedCard } from './DraftedCard'
 import { CHANGED_SINCE_CHECK } from './drafted'
+import { REFINE_IT, REFINE_NEVER, roundWords } from './Refinement'
 import { SetUpApproval } from './SetUpApprovalPage'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
@@ -287,6 +288,49 @@ describe('the drafted card’s simulation (ADR 0054, PR 7)', () => {
     expect(words).not.toContain('Trying it')
     expect(html).not.toContain('role="status" data-simulation')
     expect(buttons(html)).not.toContain('Try it now')
+  })
+})
+
+describe('refining the drafted card’s Check (ADR 0054, section 7, PR 8)', () => {
+  const view = simulated as DraftedWorkflowView
+  const refinement = (over: Partial<RefinementView>): RefinementView => ({ state: 'offered', said: 'A case failed on practice systems. I can change the draft where it failed and try it again.', rounds: [], revision: null, ends_by: null, can_start: true, ...over })
+  const with_ = (over: Partial<RefinementView>) => card({ ...view, refinement: refinement(over) })
+
+  it('offers Refine it to whoever can start it, after the result, and says nothing turns on', () => {
+    const html = with_({})
+    const words = text(html)
+    expect(words.indexOf('Tried 5 cases on practice systems: 4 passed.')).toBeLessThan(words.indexOf('A case failed on practice systems.'))
+    expect(words).toContain(REFINE_NEVER)
+    expect(buttons(html)).toContain(REFINE_IT)
+    expect(buttons(html).at(-1)).toBe('Turn on')
+  })
+
+  it('never shows a dead button: no Refine it for someone who can’t start it', () => {
+    const html = with_({ can_start: false })
+    expect(buttons(html)).not.toContain(REFINE_IT)
+    expect(html).not.toContain('disabled')
+  })
+
+  it('says so while it refines, with each round as code counted it, and no button', () => {
+    const html = with_({ state: 'refining', said: 'Refining it on practice systems.', rounds: [{ round: 1, passed: 1, scenarios: 2 }], can_start: false })
+    expect(text(html)).toContain('Refining it on practice systems. Round 1: 1 of 2 cases passed.')
+    expect(html).toContain('role="status"')
+    expect(buttons(html)).not.toContain(REFINE_IT)
+  })
+
+  it('shows a refined draft and a refinement that gave up in the platform’s own words', () => {
+    expect(text(with_({ state: 'refined', said: 'Refined on practice systems in 1 round. It’s checked again like any draft.', revision: 3, can_start: false }))).toContain('Refined on practice systems in 1 round.')
+    const gaveUp = text(with_({ state: 'gave_up', said: 'I couldn’t refine it. A change didn’t make more cases pass.', can_start: false }))
+    expect(gaveUp).toContain('I couldn’t refine it. A change didn’t make more cases pass.')
+  })
+
+  it('keeps reading the card while it refines', () => {
+    expect(stillMoving({ ...view, refinement: refinement({ state: 'refining', can_start: false }) })).toBe(true)
+    expect(stillMoving({ ...view, refinement: refinement({ state: 'gave_up', can_start: false }) })).toBe(false)
+  })
+
+  it('words each round plainly', () => {
+    expect(roundWords({ round: 2, passed: 1, scenarios: 1 })).toBe('Round 2: 1 of 1 case passed.')
   })
 })
 

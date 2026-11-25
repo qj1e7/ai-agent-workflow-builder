@@ -5786,11 +5786,12 @@
             "description": "Who has it open in their own n8n space, without its keys. Done in n8n reads it back as a new revision."
           },
           "made_by": {
-            "description": "How the newest revision was made: by the drafter, by code from an answer, or read back from n8n.",
+            "description": "How the newest revision was made: by the drafter, by code from an answer, read back from n8n, or refined on practice systems.",
             "enum": [
               "drafter",
               "answer",
-              "n8n"
+              "n8n",
+              "refined"
             ],
             "title": "Made By",
             "type": "string"
@@ -5831,6 +5832,17 @@
             ],
             "description": "The id of the one setting the card asks for now, in the ADR's order. Null when nothing can be asked now, or it isn't a draft.",
             "title": "Question"
+          },
+          "refinement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RefinementView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Refining the newest revision's Check on practice systems (ADR 0054, section 7): offered to an Operator, under way, refined, or given up with why. Null when there is nothing to refine, or refining isn't turned on here."
           },
           "replaced_waiting": {
             "description": "This revision replaced a set-up approval that was still waiting.",
@@ -8327,7 +8339,7 @@
         "additionalProperties": false,
         "properties": {
           "cover": {
-            "description": "Blocks no scenario reached. The Scenario writer can't aim at a block yet, so an ask to cover blocks finds nothing new.",
+            "description": "Blocks no scenario reached, for the Scenario writer to reach. Without its model, code's templates can't aim at a block, so the answer holds no scenario.",
             "items": {
               "type": "string"
             },
@@ -12963,6 +12975,182 @@
           "detail"
         ],
         "title": "ReadinessCheck",
+        "type": "object"
+      },
+      "RefineEventIn": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Data",
+            "type": "object"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RefineKind"
+          }
+        },
+        "required": [
+          "kind",
+          "data"
+        ],
+        "title": "RefineEventIn",
+        "type": "object"
+      },
+      "RefineEventOut": {
+        "additionalProperties": false,
+        "properties": {
+          "refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why no event was kept, or null when it was.",
+            "title": "Refused"
+          }
+        },
+        "required": [
+          "refused"
+        ],
+        "title": "RefineEventOut",
+        "type": "object"
+      },
+      "RefineKind": {
+        "enum": [
+          "fix_handoff",
+          "fix_round",
+          "fix_proposed",
+          "fix_handed_back"
+        ],
+        "type": "string"
+      },
+      "RefineRevisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CauseFound"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The blocks where a case failed on the draft as checked, or null when none failed and the draft comes back unchanged."
+          },
+          "version": {
+            "$ref": "#/components/schemas/WorkflowPlan",
+            "description": "The refined draft, which code accepted."
+          }
+        },
+        "required": [
+          "version",
+          "cause"
+        ],
+        "title": "RefineRevisionIn",
+        "type": "object"
+      },
+      "RefinementRoundView": {
+        "additionalProperties": false,
+        "description": "One round of a refinement, as code counted it: the cases that apply, and how many passed.",
+        "properties": {
+          "passed": {
+            "title": "Passed",
+            "type": "integer"
+          },
+          "round": {
+            "title": "Round",
+            "type": "integer"
+          },
+          "scenarios": {
+            "title": "Scenarios",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "round",
+          "passed",
+          "scenarios"
+        ],
+        "title": "RefinementRoundView",
+        "type": "object"
+      },
+      "RefinementState": {
+        "enum": [
+          "offered",
+          "refining",
+          "refined",
+          "unchanged",
+          "gave_up"
+        ],
+        "type": "string"
+      },
+      "RefinementView": {
+        "additionalProperties": false,
+        "description": "A drafted revision's Check refined on practice systems (ADR 0054, section 7). The same\ncoordinator as Fix it for me drafts a change, and code decides when it is done. A refined\ndraft is a new revision that goes through the same Check. Nothing turns on and nothing is\nwritten.",
+        "properties": {
+          "can_start": {
+            "description": "Whether this person can start it now.",
+            "title": "Can Start",
+            "type": "boolean"
+          },
+          "ends_by": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it counts as given up, while refining.",
+            "title": "Ends By"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The refined revision, once refined.",
+            "title": "Revision"
+          },
+          "rounds": {
+            "description": "Each round so far, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/RefinementRoundView"
+            },
+            "title": "Rounds",
+            "type": "array"
+          },
+          "said": {
+            "description": "What happened, in words to show.",
+            "title": "Said",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RefinementState",
+            "description": "offered: an Operator can start it, as a case failed or no case reached a block. refining: under way. refined: a new revision, checked again. unchanged: every case passed, so nothing changed. gave_up: it ended with no refined draft, with said."
+          }
+        },
+        "required": [
+          "state",
+          "said",
+          "rounds",
+          "revision",
+          "ends_by",
+          "can_start"
+        ],
+        "title": "RefinementView",
         "type": "object"
       },
       "Refusal": {
@@ -21195,6 +21383,107 @@
         ]
       }
     },
+    "/api/v1/drafted-workflows/{drafted_id}/refinements": {
+      "post": {
+        "description": "Starts refining the newest revision's Check on practice systems (ADR 0054, section 7), once its simulation failed a case or no case reached a block. The coordinator of Fix it for me drafts a change, and code decides when it is done. A refined draft is a new revision that goes through the normal Check. Nothing turns on and nothing is written. Only where Simulation mode's model is on and a model is connected. It answers at once with the refinement under way. 409, with words to show, when there is nothing to refine, one is under way, this revision was refined already, or the revision named is not the newest.",
+        "operationId": "refine_drafted_api_v1_drafted_workflows__drafted_id__refinements_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftSimulationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Refine Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/drafted-workflows/{drafted_id}/send": {
       "post": {
         "description": "Sends the newest revision for a set-up approval, to any Approver who is not a party: the person who described it, everyone who changed it, and the sender. It goes to the Teams channel with a link to the approval page. 409, with the words the card shows, while any setting is still needed, when the check found a flag, or when it changes someone's access, until those steps are built.",
@@ -28900,6 +29189,516 @@
         "summary": "Ready",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/internal/v1/drafted/{drafted_id}/refinements/{fix_id}/checks": {
+      "post": {
+        "description": "The safety checker's grade of a plan, laid out as any drafted plan is.",
+        "operationId": "refine_check_internal_v1_drafted__drafted_id__refinements__fix_id__checks_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "pattern": "^dw_[0-9A-Za-z]{1,40}$",
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixCheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The token is not valid for this drafted workflow and refinement"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fixes aren't set up here."
+          }
+        },
+        "summary": "Refine Check",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/drafted/{drafted_id}/refinements/{fix_id}/events": {
+      "post": {
+        "description": "Keeps one event of the refinement by its drafted workflow, under the rules a fix's events keep on a run, or says why none was kept. Never its start. A proposal must name the revision the refinement kept.",
+        "operationId": "note_refine_event_internal_v1_drafted__drafted_id__refinements__fix_id__events_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "pattern": "^dw_[0-9A-Za-z]{1,40}$",
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefineEventIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefineEventOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The token is not valid for this drafted workflow and refinement"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The event is another fix's."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fixes aren't set up here."
+          }
+        },
+        "summary": "Note Refine Event",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/drafted/{drafted_id}/refinements/{fix_id}/revisions": {
+      "post": {
+        "description": "Keeps the refined draft as the drafted workflow's next revision, once: asking again with the same plan answers the same. Only while the refinement runs, with no setting changed, the change inside the blocks where a case failed, a simulation here that every case passed, and the safety checker's grade of safe. A draft that comes back unchanged keeps nothing new. The revision goes through the normal Check.",
+        "operationId": "keep_refined_internal_v1_drafted__drafted_id__refinements__fix_id__revisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "pattern": "^dw_[0-9A-Za-z]{1,40}$",
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefineRevisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixRevisionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The token is not valid for this drafted workflow and refinement"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The refinement ended, or nothing here proved the draft"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "A refinement can't change a setting."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fixes aren't set up here."
+          }
+        },
+        "summary": "Keep Refined",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/drafted/{drafted_id}/refinements/{fix_id}/scenarios": {
+      "post": {
+        "description": "Scenarios for the draft: code's template for each kind that applies, or the Scenario writer's, also aimed at blocks no scenario reached, when Simulation mode's model is on and the refinement can pay for it.",
+        "operationId": "refine_scenarios_internal_v1_drafted__drafted_id__refinements__fix_id__scenarios_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "pattern": "^dw_[0-9A-Za-z]{1,40}$",
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixScenariosIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixScenariosOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The token is not valid for this drafted workflow and refinement"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The draft can't be simulated"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fixes aren't set up here."
+          }
+        },
+        "summary": "Refine Scenarios",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/drafted/{drafted_id}/refinements/{fix_id}/simulations": {
+      "post": {
+        "description": "Runs a plan in the scenarios given on practice systems, and grades each run, with what it reached.",
+        "operationId": "refine_simulation_internal_v1_drafted__drafted_id__refinements__fix_id__simulations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "pattern": "^dw_[0-9A-Za-z]{1,40}$",
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixSimulationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixSimulationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The token is not valid for this drafted workflow and refinement"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The draft or a scenario can't be simulated"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fixes aren't set up here."
+          }
+        },
+        "summary": "Refine Simulation",
+        "tags": [
+          "internal"
         ]
       }
     },

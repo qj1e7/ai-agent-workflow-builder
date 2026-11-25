@@ -19,6 +19,7 @@ FIXABLE = (
     "fixable-renamed-repository",
     "fixable-jira-key-in-a-second-round",
     "fixable-a-field-that-moved",
+    "cover-no-answer-still-hands-in",
 )
 
 

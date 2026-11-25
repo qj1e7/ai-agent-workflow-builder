@@ -96,11 +96,29 @@ class PlatformParts:
         *,
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        path: str | None = None,
     ) -> None:
-        self._base = f"{base_url.rstrip('/')}/internal/v1/runs/{run_id}/fixes/{fix_id}"
+        where = path or f"runs/{run_id}/fixes/{fix_id}"
+        self._base = f"{base_url.rstrip('/')}/internal/v1/{where}"
         self._token = token
         self._client = client or httpx.Client(follow_redirects=False)
         self._sleep = sleep
+
+    @classmethod
+    def of_a_draft(
+        cls,
+        base_url: str,
+        drafted_id: str,
+        fix_id: str,
+        token: str,
+        *,
+        client: httpx.Client | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> PlatformParts:
+        """The same parts for a refinement of a drafted workflow's Check, under its own routes
+        and token (ADR 0054, section 7)."""
+        path = f"drafted/{drafted_id}/refinements/{fix_id}"
+        return cls(base_url, "", fix_id, token, client=client, sleep=sleep, path=path)
 
     def write(
         self,
@@ -151,12 +169,14 @@ class PlatformParts:
         )
         return checked is not None and checked.passes
 
-    def store(self, fixed: WorkflowPlan, cause: CauseFound, seconds: float) -> StoredRevision:
+    def store(
+        self, fixed: WorkflowPlan, cause: CauseFound | None, seconds: float
+    ) -> StoredRevision:
         """The fixed version, stored under the fix's id with the cause code confirmed. It raises
         when platform-api refused it or didn't answer, so the coordinator may hand it in again."""
         body = {
             "version": fixed.model_dump(mode="json"),
-            "cause": cause.model_dump(mode="json", exclude={"kind"}),
+            "cause": None if cause is None else cause.model_dump(mode="json", exclude={"kind"}),
         }
         answer = self._post("revisions", body, _within(seconds))
         answer.raise_for_status()

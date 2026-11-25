@@ -52,6 +52,7 @@ from platform_api.builder.drafted_views import (
     DraftedState,
     DraftedWorkflowView,
     FixEvidenceView,
+    RefinementView,
     SetUpApprovalView,
     SetUpDecisionIn,
     report_settings,
@@ -60,6 +61,7 @@ from platform_api.builder.drafted_views import (
 from platform_api.builder.explain import WorkflowExplained, view_of
 from platform_api.builder.layout import DraftedLayout, lay_out_drafted
 from platform_api.builder.n8n_draft import blocks_of
+from platform_api.builder.simulation_views import SimulationView
 from platform_api.builder.simulations import (
     NO_SIMULATION,
     NOTHING_TO_TRY,
@@ -180,6 +182,8 @@ GONE_IN_N8N: Final = (
 KEYS_WAIT: Final = "Waiting for a write key, which comes in a later step."
 READ_BACK: Final = "Read back from n8n."
 OPEN_IN_N8N: Final = "Open in your own n8n space, without its keys."
+REFINED: Final = "Refined on practice systems."
+"""The words a refined revision keeps, as an answer's revision keeps the answer."""
 
 
 def opened_by(name: str, since: datetime, zone: str) -> str:
@@ -238,7 +242,7 @@ class Revision:
     document: dict[str, Any] | None
     digest: str | None
     said: str | None
-    made_by: Literal["drafter", "answer", "n8n"] = "drafter"
+    made_by: Literal["drafter", "answer", "n8n", "refined"] = "drafter"
     sources: Sources = field(default_factory=dict[str, Source])
     catalogue: str | None = None
     notes: tuple[str, ...] = ()
@@ -277,7 +281,9 @@ class Kept:
     @property
     def card_revision(self) -> int:
         """The newest revision that started a card: an answer's revision stays on its card."""
-        return next(r.number for r in reversed(self.revisions) if r.made_by != "answer")
+        return next(
+            r.number for r in reversed(self.revisions) if r.made_by not in ("answer", "refined")
+        )
 
     def revision(self, number: int) -> Revision:
         return next(r for r in self.revisions if r.number == number)
@@ -353,7 +359,7 @@ class Made:
 
     by: UserId
     words: str
-    how: Literal["answer", "n8n"]
+    how: Literal["answer", "n8n", "refined"]
     plan: WorkflowPlan
     sources: Sources
     catalogue: str | None
@@ -430,6 +436,20 @@ class FixSide(Protocol):
     async def approved(self, approved: ApprovedSetUp) -> None: ...
 
 
+class RefineSide(Protocol):
+    """Refining a Check (ADR 0054, section 7), as a drafted workflow's view asks it."""
+
+    async def view(
+        self,
+        drafted_id: str,
+        newest: int,
+        digest: str | None,
+        editing: bool,
+        simulation: SimulationView | None,
+        viewer: Principal | None,
+    ) -> RefinementView | None: ...
+
+
 class DraftedWorkflows:
     def __init__(
         self,
@@ -461,10 +481,62 @@ class DraftedWorkflows:
         self._simulations = simulations or Simulations(db, None)
         self._versions = UseCaseSimulations(db, self._simulations)
         self._fixes: FixSide | None = None
+        self._refinements: RefineSide | None = None
 
     def serve_fixes(self, fixes: FixSide) -> None:
         """Fix it for me's side, bound once both are built."""
         self._fixes = fixes
+
+    def serve_refinements(self, refinements: RefineSide) -> None:
+        """Refining a Check (ADR 0054, section 7), bound once both are built."""
+        self._refinements = refinements
+
+    async def revision_plan(self, drafted_id: str, number: int) -> tuple[WorkflowPlan, str] | None:
+        """A drafted revision's plan and digest, or None while it has neither."""
+        async with self._db.connection("builder") as conn:
+            kept = await _kept(conn, drafted_id)
+        if kept is None or not any(r.number == number for r in kept.revisions):
+            return None
+        revision = kept.revision(number)
+        if revision.plan is None or revision.digest is None:
+            return None
+        return revision.plan, revision.digest
+
+    async def keep_refined(
+        self, drafted_id: str, number: int, plan: WorkflowPlan, by: UserId
+    ) -> tuple[int, str] | Refused:
+        """A refinement's plan as the revision after `number`, made by code with no model, and
+        checked as any revision is: laid out, graded and tried on practice systems. Only while
+        `number` is still the newest revision and still a draft, and only when the safety
+        checker grades it safe. The person who asked for the refinement is its asker, so a
+        party to its set-up approval."""
+        async with self._db.transaction("builder") as uow:
+            await hold_workflow(uow.conn, f"drafted:{drafted_id}", alone=True)
+            kept = await _kept(uow.conn, drafted_id)
+            if kept is None or kept.newest.number != number or kept.newest.plan is None:
+                return Refused(NEWER_BELOW)
+            if kept.set_up_at is not None or kept.in_n8n is not None:
+                return Refused(NEWER_BELOW)
+            state = await self._approvals.latest(drafted_id)
+            if state is not None and state.request.revision == number:
+                return Refused(NEWER_BELOW)
+            if self._n8n is None or (error_workflow := await self._n8n.error_workflow_id()) is None:
+                return Refused(N8N_NOT_READY)
+            laid = await self._laid(kept, plan, error_workflow)
+            if laid.grade != "safe":
+                return Refused(NO_LONGER_PASSES)
+            newest = kept.newest
+            made = Made(
+                by,
+                REFINED,
+                "refined",
+                plan,
+                carried(newest.sources, plan, {}, by),
+                newest.catalogue,
+            )
+            claimed = await self._keep(uow.conn, kept, made, laid, uow.now)
+        await self._simulations.start(claimed)
+        return number + 1, workflow_digest(laid.document)
 
     async def set_up_plan(self, use_case_id: str) -> SetUpPlan | None:
         """The drafted revision the workflow was set up from, or None for a workflow no drafted
@@ -1382,6 +1454,16 @@ class DraftedWorkflows:
                 "can_send": editing and why is None,
                 "why_not_send": why if lived == "draft" else _not_now(lived),
                 "simulation": simulation,
+                "refinement": None
+                if self._refinements is None
+                else await self._refinements.view(
+                    kept.drafted_id,
+                    newest.number,
+                    newest.digest,
+                    editing,
+                    simulation,
+                    viewer,
+                ),
             }
         )
 
