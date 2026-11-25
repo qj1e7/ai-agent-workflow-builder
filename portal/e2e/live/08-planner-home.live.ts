@@ -917,7 +917,7 @@ test.describe('with the AI model on', () => {
     { width: 1920, height: 1080, phone: false, face: 120, box: 75, chip: 45 },
     { width: 2560, height: 1440, phone: false, face: 134, box: 84, chip: 50 },
   ]) {
-    test(`Home at ${String(width)} px: a ${String(faceSize)} px face, a ${String(boxHeight)} px box, ${String(chipHeight)} px chips, the question on one line, and a page that ends in the window`, async ({ browser }) => {
+    test(`Home at ${String(width)} px: a ${String(faceSize)} px face, a ${String(boxHeight)} px box, ${String(chipHeight)} px chips, the question on ${phone ? 'two lines at most' : 'one line'}, and a page that ends in the window`, async ({ browser }) => {
       const context = await devContext(browser, 'alice', { phone })
       const page = await context.newPage()
       await page.setViewportSize({ width, height })
@@ -938,7 +938,8 @@ test.describe('with the AI model on', () => {
       expect(Math.round(composer?.height ?? 0), 'the box before the first message').toBe(boxHeight)
       expect(Math.round(chip?.height ?? 0), 'a chip').toBe(chipHeight)
       const lines = await main(page).getByRole('heading', { level: 1 }).evaluate((h1: HTMLElement) => Math.round(h1.offsetHeight / parseFloat(getComputedStyle(h1).lineHeight)))
-      expect(lines, 'the question stays on one line').toBe(1)
+      // The team lead's question of 25 Nov, "What can I help you with today?", is longer than the sketch's, so a phone's narrow window balances it on two lines.
+      expect(lines, phone ? 'the question takes two lines at most' : 'the question stays on one line').toBeLessThanOrEqual(phone ? 2 : 1)
       // At 900 px and narrower the practice stack's test controls sit under the page, so the check is that the page itself ends in the window.
       const mainBottom = await main(page).evaluate((element) => element.getBoundingClientRect().bottom)
       expect(mainBottom, 'the empty Home never makes the page scroll').toBeLessThanOrEqual((await page.evaluate(() => window.innerHeight)) + 1)
