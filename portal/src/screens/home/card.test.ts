@@ -733,6 +733,59 @@ describe('the Planner’s set-up card', () => {
     })
   })
 
+  describe('the repository row', () => {
+    const missing = (kind: RowKind, text = '') => ({ kind, text, state: (text === '' ? 'missing' : 'understood') as RowState, note: null })
+    const fastapi = () => answerWhen(cardFrom('x', [missing('schedule', 'Every weekday at 9am'), missing('look_for', 'New releases of FastAPI'), missing('do', 'Tell me here'), missing('where', 'Here in the chat')], ''), { often: 'weekdays', at: '09:00' })
+    const MATCHES = [
+      { repo: 'fastapi/fastapi', what: 'FastAPI web framework' },
+      { repo: 'tiangolo/fastapi', what: 'An older address' },
+    ]
+
+    it('names the software the card watches, and no software when the row already holds owner/name', () => {
+      expect(softwareOf(fastapi())).toBe('FastAPI')
+      const known = cardFrom('x', [missing('look_for', 'New releases of langchain-ai/langgraph')], '')
+      expect(softwareOf(known)).toBeNull()
+      expect(repoMissing(known)).toBe(false)
+      expect(softwareOf(cardFrom('x', [missing('look_for', 'Tickets closed this week in MOCK')], ''))).toBeNull()
+    })
+
+    it('is a question until a repository is chosen, and the footer counts it', () => {
+      expect(repoMissing(fastapi())).toBe(true)
+      expect(setupLeft(fastapi(), null).choices).toEqual(['the GitHub repository'])
+      expect(answerFirst(setupLeft(fastapi(), null))).toBe('Pick 1 more to finish')
+      const chosen = chooseRepo(fastapi(), 'fastapi/fastapi', true)
+      expect(repoMissing(chosen)).toBe(false)
+      expect(setupLeft(chosen, null).choices).toEqual([])
+    })
+
+    it('asks first, before When and the Jira project, with each match as a choice', () => {
+      const asked = questionsOf(fastapi(), null, ['MOCK'], { state: 'found', matches: MATCHES })
+      expect(asked[0]).toEqual({ kind: 'repo', words: 'Which repository should I watch?', choices: MATCHES, checking: false })
+    })
+
+    it('is looking while the finder works, and has no choices when it found none', () => {
+      expect(questionsOf(fastapi(), null, [], { state: 'checking' })[0]).toMatchObject({ kind: 'repo', checking: true, choices: [] })
+      expect(questionsOf(fastapi(), null, [], { state: 'none' })[0]).toMatchObject({ kind: 'repo', checking: false, choices: [] })
+    })
+
+    it('is filled by the one clear match, and again by Change after a choice', () => {
+      const one = [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework' }]
+      expect(effectiveRepo(fastapi(), one)).toBe('fastapi/fastapi')
+      expect(questionsOf(fastapi(), null, [], { state: 'found', matches: one })).toEqual([])
+      const cleared = { ...fastapi(), typed: { [REPO_CHOICE]: '' } }
+      expect(effectiveRepo(cleared, one)).toBeNull()
+      expect(questionsOf(cleared, null, [], { state: 'found', matches: one })[0]).toMatchObject({ kind: 'repo', choices: one })
+    })
+
+    it('fills the agent’s GitHub repository input from the choice', () => {
+      const chosen = chooseRepo(fastapi(), 'fastapi/fastapi', true)
+      const plan = planView({ ...(NEW_AGENT as object), project: null } as PlanOut, chosen.rows)
+      const agent = plan.kind === 'agents' ? plan.agents.find((one) => one.inputs.some((input) => input.kind === 'github_repo')) : undefined
+      const name = agent?.inputs.find((input) => input.kind === 'github_repo')?.name
+      if (agent && name) expect(valueOf(chosen, agent, name)).toBe('fastapi/fastapi')
+    })
+  })
+
   describe('setupLeft with crosses', () => {
     const CROSS = crossAnswer as SetupCardReply
     const CLASH = clashAnswer as SetupCardReply

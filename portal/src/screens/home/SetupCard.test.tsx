@@ -16,7 +16,7 @@ import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
 import planUseOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
-import type { DraftedWorkflowView, Me, PlanOut, RunView, SetupCardReply, SimulationView, UseCaseCreated, UseCaseSimulationView, UseCaseView, WatchlistView } from '../../api/types'
+import type { FindOut, DraftedWorkflowView, Me, PlanOut, RunView, SetupCardReply, SimulationView, UseCaseCreated, UseCaseSimulationView, UseCaseView, WatchlistView } from '../../api/types'
 import type { Made, SetUp } from '../../api/workflowQueries'
 import { emptyModel, foldWire, type RunModel } from '../run/runModel'
 import { BuildingCard, type CardProps } from './Building'
@@ -50,11 +50,13 @@ interface World {
   readonly simulation?: UseCaseSimulationView
   /** The Jira projects the platform may use, as GET /api/v1/tools lists them. */
   readonly projects?: readonly string[]
+  /** What the software finder answered for a name, as POST /api/v1/watchlist/find gives it. */
+  readonly found?: { readonly name: string; readonly answer: FindOut }
 }
 
 const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, simulation, projects }: World = {}): string {
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, simulation, projects, found }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], ALICE)
   if (run) queryClient.setQueryData(keys.run(scope, run.run_id), run)
@@ -63,6 +65,7 @@ function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread =
   if (setUp) queryClient.setQueryData(keys.setUp(scope, CREATED.use_case_id), setUp)
   if (watched) queryClient.setQueryData(keys.watchlist(scope), watched)
   if (projects) queryClient.setQueryData(keys.tools(), { tools: [], jira_projects: projects })
+  if (found) queryClient.setQueryData(keys.softwareFind(scope, found.name), found.answer)
   if (made) queryClient.setQueryData(keys.made(scope, made.key), made.made)
   if (simulation) queryClient.setQueryData(keys.useCaseSimulation(scope, simulation.use_case_id), simulation)
   const memory = newCardMemory()
@@ -108,11 +111,11 @@ function building(test: RunModel | null, world: World = {}, more: Partial<CardPr
 }
 
 describe('the set-up card before Set up', () => {
-  it('is a Draft that asks one question at a time and says Answer 1 question first in place of the main button', () => {
+  it('is a Draft that asks every open question in its own row and says Pick 1 more to finish in place of the main button', () => {
     const html = render(card(SETUP))
     expect(pill(html)).toBe('Draft')
     expect(html.match(/data-mark="ask"/g)).toHaveLength(1)
-    expect(text(html)).toContain('Answer 1 question first')
+    expect(text(html)).toContain('Pick 1 more to finish')
     expect(buttons(html)).not.toContain('Turn on')
     expect(buttons(html).slice(-1)).toEqual(['Never mind'])
     expect(html, 'no button is shown dead').not.toMatch(/<button[^>]*disabled/)
@@ -148,7 +151,7 @@ describe('the set-up card before Set up', () => {
     const refused = render(card(SETUP), { kept: { form, draft: null, phase: { kind: 'creating', key: 'press_2' } }, made: { key: 'press_2', made: { kind: 'refused', said: ['Give the workflow a name.'] } } })
     expect(pill(refused)).toBe('Draft')
     expect(text(refused)).toContain('Give the workflow a name.')
-    expect(text(refused)).toMatch(/Answer \d questions? first/)
+    expect(text(refused)).toMatch(/Pick \d more to finish/)
   })
 
   it('keeps their own words quoted for a clause it didn’t follow, as the sketch does', () => {
@@ -202,6 +205,48 @@ describe('the Jira step of the set-up card', () => {
     const words = text(renderToStaticMarkup(<PartsList parts={frozenParts(form, null, null, null)} />))
     expect(words).toContain('Each ticket waits for an Approver’s yes in Teams.')
     expect(words).not.toContain('After a yes')
+  })
+})
+
+describe('the repository row of the set-up card', () => {
+  const ROWS: SetupCardReply['rows'] = [
+    { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+    { kind: 'look_for', text: 'New releases of FastAPI', state: 'understood', note: null },
+    { kind: 'do', text: 'Tell me here', state: 'understood', note: null },
+    { kind: 'where', text: 'Here in the chat', state: 'understood', note: null },
+  ]
+  const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
+  const TYPED_WORDS = 'Every weekday at 9am, check FastAPI for new releases'
+  const match = (repo: string, what: string) => ({ kind: 'github' as const, repo, what, why: 'On the reviewed list.', releases: 'published' as const, newest: '0.121.0', already_listed: null })
+  const partText = (html: string) => text((html.split('data-part="Watch"')[1] ?? '').split('data-part=')[0]?.replace(/^[^>]*>/, '').replace(/<[^>]*$/, '') ?? '')
+
+  it('fills the repository with the one clear match, with a tick, Change and where it was found', () => {
+    const html = render(card(reply, TYPED_WORDS), { found: { name: 'FastAPI', answer: { status: 'found', matches: [match('fastapi/fastapi', 'FastAPI web framework')] } } })
+    const watch = partText(html)
+    expect(watch).toContain('fastapi/fastapi')
+    expect(watch).toContain('Found on GitHub')
+    expect(buttons(html)).toContain('Change')
+    expect(html.match(/data-mark="ask"/g)).toBeNull()
+  })
+
+  it('shows several matches as buttons with what each is, and Another repository', () => {
+    const html = render(card(reply, TYPED_WORDS), { found: { name: 'FastAPI', answer: { status: 'found', matches: [match('fastapi/fastapi', 'FastAPI web framework'), match('tiangolo/fastapi', 'An older address')] } } })
+    expect(partText(html)).toContain('Which repository should I watch?')
+    expect(buttons(html)).toEqual(expect.arrayContaining(['fastapi/fastapi FastAPI web framework', 'tiangolo/fastapi An older address', 'Another repository']))
+    expect(text(html)).toContain('Pick 1 more to finish')
+  })
+
+  it('shows only Another repository, with its hint, when the finder knows none', () => {
+    const html = render(card(reply, TYPED_WORDS), { found: { name: 'FastAPI', answer: { status: 'not_known', message: 'I don’t know it.' } } })
+    expect(partText(html)).toContain('The public repository to watch, as owner/name.')
+    expect(html).toMatch(/<input[^>]*type="text"/)
+    expect(buttons(html)).not.toContain('Another repository')
+  })
+
+  it('says it is looking while the finder works, and counts the row as open', () => {
+    const html = render(card(reply, TYPED_WORDS))
+    expect(partText(html)).toContain('Looking for the repository')
+    expect(text(html)).toContain('Pick 1 more to finish')
   })
 })
 
