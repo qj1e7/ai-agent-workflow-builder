@@ -321,6 +321,9 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
 .pt .v { min-width: 0; display: grid; gap: 8px; }
 .pt[data-s="ask"] .v > span:first-child { font-weight: 700; }
 .pt .s { font-size: var(--fs-small); color: var(--text-2); }
+.pt .aq { display: grid; gap: 8px; }
+.pt .aq > span:first-child { font-weight: 700; }
+.pt .aq + .aq { margin-top: 4px; }
 .pt select, .sched select, .field select { font: inherit; font-weight: 600; padding: 6px 8px; border: 1.5px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); max-width: 100%; min-height: 36px; }
 .ba { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .was { color: var(--text-2); text-decoration: line-through; text-decoration-color: var(--line-strong); }
@@ -1152,13 +1155,13 @@ const YES_LINE = 'Each ticket waits for an Approver’s yes in Teams.';
 const THEN = { jira: 'Create a Jira ticket, after a yes', tell: 'Tell me here' };
 
 /* ---------- Schedules: a time is never guessed ---------- */
-const DAY = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
-const short = (s) => `${s.day ? DAY[s.day].slice(0, 3) : 'Daily'} ${s.time || '…'}`;
-const long = (s) => `Every ${s.day ? DAY[s.day] : 'day'} at ${s.time}`;
+const DAY = { wkd: 'weekday', man: 'by hand', mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+const short = (s) => (s.day === 'man' ? 'By hand' : s.day === 'wkd' ? `Weekdays ${s.time || '…'}` : `${s.day ? DAY[s.day].slice(0, 3) : 'Daily'} ${s.time || '…'}`);
+const long = (s) => (s.day === 'man' ? 'Only when I run it' : `Every ${s.day ? DAY[s.day] : 'day'} at ${s.time}`);
 const lower = (t) => (/^(GitHub|Bob|Alice|MOCK|Jira|Teams|FastAPI|React|LangGraph)\b/.test(t) ? t : t.charAt(0).toLowerCase() + t.slice(1));
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const sameS = (a, b) => (a.day || null) === (b.day || null) && a.time === b.time;
-const firstRun = (s) => (s.day ? `${DAY[s.day]}, ${s.time}` : `tomorrow, ${s.time}`);
+const firstRun = (s) => (s.day === 'man' ? 'when you press Run now' : s.day === 'wkd' ? `weekday, ${s.time}` : s.day ? `${DAY[s.day]}, ${s.time}` : `tomorrow, ${s.time}`);
 const DAY_RE = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b|\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b/;
 const DAILY_RE = /\b(every ?day|daily|each day|every morning)\b/;
 const WEEKLY_RE = /\b(weekly|every week|once a week)\b/;
@@ -2475,30 +2478,45 @@ function parseReq(t) {
   d.name = nameOf(d);
   return d;
 }
-function question(d) {
-  if (!d.soft) return { k: 'Watch', q: 'Which software?', opts: Object.keys(W.soft).filter((k) => !W.soft[k].missing && !W.wf[k]).slice(0, 4).map((k) => [`soft:${k}`, W.soft[k].name]) };
+/* Every open question is in its row from the start, answered with buttons (25 Nov). The time is never guessed, and "Only when I run it" needs none. */
+const CARD_TIMES = ['8:00', '9:00', '13:00', '17:00'];
+function questions(d) {
+  const qs = [];
+  if (!d.soft) qs.push({ id: 'soft', k: 'Watch', q: 'Which software?', opts: Object.keys(W.soft).filter((k) => !W.soft[k].missing && !W.wf[k]).slice(0, 4).map((k) => [`soft:${k}`, W.soft[k].name]) });
   if (d.sched.day === undefined) {
-    return d.weekly
-      ? { k: 'When', q: 'Which day?', opts: [['day:mon', 'Mondays'], ['day:wed', 'Wednesdays'], ['day:fri', 'Fridays']] }
-      : { k: 'When', q: 'How often?', opts: [['day:', 'Every day'], ['day:mon', 'Mondays'], ['day:fri', 'Fridays']] };
+    qs.push(d.weekly
+      ? { id: 'day', k: 'When', q: 'Which day?', opts: [['day:mon', 'Mondays'], ['day:wed', 'Wednesdays'], ['day:fri', 'Fridays']] }
+      : { id: 'day', k: 'When', q: 'How often?', opts: [['day:', 'Every day'], ['day:wkd', 'Every weekday'], ['day:wk', 'Every week'], ['day:man', 'Only when I run it']] });
   }
-  if (!d.sched.time) return { k: 'When', q: `${d.sched.day ? `${DAY[d.sched.day]}s` : 'Every day'}, at what time?`, opts: ['8:00', '9:00', '13:00', '17:00'].map((t) => [`time:${t}`, t]) };
-  if (d.then === 'jira' && !d.project) return { k: 'Then', q: 'Which Jira project should the ticket go in?', opts: JIRA_PROJECTS.map((p) => [`proj:${p}`, p]), other: true, typing: d.typing, miss: d.typeMiss };
-  return null;
+  if (!d.sched.time && d.sched.day !== 'man') qs.push({ id: 'time', k: 'When', q: 'At what time?', opts: CARD_TIMES.map((t) => [`time:${t}`, t]), other: 'time', typing: d.typing === 'time', miss: d.typeMiss });
+  if (d.then === 'jira' && !d.project) qs.push({ id: 'proj', k: 'Then', q: 'Create 1 Jira ticket in which project?', opts: JIRA_PROJECTS.map((p) => [`proj:${p}`, p]), other: 'proj', typing: d.typing === 'proj', miss: d.typeMiss });
+  return qs;
 }
-const okRow = (k, v, s = '') => `<li class="pt" data-s="ok"><span class="ic">${ICON.check}</span><span class="k">${k}</span><span class="v"><span>${v}</span>${s ? `<span class="s">${s}</span>` : ''}</span></li>`;
-const askRow = (q) => `<li class="pt" data-s="ask"><span class="ic" role="img" aria-label="Question">?</span><span class="k">${q.k}</span><span class="v"><span id="pq-${q.k}">${q.q}</span><span class="pick" role="group" aria-labelledby="pq-${q.k}">${q.opts.map(([v, l]) => `<button type="button" data-pick="${v}">${l}</button>`).join('')}${q.other ? `<button class="linkbtn" type="button" data-ptype aria-expanded="${q.typing ? 'true' : 'false'}">Another project</button>` : ''}</span>${q.typing ? `<form class="askf" data-ptf><input type="text" autocomplete="off" placeholder="Like MOCK" aria-label="Jira project key"${q.miss ? ' aria-invalid="true"' : ''}><button class="btn sm" type="submit">Use it</button></form>${q.miss ? '<span class="s">Write the project key, such as MOCK.</span>' : ''}` : ''}</span></li>`;
+const question = (d) => questions(d)[0] || null;
+const openParts = (d) => new Set(questions(d).map((q) => q.k)).size;
+const okRow = (k, v, s = '', change = '') => `<li class="pt" data-s="ok"><span class="ic">${ICON.check}</span><span class="k">${k}</span><span class="v"><span>${v}${change ? ` <button class="linkbtn" type="button" data-pchg="${change}" aria-label="Change ${k.toLowerCase()}">Change</button>` : ''}</span>${s ? `<span class="s">${s}</span>` : ''}</span></li>`;
+const OTHER = { time: ['Another time', 'Like 7:45 or 6pm', 'Time'], proj: ['Another project', 'Like MOCK', 'Which Jira project should the ticket go in?'] };
+const askBlock = (q, d) => `<span class="aq"><span id="pq-${d.key}-${q.id}">${q.q}</span><span class="pick" role="group" aria-labelledby="pq-${d.key}-${q.id}">${q.opts.map(([v, l]) => `<button type="button" data-pick="${v}">${l}</button>`).join('')}${q.other ? `<button class="linkbtn" type="button" data-ptype="${q.other}" aria-expanded="${q.typing ? 'true' : 'false'}">${OTHER[q.other][0]}</button>` : ''}</span>${q.typing ? `<form class="askf" data-ptf="${q.other}"><input type="text" autocomplete="off" placeholder="${OTHER[q.other][1]}" aria-label="${OTHER[q.other][2]}"${q.miss ? ' aria-invalid="true"' : ''}><button class="btn sm" type="submit">Use it</button></form>${q.miss ? `<span class="s">${q.other === 'proj' ? 'Write the project key, such as MOCK.' : 'I couldn’t read a time in that.'}</span>` : ''}` : ''}</span>`;
+const askRow = (k, qs, d, before = '', after = '') => `<li class="pt" data-s="ask"><span class="ic" role="img" aria-label="Question">?</span><span class="k">${k}</span><span class="v">${before}${qs.map((q) => askBlock(q, d)).join('')}${after}</span></li>`;
 const noRow = (c) => `<li class="pt wide" data-s="no"><span class="ic" role="img" aria-label="Can’t do">${ICON.x}</span><span class="v"><span><b>${esc(c.label)}.</b> <span class="s">${c.why}</span>${c.ask ? ' <button class="linkbtn" type="button" data-toast="Asked the team. Their answer will show here.">Ask the team</button>' : ''}</span></span></li>`;
 const thenSelect = (d) => `<select data-then="${d.key}" aria-label="Then">${Object.entries(THEN).map(([v, l]) => `<option value="${v}"${v === d.then ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
 function partsRows(d) {
-  const q = d.status === 'asking' ? question(d) : null;
-  const when = d.sched.day !== undefined && d.sched.time;
+  const qs = d.status === 'asking' ? questions(d) : [];
+  const of = (k) => qs.filter((q) => q.k === k);
+  const asking = d.status === 'asking';
   const S = d.soft && (W.soft[d.soft] || EXTRA[d.soft]);
+  const whenDone = d.sched.day !== undefined && (d.sched.time || d.sched.day === 'man');
+  const chosen = d.sched.day !== undefined ? `<span class="s">${d.sched.day === 'man' ? 'Only when I run it' : `Every ${d.sched.day ? DAY[d.sched.day] : 'day'}`}</span>` : '';
+  const then = (o) => `${asking ? thenSelect(d) : THEN[d.then]}${o}`;
+  const yes = d.then === 'jira' ? `<span class="s">${YES_LINE}</span>` : '';
   return [
-    d.soft ? okRow('Watch', `${S.name} on ${srcOf(S)}`, W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.') : q && q.k === 'Watch' ? askRow(q) : '',
-    when ? okRow('When', long(d.sched)) : q && q.k === 'When' ? askRow(q) : '',
-    okRow('Then', d.status === 'asking' ? thenSelect(d) : THEN[d.then], d.then === 'jira' ? YES_LINE : ''),
-    d.then === 'jira' && d.project ? okRow('Jira', `Project ${d.project}`) : q && q.k === 'Then' ? askRow(q) : '',
+    d.soft ? okRow('Watch', `${S.name} on ${srcOf(S)}`, W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.', asking ? 'soft' : '') : of('Watch').length ? askRow('Watch', of('Watch'), d) : '',
+    whenDone ? okRow('When', long(d.sched), '', asking ? 'when' : '') : of('When').length ? askRow('When', of('When'), d, chosen) : '',
+    d.then === 'jira' && of('Then').length
+      ? askRow('Then', of('Then'), d, `<span>${then('')}</span>`, yes)
+      : d.then === 'jira' && d.project
+        ? okRow('Then', then(''), `Create 1 Jira ticket in ${d.project}. ${YES_LINE}`, asking ? 'proj' : '')
+        : okRow('Then', then('')),
     ...d.cant.map(noRow),
   ].join('');
 }
@@ -2509,18 +2527,18 @@ const partsCard = (d) => `<div class="card" data-parts="${d.key}" data-spec="bui
   <p class="c-note" data-p-note hidden></p>
   <div class="c-foot"><span class="c-left" data-p-left></span><span class="c-act" data-p-act></span></div>
 </div>`;
+const leadFor = (d) => { const n = openParts(d); return `Here’s what I understood.${n === 0 ? '' : n === 1 ? ' Pick the missing part.' : ` Pick the ${n} missing parts.`}`; };
 function patchParts(c) {
   const d = W.drafts[c.dataset.parts];
   d.name = nameOf(d);
   $('[data-p-name]', c).textContent = d.name;
   $('[data-p-rows]', c).innerHTML = partsRows(d);
   if (d.status !== 'asking') return;
-  const q = question(d);
+  const n = openParts(d);
   const left = $('[data-p-left]', c);
   left.className = 'c-left';
   left.textContent = '';
-  const n = [!d.soft, d.sched.day === undefined, !d.sched.time, d.then === 'jira' && !d.project].filter(Boolean).length;
-  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button>${q ? `<span class="waiting dwait">Answer ${n} ${n === 1 ? 'question' : 'questions'} first</span>` : `<button class="btn" type="button" data-setup>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`}`;
+  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button>${n ? `<span class="waiting dwait">Pick ${n} more to finish</span>` : `<button class="btn" type="button" data-setup>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`}`;
 }
 function pickPart(btn) {
   const c = btn.closest('[data-parts]');
@@ -2528,19 +2546,50 @@ function pickPart(btn) {
   if (!d || d.status !== 'asking') return;
   const [k, v] = btn.dataset.pick.split(/:(.*)/);
   if (k === 'soft') d.soft = v;
-  if (k === 'day') d.sched.day = v || null;
+  if (k === 'day') {
+    if (v === 'wk') d.weekly = true;
+    else { d.weekly = false; d.sched.day = v || null; if (v === 'man') d.sched.time = 'by hand'; else if (d.sched.time === 'by hand') d.sched.time = null; }
+  }
   if (k === 'time') d.sched.time = v;
-  if (k === 'proj') Object.assign(d, { project: v, typing: false, typeMiss: false });
+  if (k === 'proj') d.project = v;
+  d.typing = null;
+  d.typeMiss = false;
   patchParts(c);
+  /* The next open button takes the keyboard, or Set up once nothing is left. */
+  ($('[data-p-rows] [data-pick]', c) || $('[data-setup]', c))?.focus();
 }
-/* A key typed by hand is checked the way the card checks it: capital letters, digits or underscores, such as MOCK. */
-function projTyped(form) {
+/* Change puts that row's buttons back in place, with nothing guessed. */
+function changePart(btn) {
+  const c = btn.closest('[data-parts]');
+  const d = W.drafts[c.dataset.parts];
+  const what = btn.dataset.pchg;
+  if (what === 'soft') d.soft = undefined;
+  if (what === 'when') { d.sched = { day: undefined, time: null }; d.weekly = false; }
+  if (what === 'proj') d.project = undefined;
+  patchParts(c);
+  $('[data-p-rows] [data-pick]', c)?.focus();
+}
+/* A key or a time typed by hand is checked as the card checks it: a project key is capital letters, digits or underscores, such as MOCK. */
+function typedPart(form) {
   const c = form.closest('[data-parts]');
   const d = W.drafts[c.dataset.parts];
-  const key = $('input', form).value.trim().toUpperCase();
-  if (!/^[A-Z][A-Z0-9_]+$/.test(key)) { d.typeMiss = true; patchParts(c); $('[data-ptf] input', c)?.focus(); return; }
-  Object.assign(d, { project: key, typing: false, typeMiss: false });
+  const v = $('input', form).value.trim();
+  if (form.dataset.ptf === 'proj') {
+    const key = v.toUpperCase();
+    if (!/^[A-Z][A-Z0-9_]+$/.test(key)) { d.typeMiss = true; patchParts(c); $('[data-ptf] input', c)?.focus(); return; }
+    d.project = key;
+  } else {
+    const m = v.toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+    let h = m ? Number(m[1]) : NaN;
+    if (m && m[3] === 'pm' && h < 12) h += 12;
+    if (m && m[3] === 'am' && h === 12) h = 0;
+    if (!m || h > 23) { d.typeMiss = true; patchParts(c); $('[data-ptf] input', c)?.focus(); return; }
+    d.sched.time = `${h}:${m[2] || '00'}`;
+  }
+  d.typing = null;
+  d.typeMiss = false;
   patchParts(c);
+  ($('[data-p-rows] [data-pick]', c) || $('[data-setup]', c))?.focus();
 }
 function dropDraft(c) {
   const d = W.drafts[c.dataset.parts];
@@ -2584,7 +2633,7 @@ function buildAsk(t) {
     return pushCard(`<div class="card"><div class="c-head"><b>${f.name}</b><span class="pill" data-s="${ss}">${st}</span></div><p>It already watches ${W.soft[d.soft].name}, ${lower(long(f.sched))}.</p><div class="c-foot"><span class="c-act">${offer}<button class="btn ghost sm" type="button" data-open="wf:${d.soft}">Open it</button></span></div></div>`, 'lead', 'You already have this one.');
   }
   W.drafts[d.key] = d;
-  const m = pushCard(partsCard(d), 'lead', 'Here’s what I understood.');
+  const m = pushCard(partsCard(d), 'lead', leadFor(d));
   patchParts($('[data-parts]', m));
   return m;
 }
@@ -3452,7 +3501,7 @@ const TASKS = {
       const c = lastIn('[data-parts]');
       await tap($('[data-pick="time:9:00"]', c));
       pickPart($('[data-pick="time:9:00"]', c));
-      await wait(800);
+      await wait(500);
       await tap($('[data-pick="proj:MOCK"]', c));
       pickPart($('[data-pick="proj:MOCK"]', c));
       await wait(800);
@@ -3655,7 +3704,7 @@ $('#composer').addEventListener('submit', (e) => {
 });
 app.addEventListener('submit', (e) => {
   const f = e.target;
-  const act = f.matches('[data-ptf]') ? projTyped : f.matches('[data-askf]') ? askSend : f.matches('[data-dtf]') ? dTyped : f.matches('[data-fbf]') ? fbSend : f.matches('[data-addf]') ? addSoft : null;
+  const act = f.matches('[data-ptf]') ? typedPart : f.matches('[data-askf]') ? askSend : f.matches('[data-dtf]') ? dTyped : f.matches('[data-fbf]') ? fbSend : f.matches('[data-addf]') ? addSoft : null;
   if (!act) return;
   e.preventDefault();
   if (!playing) act(f);
@@ -3686,7 +3735,8 @@ app.addEventListener('click', (e) => {
   if (inP && pick('[data-open]')) { quiet(showPage(pick('[data-open]').dataset.open, false, 'chat')); return; }
   if (pick('[data-need]')) { quiet(needGo(pick('[data-need]').dataset.need, inP)); return; }
   if (pick('[data-pick]')) { pickPart(pick('[data-pick]')); return; }
-  if (pick('[data-ptype]')) { const c = pick('[data-parts]'); const d = W.drafts[c.dataset.parts]; d.typing = !d.typing; patchParts(c); if (d.typing) $('[data-ptf] input', c)?.focus(); return; }
+  if (pick('[data-ptype]')) { const c = pick('[data-parts]'); const d = W.drafts[c.dataset.parts]; const w = pick('[data-ptype]').dataset.ptype; d.typing = d.typing === w ? null : w; patchParts(c); if (d.typing) $('[data-ptf] input', c)?.focus(); return; }
+  if (pick('[data-pchg]')) { changePart(pick('[data-pchg]')); return; }
   if (pick('[data-setup]')) { quiet(setupDraft(pick('[data-parts]'))); return; }
   if (pick('[data-drop]')) { dropDraft(pick('[data-parts]')); return; }
   if (pick('.turnon')) { turnOn(pick('[data-parts]')); return; }
