@@ -102,8 +102,13 @@ RUN_LIMIT = 200
 CALL_LIMIT = 1000
 """The most calls one simulated run may make, so a workflow that loops is stopped."""
 BYTE_LIMIT = 256 * 1024
-"""The most a simulated run's record may hold, as JSON, so a few large calls are stopped too. With
-RUN_LIMIT runs that is at most about 50 MB, plus the one call that crosses it in each."""
+"""The most a simulated run's record may hold, as JSON, so a few large calls are stopped too. The
+call that crosses it is kept whole."""
+HELD_LIMIT = 32 * 1024 * 1024
+"""The most every kept run may hold together, as JSON: each one's scenario and record. A new start
+or call past it forgets the oldest runs first, as past RUN_LIMIT, but never the run it is for. So
+the gateway holds about this much however large the scenarios are, plus the answers it keeps for
+repeats, which are made from the scenarios."""
 RECORDED_LIMIT = 500
 """The most items a scenario may give one block. A Read passes on READ_LIMIT of them."""
 WAKE_DELAY = 1.0
@@ -333,6 +338,7 @@ class SimulatedCalls:
         run_limit: int = RUN_LIMIT,
         call_limit: int = CALL_LIMIT,
         byte_limit: int = BYTE_LIMIT,
+        held_limit: int = HELD_LIMIT,
     ) -> None:
         self._executions = executions
         self._waker = waker
@@ -342,8 +348,12 @@ class SimulatedCalls:
         self._run_limit = run_limit
         self._call_limit = call_limit
         self._byte_limit = byte_limit
+        self._held_limit = held_limit
         self._sizes: dict[str, int] = {}
         """By run, the bytes its record holds."""
+        self._scenario_sizes: dict[str, int] = {}
+        self._held = 0
+        """The bytes every kept run holds, scenarios and records."""
         self._runs: OrderedDict[str, SimulatedRun] = OrderedDict()
         self._scenarios: dict[str, Scenario] = {}
         self._links: dict[N8nExecutionId, str] = {}
@@ -358,12 +368,18 @@ class SimulatedCalls:
         )
         self._runs[nonce] = run
         self._scenarios[nonce] = scenario
-        while len(self._runs) > self._run_limit:
-            self._forget(next(iter(self._runs)))
+        self._scenario_sizes[nonce] = len(scenario.model_dump_json())
+        self._held += self._scenario_sizes[nonce]
+        self._make_room(nonce)
         return run
 
     def run(self, nonce: str) -> SimulatedRun | None:
         return self._runs.get(nonce)
+
+    def forget(self, nonce: str) -> None:
+        """Drops a run nobody will read, such as one whose start n8n never ran."""
+        if nonce in self._runs:
+            self._forget(nonce)
 
     async def options(self, kind: OptionKind, of: Mapping[str, str]) -> list[NodeOption]:
         """Nobody edits a workflow in the simulation n8n, so its editor lists nothing."""
@@ -429,11 +445,21 @@ class SimulatedCalls:
         """Counts what the run's record now holds besides, toward its byte limit."""
         added = sum(len(model.model_dump_json()) for model in kept)
         self._sizes[run.nonce] = self._sizes.get(run.nonce, 0) + added
+        self._held += added
+        self._make_room(run.nonce)
+
+    def _make_room(self, keep: str) -> None:
+        """Forgets the oldest runs but `keep` while there are too many, or they hold too much."""
+        for nonce in list(self._runs):
+            if len(self._runs) <= self._run_limit and self._held <= self._held_limit:
+                return
+            if nonce != keep:
+                self._forget(nonce)
 
     def _forget(self, nonce: str) -> None:
         run = self._runs.pop(nonce)
         self._scenarios.pop(nonce, None)
-        self._sizes.pop(nonce, None)
+        self._held -= self._sizes.pop(nonce, 0) + self._scenario_sizes.pop(nonce, 0)
         if run.execution_id is not None:
             execution = N8nExecutionId(run.execution_id)
             self._links.pop(execution, None)

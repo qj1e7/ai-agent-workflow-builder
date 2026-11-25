@@ -65,7 +65,7 @@ from platform_api.nul_guard import RefuseNul
 from platform_api.orchestration import n8n_calls_http
 from platform_api.orchestration.dispatch import N8nWaker
 from platform_api.orchestration.mock_setup import MockSetups, Mode, SetupRefused, mock_keys
-from platform_api.orchestration.n8n import N8nApi, N8nError
+from platform_api.orchestration.n8n import SIMULATION_API_SCOPES, N8nApi, N8nError
 from platform_api.orchestration.recorded_samples import (
     ALLOW_LISTS,
     SAMPLE_ITEMS,
@@ -276,6 +276,9 @@ class SampleIn(WireIn):
     id: SampleId
     answer: AnswerKind
     block: BlockName | None = Field(default=None, description="The block it was recorded from.")
+    origin: Literal["real_run", "mock"] = Field(
+        default="real_run", description="Where it was recorded: a real run's read, or a mock."
+    )
     items: list[dict[str, JsonValue]] = Field(max_length=SAMPLE_ITEMS)
 
 
@@ -418,7 +421,7 @@ async def simulate(
         given = SimulationIn.model_validate_json(body)
     except ValidationError as error:
         return _problems(error)
-    samples = _samples(given.samples)
+    samples = scrubbed_samples(given.samples)
     version = given.version.model_dump(by_alias=True, exclude_none=True)
     try:
         done = await simulations.simulate(
@@ -442,12 +445,12 @@ async def simulate(
             return _simulation_out(done)
 
 
-def _samples(given: Sequence[SampleIn]) -> RecordedSamples:
+def scrubbed_samples(given: Sequence[SampleIn]) -> RecordedSamples:
     """The samples sent, each scrubbed by its allow list as the store keeps it."""
     samples = RecordedSamples()
     for sample in given:
         samples.record(
-            sample.answer, sample.items, "real_run", block=sample.block, sample_id=sample.id
+            sample.answer, sample.items, sample.origin, block=sample.block, sample_id=sample.id
         )
     return samples
 
@@ -546,7 +549,7 @@ async def plan(body: SignedBody, simulations: CurrentSimulations) -> PlanOut | J
             out = SimulationRefusedOut(detail=problems[0], problems=list(problems))
             return JSONResponse(status_code=422, content=out.model_dump())
         case found:
-            return plan_out(found, _samples(given.samples))
+            return plan_out(found, scrubbed_samples(given.samples))
 
 
 @control.post(
@@ -650,7 +653,7 @@ def gateway_app(
 def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     _log()
     settings = gateway_settings_from_env(os.environ if env is None else env)
-    n8n = N8nApi(settings.n8n_base_url, settings.n8n_owner)
+    n8n = N8nApi(settings.n8n_base_url, settings.n8n_owner, scopes=SIMULATION_API_SCOPES)
     waker = N8nWaker(settings.n8n_base_url, settings.node_key, Unsealed())
     github = None if settings.mock_github_url is None else MockGitHub(settings.mock_github_url)
     calls = SimulatedCalls(n8n, waker, github)

@@ -73,3 +73,11 @@ Words to confirm (needs OK), each one sentence:
 - A run whose source hangs is still held for each try and its waits. A run whose block loops for a long time on its own work has no limit.
 - The change reaches Azure only with the next deploy, which the team lead approves.
 - Naming the source for our own Read block, whose read the platform does, needs the platform to keep its own words for the failed read. n8n's record of that block holds only "Our platform could not do this step (HTTP 503)". That is a follow-up.
+
+## Note, 25 Nov 2026: redirects after a write
+
+A review asked about a POST answered with a 303. n8n follows a 303 with a GET. If that GET got the 30 s read limit and hung, Retry On Fail would send the POST again. We read n8n 2.42.6 and chose to refuse redirects on our own writes:
+
+- **Our blocks follow no redirect.** Each call to our API now sets `disableFollowRedirect`, which n8n's `httpRequest` takes (`@n8n/backend-network` 1.16.4, `dist/http/axios/request.js`). Our API never redirects, so a redirect fails the block with its status.
+- **n8n's notice blocks already follow none after a POST.** Teams, Outlook, Gmail and Slack send through n8n's older request helper, which follows a redirect after a POST only when a block asks for `followAllRedirects` (`dist/http/axios/legacy.js`), and none of them does (`n8n-nodes-base` 2.42.4).
+- **Where the GET could get 30 s.** Only when n8n follows redirects itself, one request at a time, does the interceptor see the GET (`shouldFollowRedirectsManually`, `dist/http/axios/redirect.js`). n8n does that only when a proxy is set and `N8N_SSRF_PROTECTION_ENABLED` is on. It is off unless set, and we never set it. Otherwise axios follows the redirect inside the POST's own request, which keeps its 300 s. If we turn on SSRF protection behind a proxy, an HTTP Request block set to follow every redirect could still meet this case.

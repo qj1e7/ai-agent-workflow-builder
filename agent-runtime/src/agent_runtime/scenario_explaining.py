@@ -166,20 +166,22 @@ def shown_note(kind: NoteKind, failed: FailedScenario) -> NoteKind:
 def note_check(
     asked: ModelNote, failed: Mapping[str, FailedScenario], noted: set[str]
 ) -> FailureNote | NoteCheck:
-    """The note when each pick is one of its scenario's facts, or the first check a pick fails."""
-    name = asked.scenario.strip()
+    """The note when each pick is one of its scenario's facts, or the first check a pick fails.
+    Each name is compared exactly as given, as the prompt asks, so a block whose name has a space
+    at either end is named as it is."""
+    name = asked.scenario
     scenario = failed.get(name)
     if scenario is None:
         return "not_a_scenario"
     if name in noted:
         return "twice"
-    block = asked.block.strip()
+    block = asked.block
     if block not in {*scenario.ran, scenario.stopped_at}:
         return "not_a_block"
-    source = (asked.source or "").strip() or None
+    source = asked.source or None
     if source is not None and source not in {p.block for p in scenario.plays}:
         return "not_a_play"
-    detail = (asked.detail or "").strip() or None
+    detail = asked.detail or None
     if detail is not None and not named_in(detail, scenario.happened, ANY_SHAPE):
         return "not_a_detail"
     kind = shown_note(asked.kind, scenario)

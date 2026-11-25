@@ -12,7 +12,8 @@ emails, user and account ids, avatars and text people wrote are never kept. The 
 - time: kept when it is an ISO 8601 date, with or without a time. Anything else is left out.
 - flag: kept when it is true or false. Anything else is left out.
 - count: kept when it is a whole number. Anything else is left out.
-- issue key: kept when it is a Jira key, such as SUP-12. Anything else is left out.
+- issue key: kept when it is a Jira key, such as SUP-12. Anything else is left out. A kept key
+  keeps the real project's key before the dash, so a sample names the project, though no person.
 - the tag again: a release's name is kept only when it is its tag. Any other name becomes the tag,
   since a title is text people wrote.
 - one of: kept when it is one of a few fixed words, such as a Jira status. Anything else becomes

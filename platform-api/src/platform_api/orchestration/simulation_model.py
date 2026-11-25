@@ -20,6 +20,7 @@ so one simulation costs at most the runtime's SIMULATION_COST_CAP_USD."""
 
 import hashlib
 import logging
+import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Final, Protocol
 
@@ -78,6 +79,9 @@ VARIED_SAID: Final[Mapping[ScenarioVariation, str]] = {
     "long_text": "very long text",
 }
 DETAIL_SAID: Final = " The records name {detail}."
+NAME_IN_WORDS: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_./-]*")
+"""A name in what happened, as the runtime reads one (troubleshooting.DETAIL): a word that may
+hold a slash, a dot, a dash or an underscore."""
 
 type Access = Callable[[], Awaitable[ModelAccess | None]]
 
@@ -158,13 +162,21 @@ def _failed(result: ResultOut) -> FailedScenario:
 
 def _fits(note: FailureNote, results: Mapping[str, ResultOut]) -> bool:
     """The runtime checked each pick. Code checks again that the note names a failed scenario, a
-    block that ran or stopped it, and a block the scenario played, before it writes words."""
+    block that ran or stopped it, a block the scenario played, and a whole name from what happened
+    as the explainer was sent it, before it writes words."""
     result = results.get(note.scenario)
     if result is None or result.verdict != "failed":
         return False
     if note.block not in {*result.ran, result.stopped_at}:
         return False
-    return note.source is None or note.source in {p.block for p in result.plays}
+    if note.source is not None and note.source not in {p.block for p in result.plays}:
+        return False
+    sent = result.happened[:STOP_MESSAGE_LIMIT]
+    return note.detail is None or note.detail in _names(sent)
+
+
+def _names(words: str) -> set[str]:
+    return {name.rstrip("./-") for name in NAME_IN_WORDS.findall(words)}
 
 
 class SimulationModel:
