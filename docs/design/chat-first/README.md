@@ -84,6 +84,7 @@ Switch "New words" to Show to see each one in place. Each is listed once, under 
 - 15 Nov 2026, ADR 0025's first part: a software can be published on GitHub, Maven Central or npm. Log4j core is now its Maven Central package, and Express is a known npm package. The Watch answer, the Source fact and the check's sentence name the source. The security can't says known vulnerabilities are looked up only for the Maven Central and npm packages on the watchlist.
 - 19 Nov 2026: a release check of its own reads GitHub only, so asking to watch or check a Maven Central or npm package answers that the Software watchlist checks it, with Add to the watchlist or Open it, and builds no workflow. A package's watchlist row says it is checked by the Software watchlist.
 - 22 Nov 2026: the package card asks for the version we run, optional, since known vulnerabilities are looked up only in a version someone gave; without one it says they aren't. A package's page has a Known vulnerabilities row: Open the last check, whose run says how many there are and names the worst, while an upgrade ticket lists each one; or, for a version nobody gave, that they aren't looked up. Its Checked by says the Software watchlist.
+- 25 Nov 2026: a version no check has looked up yet, as one just added, says "Not looked up yet. The next check looks them up in this version." with no Open the last check, so the link never leads to a run without them.
 
 ## Where the sketch is silent
 

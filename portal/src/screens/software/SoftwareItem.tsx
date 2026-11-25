@@ -39,7 +39,7 @@ interface ItemProps {
   readonly declined: string | null
   readonly lastCheckStopped: boolean
   /** The latest check's run, where a package's known vulnerabilities are listed, or null before the first check. */
-  readonly lastCheckRun: string | null
+  readonly lastCheck: { readonly run_id: string; readonly started_at: string } | null
   readonly onToggleHistory: () => void
   readonly onRemove: () => void
   readonly onAskAddress: () => void
@@ -53,8 +53,8 @@ interface ItemProps {
  * Remove stay, because the platform can do both. Remove comes last.
  */
 export function SoftwareItem(props: ItemProps) {
-  const { row, operator, scheduled, paused, historyOpen, removing, confirming, switching, nameOf, checkedBy, declined, lastCheckStopped, lastCheckRun } = props
-  const vulnerabilities = vulnerabilityFact(row)
+  const { row, operator, scheduled, paused, historyOpen, removing, confirming, switching, nameOf, checkedBy, declined, lastCheckStopped, lastCheck } = props
+  const vulnerabilities = vulnerabilityFact(row, lastCheck)
   const state = stateOf(row)
   const ours = oursOf(row)
   const newest = newestOf(row)
@@ -108,7 +108,7 @@ export function SoftwareItem(props: ItemProps) {
           <div>
             <dt>Known vulnerabilities</dt>
             <dd>
-              {vulnerabilities.looked && lastCheckRun ? <Link to={`/runs/${lastCheckRun}`}>Open the last check</Link> : null}
+              {vulnerabilities.run ? <Link to={`/runs/${vulnerabilities.run}`}>Open the last check</Link> : null}
               <span className={styles['src']}>{vulnerabilities.words}</span>
             </dd>
           </div>

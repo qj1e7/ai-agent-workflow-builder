@@ -91,6 +91,18 @@ describe('a package’s known vulnerabilities on its page (ADR 0025)', () => {
     expect(html).toContain('href="/runs/run_01JBB"')
   })
 
+  it('says a version given after the last check is looked up next time, with no link to a run without it', () => {
+    const html = renderItem(asPackage({ our_version_source: { kind: 'given', at: '2026-11-16T09:00:00Z', ticket: null } }), ALICE, base.id)
+    expect(text(html)).toContain('Not looked up yet. The next check looks them up in this version.')
+    expect(html).not.toContain('Open the last check')
+  })
+
+  it('links no run the last check didn’t look this package up in', () => {
+    const html = renderItem(asPackage({ checked_at: '2026-11-09T01:00:00Z' }), ALICE, base.id)
+    expect(text(html)).toContain('Not looked up yet.')
+    expect(html).not.toContain('Open the last check')
+  })
+
   it('says a version the first check read is not looked up, with no link', () => {
     const html = renderItem(asPackage({ our_version_source: { kind: 'first_check', at: '2026-11-02T10:00:00Z', ticket: null } }), ALICE, base.id)
     expect(text(html)).toContain('Not looked up. They’re looked up only in a version someone gave, or one an upgrade ticket set when marked Done.')

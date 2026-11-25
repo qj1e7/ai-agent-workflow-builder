@@ -404,12 +404,27 @@ export const HOME_PACKAGE_VERSION_HELP = 'Give it, and each check also looks up 
  * What the Software page says about a package's known vulnerabilities, or null for a GitHub project, which names no package. They are
  * looked up only in a version someone gave or an upgrade ticket set when marked Done, never in one the first check read.
  */
-export function vulnerabilityFact(row: WatchedSoftwareView): { readonly words: string; readonly looked: boolean } | null {
+export const VULNERABILITIES_NEXT = 'Not looked up yet. The next check looks them up in this version.'
+
+/**
+ * What a package's page says about its known vulnerabilities, and the run to open: only the last check, and only when that
+ * check looked this version up, so the link never leads to a run without them (ADR 0025).
+ */
+export function vulnerabilityFact(
+  row: WatchedSoftwareView,
+  lastCheck: { readonly run_id: string; readonly started_at: string } | null,
+): { readonly words: string; readonly run: string | null } | null {
   if (!isPackage(row.source.kind)) return null
-  if (row.our_version === null || row.our_version_source?.kind === 'first_check') {
-    return { words: 'Not looked up. They’re looked up only in a version someone gave, or one an upgrade ticket set when marked Done.', looked: false }
+  const given = row.our_version_source
+  if (row.our_version === null || given?.kind === 'first_check') {
+    return { words: 'Not looked up. They’re looked up only in a version someone gave, or one an upgrade ticket set when marked Done.', run: null }
   }
-  return { words: VULNERABILITIES_WHERE, looked: true }
+  const started = lastCheck ? Date.parse(lastCheck.started_at) : NaN
+  const checked = row.checked_at ? Date.parse(row.checked_at) : NaN
+  // A version kept from before versions had a source has no time, and was given before any check here.
+  const givenAt = given ? Date.parse(given.at) : -Infinity
+  const lookedUp = lastCheck !== null && givenAt <= started && checked >= started
+  return lookedUp ? { words: VULNERABILITIES_WHERE, run: lastCheck.run_id } : { words: VULNERABILITIES_NEXT, run: null }
 }
 
 const VERSION_BAD = 'Type the version as three numbers, such as 1.2.14.'

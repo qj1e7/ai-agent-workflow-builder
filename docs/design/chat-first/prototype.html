@@ -2382,6 +2382,8 @@ function isPkg(k) { const S = W.soft[k] || EXTRA[k]; return Boolean(S && S.src &
 const VULN_WHERE = 'The last check’s run says how many there are and names the worst. An upgrade ticket lists each one, linked to NVD or OSV.';
 function vulnFact(s) {
   if (!s.run || s.firstCheck) return '<span class="muted small">Not looked up. They’re looked up only in a version someone gave, or one an upgrade ticket set when marked Done.</span>';
+  /* No check has looked this version up yet, so there is no run to open (25 Nov). */
+  if (s.fresh) return '<span class="muted small">Not looked up yet. The next check looks them up in this version.</span>';
   return `<button class="linkbtn" type="button" data-open="run">Open the last check</button> <span class="muted small">${VULN_WHERE}</span>`;
 }
 function packageCard(k) {
@@ -3546,7 +3548,7 @@ app.addEventListener('click', (e) => {
     const b = pick('[data-addsoft]'); const k = b.dataset.addsoft; const card = b.closest('.card');
     const v = (card.querySelector('[data-pkgver]')?.value || '').trim();
     if (v && !/^\d+\.\d+\.\d+(?:\.Final|\.RELEASE|\.GA|-jre|-android)?$/.test(v)) { toast('Type the version as three numbers, such as 4.21.2.'); return; }
-    if (!W.soft[k]) W.soft[k] = { name: EXTRA[k].name, src: EXTRA[k].src, repo: EXTRA[k].repo, run: v || null };
+    if (!W.soft[k]) W.soft[k] = { name: EXTRA[k].name, src: EXTRA[k].src, repo: EXTRA[k].repo, run: v || null, fresh: Boolean(v) };
     card.querySelector('label.field')?.remove(); card.querySelector('label.field + p, p.muted.small')?.remove();
     b.closest('.c-act').innerHTML = `<button class="btn ghost sm" type="button" data-open="soft:${k}">Open it</button>`;
     refresh();
