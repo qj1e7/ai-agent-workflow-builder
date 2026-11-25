@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useContext, useEffect, useId, useMemo, useReducer, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
+import { ApiError } from '../../api/client'
 import { useErrorWords, useSession } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
@@ -37,6 +38,7 @@ import {
   clearProject,
   effectiveRepo,
   EACH_TICKET_WAITS,
+  isChosenProject,
   JIRA_CHOICE,
   PROJECT_BOX,
   REPO_CHOICE,
@@ -196,6 +198,7 @@ function KeyAsk({ labelId, kind, picks, other, boxLabel, hint, onChoose }: { lab
   const [typed, setTyped] = useState('')
   const [tried, setTried] = useState(false)
   const field = useRef<HTMLInputElement>(null)
+  const opener = useRef<HTMLButtonElement>(null)
   const opened = useRef(false)
   const id = useId()
   // The box takes the keyboard when the link opens it, never on its own at the start.
@@ -218,6 +221,8 @@ function KeyAsk({ labelId, kind, picks, other, boxLabel, hint, onChoose }: { lab
     } else if (event.key === 'Escape' && picks.length > 0) {
       event.preventDefault()
       setTyping(false)
+      // The box is gone, so the keyboard goes back to the link that opened it.
+      opener.current?.focus()
     }
   }
   return (
@@ -230,6 +235,7 @@ function KeyAsk({ labelId, kind, picks, other, boxLabel, hint, onChoose }: { lab
         ))}
         {picks.length > 0 ? (
           <button
+            ref={opener}
             type="button"
             className={styles['link']}
             aria-expanded={typing}
@@ -372,6 +378,22 @@ export function SetupCard({ start, anyBlock = null }: { start: CardStart; anyBlo
   return <SettingUp start={start} anyBlock={anyBlock} />
 }
 
+const LOOK_LIMIT_MS = 15_000
+const ONLY_OPERATOR = 'Only an Operator can look a repository up.'
+const COULD_NOT_REACH = 'I couldn’t reach GitHub just now.'
+
+/** What the finder said, as a state the card draws. A refusal, a stopped check and a network error each say their own reason, never “no match”. */
+function repoFind(software: string | null, notAllowed: boolean, found: ReturnType<typeof useSoftwareFind>): RepoFind | null {
+  if (software === null) return null
+  if (notAllowed) return { state: 'trouble', words: ONLY_OPERATOR }
+  if (found.isError) return { state: 'trouble', words: found.error instanceof ApiError && found.error.status === 403 ? ONLY_OPERATOR : COULD_NOT_REACH }
+  const answer = found.data
+  if (answer === undefined) return { state: 'checking' }
+  if (answer.status === 'not_checked') return { state: 'trouble', words: answer.message }
+  if (answer.status === 'not_known') return { state: 'none' }
+  return { state: 'found', matches: answer.matches.map((match) => ({ repo: match.repo, what: match.what })) }
+}
+
 function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode }) {
   const main = useMainButton()
   const live = useContext(CardLive)
@@ -413,8 +435,10 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const cards = useRef(new Map<string, string>())
   const back = useRef<string | null>(null)
 
-  const task = taskWithoutSchedule(form.rows)
-  const rowsReady = form.rows.length > 0 && cardBlockers(form.rows).length === 0
+  // A project picked on the card is not part of the request the plan answers, so picking it never asks the Planner again.
+  const planRows = form.rows.filter((row) => !isChosenProject(row, form))
+  const task = taskWithoutSchedule(planRows)
+  const rowsReady = form.rows.length > 0 && cardBlockers(planRows.filter((row) => !(row.kind === 'where' && row.state === 'missing'))).length === 0
   const planned = start.plan?.task === task ? start.plan.answer : undefined
   const planQuery = usePlanFor(task, rowsReady && phase.kind === 'open', planned)
   const plan = useMemo(() => (planQuery.data ? planView(planQuery.data, form.rows) : null), [planQuery.data, form.rows])
@@ -422,10 +446,20 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const reused = reusedAgents(plan, library.data, me.data?.id)
   const left = setupLeft(form, plan)
   const software = softwareOf(form)
-  const found = useSoftwareFind(repoMissing(form) ? software : null)
+  const operator = me.data?.roles.includes('operator') ?? false
+  const found = useSoftwareFind(repoMissing(form) ? software : null, operator)
   const matches: readonly RepoChoice[] = found.data?.status === 'found' ? found.data.matches.map((match) => ({ repo: match.repo, what: match.what })) : []
-  const repos: RepoFind | null = software === null ? null : found.isPending && found.fetchStatus !== 'idle' ? { state: 'checking' } : matches.length > 0 ? { state: 'found', matches } : { state: 'none' }
-  const questions = questionsOf(form, plan, projects, repos)
+  const repos: RepoFind | null = repoFind(software, me.data !== undefined && !operator, found)
+  const [waited, setWaited] = useState<string | null>(null)
+  const looking = repos?.state === 'checking'
+  useEffect(() => {
+    if (!looking || software === null) return
+    const timer = setTimeout(() => setWaited(software), LOOK_LIMIT_MS)
+    return () => clearTimeout(timer)
+  }, [looking, software])
+  const lookedTooLong = looking && waited === software
+  const planning = rowsReady && phase.kind === 'open' && planQuery.isPending
+  const questions = questionsOf(form, plan, projects, repos, planning)
   const problems = whenProblems(form.when)
   const timeText = whenSaid(form.when)
   const writes = writesOf(plan, kinds)
@@ -440,7 +474,6 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const onlyMatch = matches.length === 1 ? (matches[0]?.repo ?? null) : null
   useEffect(() => {
     if (onlyMatch !== null && form.typed[REPO_CHOICE] === undefined && softwareOf(form) !== null) {
-      dirty.current = true
       // The finder answers after the card is drawn, so its match comes in as a change to the form.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm((before) => (before.typed[REPO_CHOICE] === undefined ? chooseRepo(before, onlyMatch, true) : before))
@@ -796,7 +829,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
     const project = questions.find((q): q is Extract<Question, { kind: 'project' }> => q.kind === 'project' && q.index === index)
     if (row.state === 'missing' && project)
       return { mark: 'ask', body: asked(project.words, <KeyAsk labelId={`${id}-q-project`} kind="jira_project" picks={projectPicks(project.choices)} other="Another project" boxLabel={PROJECT_BOX} onChoose={chooseJira} />, 'q-project') }
-    if (row.state === 'edited' && row.kind === 'where' && form.typed[JIRA_CHOICE] !== undefined)
+    if (isChosenProject(row, form))
       return {
         mark: 'ok',
         body: (
@@ -856,34 +889,30 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
         ),
     }))
 
-  const inputPiece = (agent: PlanAgent, input: PlanAgent['inputs'][number]): { readonly mark: Mark; readonly body: ReactNode } => {
-    const fieldId = `${id}-value-${String(agent.index)}-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-    const key = valueKey(agent.index, input.name)
-    const key_ = key
-    const value = valueOf(form, agent, input.name)
-    const problem = valueProblem(input.kind, value)
-    const said = shown || value !== '' ? problem : null
+  const inputPiece = (agent: PlanAgent, input: PlanAgent['inputs'][number]): { readonly mark: Mark; readonly body: ReactNode } | null => {
     const now = questions.find((q): q is Extract<Question, { kind: 'input' }> => q.kind === 'input' && q.agent === agent.index && q.input === input.name) ?? null
-    if (problem !== null && now === null) return { mark: 'later', body: <span className="muted">{`${input.name}: ${ASKED_NEXT.toLowerCase()}`}</span> }
-    if (now !== null && input.kind === 'jira_project')
+    // A project or a repository has no box of its own: the Then and Watch rows hold the choice, and it feeds the agent.
+    if (input.kind === 'jira_project' || input.kind === 'github_repo') {
+      if (now === null) return null
       return {
         mark: 'ask',
         body: asked(
           now.words,
-          <KeyAsk
-            labelId={`${id}-q-input`}
-            kind="jira_project"
-            picks={projectPicks(now.choices ?? [])}
-            other="Another project"
-            boxLabel={PROJECT_BOX}
-            onChoose={(key) => {
-              focusNext.current = true
-              edit((before) => ({ ...before, typed: { ...before.typed, [key_]: key } }))
-            }}
-          />,
+          input.kind === 'jira_project' ? (
+            <KeyAsk labelId={`${id}-q-input`} kind="jira_project" picks={projectPicks(now.choices ?? [])} other="Another project" boxLabel={PROJECT_BOX} onChoose={chooseJira} />
+          ) : (
+            <KeyAsk labelId={`${id}-q-input`} kind="github_repo" picks={[]} other="Another repository" boxLabel="Repository, as owner/name" hint={REPO_HINT} onChoose={chooseGithub} />
+          ),
           'q-input',
         ),
       }
+    }
+    const fieldId = `${id}-value-${String(agent.index)}-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+    const key = valueKey(agent.index, input.name)
+    const value = valueOf(form, agent, input.name)
+    const problem = valueProblem(input.kind, value)
+    const said = shown || value !== '' ? problem : null
+    if (problem !== null && now === null) return { mark: 'later', body: <span className="muted">{`${input.name}: ${ASKED_NEXT.toLowerCase()}`}</span> }
     const field = (
       <>
         <label className={styles['valueLabel']} htmlFor={fieldId}>
@@ -912,7 +941,16 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   }
 
   const inputPieces = (part: PartKey) =>
-    plan?.kind === 'agents' ? plan.agents.flatMap((agent) => agent.inputs.filter((input) => inputPart(input.kind) === part).map((input) => inputPiece(agent, input))) : []
+    plan?.kind === 'agents'
+      ? plan.agents.flatMap((agent) =>
+          agent.inputs
+            .filter((input) => inputPart(input.kind) === part)
+            .flatMap((input) => {
+              const piece = inputPiece(agent, input)
+              return piece === null ? [] : [piece]
+            }),
+        )
+      : []
 
   const repoQuestion = questions.find((q): q is Extract<Question, { kind: 'repo' }> => q.kind === 'repo')
   const chosenRepo = effectiveRepo(form, matches)
@@ -921,24 +959,27 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
       ? []
       : repoQuestion
         ? [
-            repoQuestion.checking
-              ? { mark: 'ask', body: <span className="muted">Looking for the repository on GitHub…</span> }
-              : {
-                  mark: 'ask',
-                  body: asked(
-                    repoQuestion.words,
-                    <KeyAsk
-                      labelId={`${id}-q-repo`}
-                      kind="github_repo"
-                      picks={repoQuestion.choices.map((one) => ({ key: one.repo, label: one.what === '' ? one.repo : `${one.repo} ${one.what}` }))}
-                      other="Another repository"
-                      boxLabel="Repository, as owner/name"
-                      hint={REPO_HINT}
-                      onChoose={chooseGithub}
-                    />,
-                    'q-repo',
-                  ),
-                },
+            {
+              mark: 'ask',
+              body: asked(
+                repoQuestion.words,
+                <>
+                  {repoQuestion.checking ? <span className={styles['pnote']}>{lookedTooLong ? 'That is taking a while. Type the repository instead.' : 'Looking for the repository on GitHub…'}</span> : null}
+                  {repoQuestion.note ? <span className={styles['pnote']}>{repoQuestion.note}</span> : null}
+                  <KeyAsk
+                    key={`${String(repoQuestion.checking)}-${String(repoQuestion.choices.length)}-${repoQuestion.note ?? ''}`}
+                    labelId={`${id}-q-repo`}
+                    kind="github_repo"
+                    picks={repoQuestion.choices.map((one) => ({ key: one.repo, label: one.what === '' ? one.repo : `${one.repo} ${one.what}` }))}
+                    other="Another repository"
+                    boxLabel="Repository, as owner/name"
+                    {...(repoQuestion.checking || repoQuestion.note ? {} : { hint: REPO_HINT })}
+                    onChoose={chooseGithub}
+                  />
+                </>,
+                'q-repo',
+              ),
+            },
           ]
         : chosenRepo !== null
           ? [

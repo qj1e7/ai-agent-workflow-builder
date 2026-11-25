@@ -181,6 +181,29 @@ describe('the Jira step of the set-up card', () => {
     { kind: 'where', text: '', state: 'missing', note: null },
   ]
   const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
+  const TICKET_PLAN = {
+    decision: 'use_one',
+    agents: [
+      {
+        card: {
+          card_id: 'crd_tickets',
+          name: 'Ticket maker',
+          inputs: [{ name: 'Jira project', kind: 'jira_project', what: 'The Jira project that gets the ticket.', example: 'MOCK' }],
+          blocks: [{ say: 'Create a ticket.', tool: 'jira.create_ticket' }],
+        },
+        values: {},
+        part: '',
+        missing: [],
+      },
+    ],
+    reason: '',
+    questions: [],
+  } as unknown as PlanOut
+  /** The card once the Planner's plan has loaded, which is what says a ticket is written. */
+  const planned = (r: SetupCardReply, typed: string) => {
+    const form = cardFrom(r.name, r.rows, typed, r.parts)
+    return <SetupCard start={{ form, plan: { task: taskWithoutSchedule(form.rows), answer: TICKET_PLAN }, draftId: null, similar: null }} />
+  }
   const partText = (html: string, key: string) =>
     text(
       (html.split(`data-part="${key}"`)[1] ?? '')
@@ -190,7 +213,7 @@ describe('the Jira step of the set-up card', () => {
     )
 
   it('asks which project in the Then row, with the platform’s projects as buttons and a link to type another', () => {
-    const html = render(card(reply, TICKET), { projects: ['MOCK'] })
+    const html = render(planned(reply, TICKET), { projects: ['MOCK'] })
     const then = partText(html, 'Then')
     expect(then).toContain('Create 1 Jira ticket in which project?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['MOCK', 'Another project']))
@@ -201,8 +224,15 @@ describe('the Jira step of the set-up card', () => {
     expect(text(html)).toContain('Pick 1 more to finish')
   })
 
-  it('says each ticket needs an Approver’s approval in Teams under the project question, in place of the old line', () => {
+  it('waits for the plan before it asks where the result goes: no empty chip and no question yet', () => {
     const html = render(card(reply, TICKET), { projects: ['MOCK'] })
+    expect(partText(html, 'Then')).not.toContain('where it goes')
+    expect(partText(html, 'Then')).not.toContain('Where should the result go?')
+    expect(partText(html, 'Then')).not.toContain('in which project?')
+  })
+
+  it('says each ticket needs an Approver’s approval in Teams under the project question, in place of the old line', () => {
+    const html = render(planned(reply, TICKET), { projects: ['MOCK'] })
     expect(text(html)).not.toContain('After a yes')
     expect(partText(html, 'Then')).toContain('Each ticket needs an Approver’s approval in Teams.')
   })
@@ -216,7 +246,7 @@ describe('the Jira step of the set-up card', () => {
 
   it('asks every open part at once from the start: How often?, At what time? and the project, each with its buttons, and counts them', () => {
     const open: SetupCardReply = { ...reply, rows: ROWS.map((row) => (row.kind === 'schedule' ? { ...row, text: '', state: 'missing' as const } : row)) }
-    const html = render(card(open, 'Check LangGraph and create a Jira ticket'), { projects: ['MOCK'] })
+    const html = render(planned(open, 'Check LangGraph and create a Jira ticket'), { projects: ['MOCK'] })
     expect(html.match(/data-mark="ask"/g), 'When and Then are both open').toHaveLength(2)
     const when = partText(html, 'When')
     expect(when).toContain('How often?')
@@ -227,13 +257,13 @@ describe('the Jira step of the set-up card', () => {
   })
 
   it('shows no dead button, and the project buttons are a group named by the question', () => {
-    const html = render(card(reply, TICKET), { projects: ['MOCK'] })
+    const html = render(planned(reply, TICKET), { projects: ['MOCK'] })
     expect(html).not.toMatch(/<button[^>]*disabled/)
     expect(html).toMatch(/role="group" aria-labelledby="[^"]+"/)
   })
 
   it('opens the key box at once when the platform lists no project', () => {
-    const html = render(card(reply, TICKET), { projects: [] })
+    const html = render(planned(reply, TICKET), { projects: [] })
     expect(html).toMatch(/<input[^>]*type="text"/)
     expect(buttons(html)).not.toContain('Another project')
   })

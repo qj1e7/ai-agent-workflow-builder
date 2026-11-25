@@ -912,6 +912,7 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
     <div class="ctl"><span class="lbl" id="tasks-l">Play</span><div class="seg" id="tasks" role="group" aria-labelledby="tasks-l">
       <button type="button" data-t="morning">Morning check</button><button type="button" data-t="words">Ask in my words</button><button type="button" data-t="edit">Change by talking</button><button type="button" data-t="cant">Something it can’t do</button><button type="button" data-t="decline">Bob declines</button><button type="button" data-t="browse">Browse</button><button type="button" data-t="n8n">Edit in n8n</button><button type="button" data-t="draft">Draft a workflow</button><button type="button" data-t="setupyes">Bob approves a draft</button><button type="button" data-t="second">Second Approver</button><button type="button" data-t="explain">Explain</button>
     </div></div>
+    <div class="ctl"><span class="lbl" id="finder-l">Repository finder</span><div class="seg" id="finderSeg" role="group" aria-labelledby="finder-l"><button type="button" data-finder="one">One match</button><button type="button" data-finder="several">Several</button><button type="button" data-finder="none">None</button><button type="button" data-finder="looking">Looking</button><button type="button" data-finder="slow">Slow</button><button type="button" data-finder="reach">Can’t reach GitHub</button><button type="button" data-finder="unchecked">Not checked</button><button type="button" data-finder="operator">Not an Operator</button></div></div>
     <div class="ctl"><span class="lbl" id="cause-l">Why it stopped</span><div class="seg" id="causeSeg" role="group" aria-labelledby="cause-l"><button type="button" data-cause="quiet">No answer</button><button type="button" data-cause="moved">A field moved</button></div></div>
     <div class="ctl"><span class="lbl" id="fixp-l">Fix it for me</span><div class="seg" id="fixSeg" role="group" aria-labelledby="fixp-l"><button type="button" data-fixplan="ready">Ready</button><button type="button" data-fixplan="fails">Test fails</button><button type="button" data-fixplan="back">Handed back</button></div></div>
     <button class="btn ghost sm" id="reset" type="button">Start over</button>
@@ -1152,7 +1153,7 @@ const stepsFor = (then) => (then === 'tell' ? [STEP.when, STEP.read, STEP.compar
 /* The Jira projects the platform may write in. The local stack has MOCK. */
 const JIRA_PROJECTS = ['MOCK'];
 const YES_LINE = 'Each ticket needs an Approver’s approval in Teams.';
-const THEN = { jira: 'Create a Jira ticket, after a yes', tell: 'Tell me here' };
+const THEN = { jira: 'Create a Jira ticket, after approval', tell: 'Tell me here' };
 
 /* ---------- Schedules: a time is never guessed ---------- */
 const DAY = { wkd: 'weekday', man: 'by hand', mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
@@ -2483,6 +2484,10 @@ const CARD_TIMES = ['8:00', '9:00', '13:00', '17:00'];
 function questions(d) {
   const qs = [];
   if (!d.soft) qs.push({ id: 'soft', k: 'Watch', q: 'Which software?', opts: Object.keys(W.soft).filter((k) => !W.soft[k].missing && !W.wf[k]).slice(0, 4).map((k) => [`soft:${k}`, W.soft[k].name]) });
+  if (d.soft && !d.repo && FINDER[W.finder || 'one'].ask) {
+    const f = FINDER[W.finder || 'one'];
+    qs.push({ id: 'repo', k: 'Watch', q: 'Which repository should I watch?', opts: f.opts.map(([r, w]) => [`repo:${r}`, `${r} ${w}`]), other: 'repo', typing: f.opts.length === 0 || d.typing === 'repo', note: f.note });
+  }
   if (d.sched.day === undefined) {
     qs.push(d.weekly
       ? { id: 'day', k: 'When', q: 'Which day?', opts: [['day:mon', 'Mondays'], ['day:wed', 'Wednesdays'], ['day:fri', 'Fridays']] }
@@ -2495,8 +2500,19 @@ function questions(d) {
 const question = (d) => questions(d)[0] || null;
 const openParts = (d) => new Set(questions(d).map((q) => q.k)).size;
 const okRow = (k, v, s = '', change = '') => `<li class="pt" data-s="ok"><span class="ic">${ICON.check}</span><span class="k">${k}</span><span class="v"><span>${v}${change ? ` <button class="linkbtn" type="button" data-pchg="${change}" aria-label="Change ${k.toLowerCase()}">Change</button>` : ''}</span>${s ? `<span class="s">${s}</span>` : ''}</span></li>`;
-const OTHER = { time: ['Another time', 'Like 7:45 or 6pm', 'Time'], proj: ['Another project', 'Like MOCK', 'Which Jira project should the ticket go in?'] };
-const askBlock = (q, d) => `<span class="aq"><span id="pq-${d.key}-${q.id}">${q.q}</span><span class="pick" role="group" aria-labelledby="pq-${d.key}-${q.id}">${q.opts.map(([v, l]) => `<button type="button" data-pick="${v}">${l}</button>`).join('')}${q.other ? `<button class="linkbtn" type="button" data-ptype="${q.other}" aria-expanded="${q.typing ? 'true' : 'false'}">${OTHER[q.other][0]}</button>` : ''}</span>${q.typing ? `<form class="askf" data-ptf="${q.other}"><input type="text" autocomplete="off" placeholder="${OTHER[q.other][1]}" aria-label="${OTHER[q.other][2]}"${q.miss ? ' aria-invalid="true"' : ''}><button class="btn sm" type="submit">Use it</button></form>${q.miss ? `<span class="s">${q.other === 'proj' ? 'Write the project key, such as MOCK.' : 'I couldn’t read a time in that.'}</span>` : ''}` : ''}</span>`;
+/* What the software finder says, as the Portal draws it (25 Nov). One clear match fills the row, so it asks nothing. */
+const FINDER = {
+  one: { ask: false },
+  several: { ask: true, opts: [['fastapi/fastapi', 'FastAPI web framework'], ['tiangolo/fastapi', 'An older address']], note: '' },
+  none: { ask: true, opts: [], note: '', hint: true },
+  looking: { ask: true, opts: [], note: 'Looking for the repository on GitHub…' },
+  slow: { ask: true, opts: [], note: 'That is taking a while. Type the repository instead.' },
+  reach: { ask: true, opts: [], note: 'I couldn’t reach GitHub just now.' },
+  unchecked: { ask: true, opts: [], note: 'GitHub did not answer.' },
+  operator: { ask: true, opts: [], note: 'Only an Operator can look a repository up.' },
+};
+const OTHER = { repo: ['Another repository', 'Like owner/name', 'Repository, as owner/name'], time: ['Another time', 'Like 7:45 or 6pm', 'Time'], proj: ['Another project', 'Like MOCK', 'Which Jira project should the ticket go in?'] };
+const askBlock = (q, d) => `<span class="aq"><span id="pq-${d.key}-${q.id}">${q.q}</span>${q.note ? `<span class="s">${q.note}</span>` : ''}<span class="pick" role="group" aria-labelledby="pq-${d.key}-${q.id}">${q.opts.map(([v, l]) => `<button type="button" data-pick="${v}">${l}</button>`).join('')}${q.other ? `<button class="linkbtn" type="button" data-ptype="${q.other}" aria-expanded="${q.typing ? 'true' : 'false'}">${OTHER[q.other][0]}</button>` : ''}</span>${q.typing ? `<form class="askf" data-ptf="${q.other}"><input type="text" autocomplete="off" placeholder="${OTHER[q.other][1]}" aria-label="${OTHER[q.other][2]}"${q.miss ? ' aria-invalid="true"' : ''}><button class="btn sm" type="submit">Use it</button></form>${q.id === 'repo' && !q.note ? '<span class="s">The public repository to watch, as owner/name.</span>' : ''}${q.miss ? `<span class="s">${q.other === 'proj' ? 'Write the project key, such as MOCK.' : q.other === 'repo' ? 'Write it as owner/name, such as langchain-ai/langgraph.' : 'I couldn’t read a time in that.'}</span>` : ''}` : ''}</span>`;
 const askRow = (k, qs, d, before = '', after = '') => `<li class="pt" data-s="ask"><span class="ic" role="img" aria-label="Question">?</span><span class="k">${k}</span><span class="v">${before}${qs.map((q) => askBlock(q, d)).join('')}${after}</span></li>`;
 const noRow = (c) => `<li class="pt wide" data-s="no"><span class="ic" role="img" aria-label="Can’t do">${ICON.x}</span><span class="v"><span><b>${esc(c.label)}.</b> <span class="s">${c.why}</span>${c.ask ? ' <button class="linkbtn" type="button" data-toast="Asked the team. Their answer will show here.">Ask the team</button>' : ''}</span></span></li>`;
 const thenSelect = (d) => `<select data-then="${d.key}" aria-label="Then">${Object.entries(THEN).map(([v, l]) => `<option value="${v}"${v === d.then ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
@@ -2510,7 +2526,7 @@ function partsRows(d) {
   const then = (o) => `${asking ? thenSelect(d) : THEN[d.then]}${o}`;
   const yes = d.then === 'jira' ? `<span class="s">${YES_LINE}</span>` : '';
   return [
-    d.soft ? okRow('Watch', `${S.name} on ${srcOf(S)}`, `Found on GitHub. ${W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.'}`, asking ? 'soft' : '') : of('Watch').length ? askRow('Watch', of('Watch'), d) : '',
+    of('Watch').length ? askRow('Watch', of('Watch'), d) : d.soft ? okRow('Watch', `${S.name} on ${srcOf(S)}${d.repo ? `, ${d.repo}` : ''}`, `Found on GitHub. ${W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.'}`, asking ? 'soft' : '') : '',
     whenDone ? okRow('When', long(d.sched), '', asking ? 'when' : '') : of('When').length ? askRow('When', of('When'), d, chosen) : '',
     d.then === 'jira' && of('Then').length
       ? askRow('Then', of('Then'), d, `<span>${then('')}</span>`, yes)
@@ -2546,6 +2562,7 @@ function pickPart(btn) {
   if (!d || d.status !== 'asking') return;
   const [k, v] = btn.dataset.pick.split(/:(.*)/);
   if (k === 'soft') d.soft = v;
+  if (k === 'repo') d.repo = v;
   if (k === 'day') {
     if (v === 'wk') d.weekly = true;
     else { d.weekly = false; d.sched.day = v || null; if (v === 'man') d.sched.time = 'by hand'; else if (d.sched.time === 'by hand') d.sched.time = null; }
@@ -2563,7 +2580,7 @@ function changePart(btn) {
   const c = btn.closest('[data-parts]');
   const d = W.drafts[c.dataset.parts];
   const what = btn.dataset.pchg;
-  if (what === 'soft') d.soft = undefined;
+  if (what === 'soft') { d.soft = undefined; d.repo = undefined; }
   if (what === 'when') { d.sched = { day: undefined, time: null }; d.weekly = false; }
   if (what === 'proj') d.project = undefined;
   patchParts(c);
@@ -2574,7 +2591,10 @@ function typedPart(form) {
   const c = form.closest('[data-parts]');
   const d = W.drafts[c.dataset.parts];
   const v = $('input', form).value.trim();
-  if (form.dataset.ptf === 'proj') {
+  if (form.dataset.ptf === 'repo') {
+    if (!/^[\w.-]+\/[\w.-]+$/.test(v)) { d.typeMiss = true; patchParts(c); $('[data-ptf] input', c)?.focus(); return; }
+    d.repo = v;
+  } else if (form.dataset.ptf === 'proj') {
     const key = v.toUpperCase();
     if (!/^[A-Z][A-Z0-9_]+$/.test(key)) { d.typeMiss = true; patchParts(c); $('[data-ptf] input', c)?.focus(); return; }
     d.project = key;
@@ -3695,6 +3715,9 @@ $('#causeSeg').addEventListener('click', (e) => { const b = e.target.closest('bu
 $('#fixSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { FIXPLAN = b.dataset.fixplan; press($('#fixSeg'), 'data-fixplan', FIXPLAN); } });
 press($('#fixSeg'), 'data-fixplan', FIXPLAN);
 press($('#causeSeg'), 'data-cause', 'quiet');
+/* What the software finder says, for the Planner's card: one clear match, several, none, still looking, slow, or a trouble (25 Nov). */
+$('#finderSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; W.finder = b.dataset.finder; press($('#finderSeg'), 'data-finder', W.finder); $$('[data-parts]').forEach(patchParts); });
+press($('#finderSeg'), 'data-finder', 'one');
 $('#reset').addEventListener('click', () => { press($('#tasks'), 'data-t', ''); scene(whoWorld(whoNow()), true); });
 $('#composer').addEventListener('submit', (e) => {
   e.preventDefault();

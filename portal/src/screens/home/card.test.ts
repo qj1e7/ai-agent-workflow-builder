@@ -807,7 +807,7 @@ describe('the Planner’s set-up card', () => {
 
     it('asks first, before When and the Jira project, with each match as a choice', () => {
       const asked = questionsOf(fastapi(), null, ['MOCK'], { state: 'found', matches: MATCHES })
-      expect(asked[0]).toEqual({ kind: 'repo', words: 'Which repository should I watch?', choices: MATCHES, checking: false })
+      expect(asked[0]).toEqual({ kind: 'repo', words: 'Which repository should I watch?', choices: MATCHES, checking: false, note: null })
     })
 
     it('is looking while the finder works, and has no choices when it found none', () => {
@@ -933,7 +933,7 @@ describe('the Planner’s set-up card', () => {
         'MOCK',
       )
       const saved = draftContent(chosen, null)
-      const reopened = restoreDraft({ draft_id: 'd1', step: 2, content: saved, created_at: '2026-11-03T07:00:00Z', saved_at: '2026-11-03T07:00:00Z' } as DraftView)
+      const reopened = restoreDraft({ draft_id: 'd1', step: 2, content: saved, created_at: '2026-11-03T07:00:00Z', saved_at: '2026-11-03T07:00:00Z' })
       expect(reopened.form.rows.find((row) => row.kind === 'where')).toMatchObject({ text: 'In the MOCK project', state: 'edited' })
       expect(reopened.form.rows.some((row) => row.state === 'checking')).toBe(false)
     })

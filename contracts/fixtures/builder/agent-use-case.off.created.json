@@ -27,7 +27,7 @@
     {
       "at": "2026-11-02T01:00:00.040000Z",
       "kind": "check",
-      "text": "Every write waits for a yes."
+      "text": "Every write waits for approval."
     },
     {
       "at": "2026-11-02T01:00:00.820000Z",

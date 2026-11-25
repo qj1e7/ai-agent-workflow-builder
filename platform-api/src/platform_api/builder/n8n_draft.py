@@ -30,7 +30,7 @@ from platform_api.orchestration import (
 ADDING = "Adding blocks in n8n…"
 FIT = "The blocks fit together."
 CHECKING = "Safety checker is checking the write…"
-EVERY_WRITE = "Every write waits for a yes."
+EVERY_WRITE = "Every write waits for approval."
 SAVED = "Saved as a draft in n8n."
 WHAT_IS_WRITTEN: Mapping[str, str] = {
     "Create ticket": "each ticket",

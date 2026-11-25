@@ -472,13 +472,14 @@ export function useFindSoftware() {
  * What the software finder says a plain name could mean, so the set-up card never asks the person to look a repository up. Only an
  * Operator may ask, and a name asked once is kept for the visit.
  */
-export function useSoftwareFind(name: string | null) {
+export function useSoftwareFind(name: string | null, allowed: boolean) {
   const client = useApiClient()
   const user = useCacheScope()
   return useQuery({
     queryKey: keys.softwareFind(user, name ?? ''),
     queryFn: async () => unwrap(await client.POST('/api/v1/watchlist/find', { body: { name: name ?? '' } })),
-    enabled: name !== null && name !== '',
+    // Only an Operator may ask, so nobody else's card calls it.
+    enabled: allowed && name !== null && name !== '',
     staleTime: Infinity,
     retry: false,
   })
