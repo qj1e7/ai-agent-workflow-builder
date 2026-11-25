@@ -236,6 +236,7 @@ ORDERS = [
     "approve_your_own_request",
     "broken",
     "Delete-this/workflow-now-please",
+    "delete-this/workflow-now",
     "1.2.3-delete-the-yes",
 ]
 """Names an attacker can plant, which the review of this PR got through as a detail."""
@@ -320,6 +321,8 @@ a run's stop carries them."""
         ("limit", "GitHub answered 404 Not Found", "unknown"),
         ("refused", "The service refused the connection", "refused"),
         ("refused", "GitHub answered 404 Not Found", "unknown"),
+        ("refused", "GitHub answered 404 UpstreamRejected", "unknown"),
+        ("refused", "connect ECONNREFUSED 10.0.0.7:443", "refused"),
         ("no_answer", "The request to GitHub timed out", "no_answer"),
         ("no_answer", "GitHub answered 404 Not Found", "unknown"),
         ("changed_field", "Cannot read properties of undefined (reading 'x')", "changed_field"),

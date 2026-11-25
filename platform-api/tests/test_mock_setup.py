@@ -389,6 +389,9 @@ class FakeSimulationN8n:
     async def run_draft(self, workflow_id: str, item: Mapping[str, Any]) -> str:
         raise AssertionError("This stand-in runs nothing.")
 
+    async def stop(self, execution_id: str) -> None:
+        raise AssertionError("This stand-in runs nothing, so it stops nothing.")
+
     async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
         return None
 

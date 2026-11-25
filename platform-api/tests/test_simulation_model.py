@@ -251,8 +251,16 @@ async def test_nothing_is_asked_without_a_model_or_without_a_failure() -> None:
         note(scenario="happy_path", block="Compare", kind="stopped"),
         note(scenario="odd_data", block="Ask for a yes", kind="stopped"),
         note(scenario="odd_data", block="Compare", kind="stopped", source="Compare"),
+        note(scenario="odd_data", block="Compare", kind="stopped", detail="langchain-ai/langgraph"),
+        note(scenario="odd_data", block="Compare", kind="stopped", detail="tag"),
     ],
-    ids=["a-scenario-that-passed", "a-block-that-did-not-run", "a-source-not-played"],
+    ids=[
+        "a-scenario-that-passed",
+        "a-block-that-did-not-run",
+        "a-source-not-played",
+        "a-detail-not-in-what-happened",
+        "part-of-a-name-as-the-detail",
+    ],
 )
 async def test_a_note_outside_its_scenarios_facts_is_left_out_here_too(picked: FailureNote) -> None:
     agents = FakeAgents(explain_answer=ScenariosExplained(notes=[picked], kept=[]))

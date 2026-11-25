@@ -167,6 +167,41 @@ def test_a_block_after_a_write_is_one_a_simulation_never_runs() -> None:
     assert planned(release_check(write=False)).after_write == frozenset()
 
 
+def with_write(**settings: Any) -> dict[str, Any]:
+    version = release_check()
+    write = next(n for n in version["nodes"] if n["name"] == EXITS[1])
+    write.update(settings)
+    return version
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [{"onError": "continueRegularOutput"}, {"continueOnFail": True}],
+    ids=["continue", "continue-on-fail"],
+)
+def test_a_write_set_to_go_on_after_a_failure_runs_the_blocks_after_it(
+    settings: dict[str, Any],
+) -> None:
+    """n8n passes the refusal on as an item, so Tell runs in a simulation too."""
+    assert planned(with_write(**settings)).after_write == frozenset()
+
+
+def test_a_write_that_sends_a_failure_to_its_error_exit_runs_only_that_exit() -> None:
+    version = with_write(onError="continueErrorOutput")
+    version["nodes"].append(block("On error", "n8n-nodes-base.noOp"))
+    version["connections"][EXITS[1]] = {
+        "main": [
+            [{"node": "Tell", "type": "main", "index": 0}],
+            [{"node": "On error", "type": "main", "index": 0}],
+        ]
+    }
+    assert planned(version).after_write == frozenset({"Tell"})
+
+
+def test_a_write_set_to_stop_on_a_failure_ends_the_run() -> None:
+    assert planned(with_write(onError="stopWorkflow")).after_write == frozenset({"Tell"})
+
+
 def test_a_version_with_no_start_from_the_portal_is_refused_in_words() -> None:
     version = release_check()
     version["nodes"] = [n for n in version["nodes"] if n["name"] != START]

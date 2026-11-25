@@ -54,6 +54,8 @@ class FakeN8n:
     )
     """Each run of a draft by hand: the workflow, and the body n8n was sent."""
     retries: list[str] = field(default_factory=list[str])
+    stops: list[str] = field(default_factory=list[str])
+    """Each execution n8n was asked to stop."""
     retry_answer: str = "stops"
     """How n8n answers a retry: "stops" once the retry stopped, "slow" never in time, "slow
     refusal" never in time and with no retry made, or with "succeeded" when the execution needs
@@ -397,6 +399,19 @@ class FakeN8n:
                 )
                 workflow.update(activeVersionId=None, active=False)
                 return httpx.Response(200, json=workflow)
+            case "POST", ["executions", execution_id, "stop"]:
+                key = request.headers.get("X-N8N-API-KEY", "")
+                if "execution:stop" not in self.scopes.get(key, {"execution:stop"}):
+                    return httpx.Response(403, json={"message": "Forbidden"})
+                self.stops.append(execution_id)
+                found = self.executions.get(execution_id)
+                if found is None:
+                    return httpx.Response(404, json={"message": "Failed to find execution to stop"})
+                if found["status"] not in ("new", "unknown", "running", "waiting"):
+                    message = "Only running or waiting executions can be stopped"
+                    return httpx.Response(409, json={"message": message})
+                found["status"] = "canceled"
+                return httpx.Response(200, json={"mode": found.get("mode"), "status": "canceled"})
             case "POST", ["executions", execution_id, "retry"]:
                 key = request.headers.get("X-N8N-API-KEY", "")
                 if "execution:retry" not in self.scopes.get(key, {"execution:retry"}):

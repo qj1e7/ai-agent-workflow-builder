@@ -151,6 +151,14 @@ describe.each(Object.entries(CASES))('%s', (_name, c) => {
     await expect(run(c, api)).rejects.toThrow(/HTTP 422/);
   });
 
+  it('follows no redirect, so a call that may have landed is never sent on as a GET (ADR 0056)', async () => {
+    const api = new FakeApi().redirects(`${API_URL}/elsewhere`);
+    await expect(run(c, api)).rejects.toThrow(/HTTP 303/);
+    expect(api.sent.map((sent) => [sent.method, sent.url])).toEqual([
+      ['POST', `${API_URL}/internal/v1/n8n/${c.path}`],
+    ]);
+  });
+
   it('throws on a server error so n8n can retry', async () => {
     const api = new FakeApi().answers(503, { detail: 'down' });
     await expect(run(c, api)).rejects.toThrow(/HTTP 503/);

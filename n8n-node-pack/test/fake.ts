@@ -34,6 +34,7 @@ type Answer = { statusCode: number; body: unknown } | Error;
 export class FakeApi {
   readonly sent: SentRequest[] = [];
   private answer: Answer = { statusCode: 200, body: {} };
+  private location: string | undefined;
 
   answers(statusCode: number, body: unknown): this {
     this.answer = { statusCode, body };
@@ -42,6 +43,13 @@ export class FakeApi {
 
   fails(error: Error): this {
     this.answer = error;
+    return this;
+  }
+
+  /** Answers 303 See Other to the next request, pointing at `location`. */
+  redirects(location: string): this {
+    this.location = location;
+    this.answer = { statusCode: 303, body: '' };
     return this;
   }
 
@@ -54,6 +62,13 @@ export class FakeApi {
       body: options.body,
     });
     const answer = this.answer;
+    // n8n's httpRequest follows a redirect unless told not to, and a 303 turns a POST into a GET.
+    const follow = this.location;
+    if (follow !== undefined && options.disableFollowRedirect !== true) {
+      this.location = undefined;
+      this.answer = { statusCode: 200, body: {} };
+      return this.httpRequest({ ...options, method: 'GET', url: follow, body: undefined, qs: undefined });
+    }
     if (answer instanceof Error) return Promise.reject(answer);
     if (answer.statusCode >= 400 && !options.ignoreHttpStatusErrors) {
       return Promise.reject(new Error(`Request failed with status code ${answer.statusCode}`));

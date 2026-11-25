@@ -7,6 +7,7 @@ import json
 import re
 import secrets
 from collections.abc import Iterator, Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ from platform_api.orchestration.n8n_calls import (
     WriteCall,
 )
 from platform_api.orchestration.recorded_samples import RecordedSamples
+from platform_api.orchestration.scenario_grades import ENDED
 from platform_api.orchestration.scenarios import KINDS, GitHubPlay, ScenarioSpec
 from platform_api.orchestration.simulated_calls import SimulatedCalls
 from platform_api.orchestration.simulation_gateway import gateway_app
@@ -84,6 +86,12 @@ class LineN8n(FakeSimulationN8n):
         self.served: dict[str, list[Any]] = {}
         self.fail_runs = False
         self.fail_deletes = False
+        self.hang_runs = False
+        """Each run by hand stays running, as a run past the wait limit does."""
+        self.asked: list[dict[str, Any]] = []
+        """The start item of each run by hand n8n was asked for."""
+        self.order: list[tuple[str, str]] = []
+        """Each stop and delete, in turn, with the execution or workflow it was for."""
 
     async def create(self, document: Mapping[str, Any]) -> Any:
         made = await super().create(document)
@@ -92,6 +100,7 @@ class LineN8n(FakeSimulationN8n):
 
     async def delete(self, workflow_id: str) -> None:
         self.deleted.append(workflow_id)
+        self.order.append(("delete", workflow_id))
         if self.fail_deletes:
             raise RuntimeError("something nobody expected")
         self.copies.pop(workflow_id, None)
@@ -100,13 +109,22 @@ class LineN8n(FakeSimulationN8n):
         return self.records.get(execution_id)
 
     async def run_draft(self, workflow_id: str, item: Mapping[str, Any]) -> str:
+        self.asked.append(dict(item))
         if self.fail_runs:
             raise N8nError("the simulation n8n is down")
         execution = str(len(self.records) + 100)
         nonce = str(item["nonce"])
         self.records[execution] = record(execution, workflow_id, nonce, "running", {})
-        await self._run(execution, workflow_id, nonce, self.copies[workflow_id])
+        if not self.hang_runs:
+            await self._run(execution, workflow_id, nonce, self.copies[workflow_id])
         return execution
+
+    async def stop(self, execution_id: str) -> None:
+        """n8n's stop: a run still going or waiting ends as canceled."""
+        self.order.append(("stop", execution_id))
+        found = self.records.get(execution_id)
+        if found is not None and found.status not in ENDED:
+            self.records[execution_id] = replace(found, status="canceled")
 
     async def _run(
         self, execution: str, workflow: str, nonce: str, document: Mapping[str, Any]
@@ -242,6 +260,19 @@ def record(
     )
 
 
+class Ticks:
+    """A clock that moves only when the simulation waits."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def clock(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+
 class Stack:
     def __init__(self) -> None:
         self.github = FakeMockGitHub()
@@ -250,8 +281,14 @@ class Stack:
         self.calls = SimulatedCalls(self.n8n, self.waker, None, sleep=no_wait)
         self.n8n.calls, self.n8n.waker = self.calls, self.waker
         self.setups = MockSetups(self.n8n, mock_keys(GITHUB_URL, None, None))
+        self.ticks = Ticks()
         self.simulations = Simulations(
-            self.setups, self.calls, self.n8n, self.github, sleep=no_wait
+            self.setups,
+            self.calls,
+            self.n8n,
+            self.github,
+            sleep=self.ticks.sleep,
+            clock=self.ticks.clock,
         )
 
     async def simulate(
@@ -347,6 +384,36 @@ async def test_mock_github_is_set_back_even_when_the_delete_fails_unexpectedly(
         await stack.simulate(release_check([github_read()]))
     assert len(stack.n8n.deleted) == 1
     assert stack.github.played[-1] is None
+
+
+@pytest.mark.anyio
+async def test_a_run_still_going_when_the_wait_ends_is_stopped_before_its_copy_is_deleted(
+    stack: Stack,
+) -> None:
+    """n8n 2.42.6 deletes a workflow's executions with it, but stops none that is running or
+    waiting (WorkflowService.delete), so the run would go on calling the gateway."""
+    stack.n8n.hang_runs = True
+    simulation = await stack.simulate(release_check(), [{"kind": "happy_path"}])
+    assert verdicts(simulation) == {"happy_path": "failed"}
+    [execution] = stack.n8n.records
+    [copy] = stack.n8n.deleted
+    assert stack.n8n.order == [("stop", execution), ("delete", copy)]
+    assert stack.n8n.records[execution].status == "canceled"
+
+
+@pytest.mark.anyio
+async def test_a_run_that_ended_is_not_stopped(stack: Stack) -> None:
+    await stack.simulate(release_check())
+    assert [what for what, _ in stack.n8n.order] == ["delete"] * len(KINDS)
+
+
+@pytest.mark.anyio
+async def test_the_gateway_forgets_the_run_of_a_start_n8n_never_ran(stack: Stack) -> None:
+    stack.n8n.fail_runs = True
+    with pytest.raises(N8nError):
+        await stack.simulate(release_check())
+    [item] = stack.n8n.asked
+    assert stack.calls.run(str(item["nonce"])) is None
 
 
 @pytest.mark.anyio
