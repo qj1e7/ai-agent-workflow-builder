@@ -1,7 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import type { ExplainFlag, ExplainSetting, ExplainTouch, Segment, WorkflowExplained } from '../../api/types'
-import { gradePill } from '../workflows/n8nChange'
-import { approvalGist, approvesGist, FLAGS_ANCHOR, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist } from './explain'
+import { useState, type ReactNode } from 'react'
+import type { ExplainCleared, ExplainFlag, ExplainSetting, ExplainTouch, ExplainWrite, Segment, WorkflowExplained } from '../../api/types'
+import { approvalGist, approvesGist, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist } from './explain'
 import styles from './Report.module.css'
 
 /** A string from the plan or the document shows in curly quotes, apart from code's own words, so a block named “Security approved” can't read as a verdict. */
@@ -23,15 +22,14 @@ interface SectionProps {
   readonly title: string
   readonly gist: string
   readonly startOpen: boolean
-  readonly id?: string | undefined
   readonly children: ReactNode
 }
 
 /** A row with its gist, closed until a click or Enter opens it. The browser's own disclosure keeps the keyboard and the screen reader's state. */
-function Section({ title, gist, startOpen, id, children }: SectionProps) {
+function Section({ title, gist, startOpen, children }: SectionProps) {
   const [open, setOpen] = useState(startOpen)
   return (
-    <details id={id} className={styles['section']} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <details className={styles['section']} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary>
         <span className={styles['title']}>{title}</span>
         <span className={styles['gist']}>{gist}</span>
@@ -61,7 +59,7 @@ function Touch({ touch }: { touch: ExplainTouch }) {
   )
 }
 
-/** What it reads, writes and posts, one row for each. The approval page draws it open, the report as a row. */
+/** What it reads, writes and posts, one row for each. The set-up approval draws it in view, the report as a row. */
 export function Touches({ touches }: { touches: readonly ExplainTouch[] }) {
   if (touches.length === 0) return <p>It reads, writes and posts nothing.</p>
   return (
@@ -90,6 +88,23 @@ export function Flag({ flag }: { flag: ExplainFlag }) {
   )
 }
 
+/** Who decides each write, one row for each. The set-up approval draws it in view, the report as a row. */
+export function WhoApproves({ approves }: { approves: readonly ExplainWrite[] }) {
+  if (approves.length === 0) return <p>It writes nothing, so nobody approves a write.</p>
+  return (
+    <ul className={styles['rows']}>
+      {approves.map((write, index) => (
+        <li key={index}>
+          <b>
+            <Quoted text={write.block} />
+          </b>
+          <span className={styles['s']}>{write.words}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function Setting({ setting }: { setting: ExplainSetting }) {
   return (
     <li>
@@ -104,45 +119,65 @@ function Setting({ setting }: { setting: ExplainSetting }) {
   )
 }
 
+/** Each value it runs with, a write block's key among them, with where it came from or its mark, so a guess never reads as given. */
+export function Settings({ settings }: { settings: readonly ExplainSetting[] }) {
+  return (
+    <ul className={styles['rows']}>
+      {settings.map((setting, index) => (
+        <Setting key={index} setting={setting} />
+      ))}
+    </ul>
+  )
+}
+
+function Cleared({ title, items }: { title: string; items: readonly ExplainCleared[] }) {
+  if (items.length === 0) return null
+  return (
+    <>
+      <p className={styles['sub']}>{title}</p>
+      <ul className={styles['ok']}>
+        {items.map((item) => (
+          <li key={item.rule}>{item.words}</li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
+/** What code made sure of when it laid the workflow out, then every other rule no block breaks, in the safety checker's words. */
+export function Checks({ report }: { report: Pick<WorkflowExplained, 'fixed' | 'passed'> }) {
+  return (
+    <>
+      <Cleared title="Fixed for you" items={report.fixed} />
+      <Cleared title="Passed" items={report.passed} />
+    </>
+  )
+}
+
 interface ReportProps {
   readonly report: WorkflowExplained
   readonly code?: boolean
   /** Swaps between the reworded In short and code's. Only the chat card gives it. */
   readonly onWording?: () => void
-  /** Leaves out In short and the row of what it reads, writes and posts, for a page that already says them above. */
-  readonly rest?: boolean
-  /** Opens on the flags, for a page reached from Needs a fix. */
-  readonly flagsOpen?: boolean
 }
 
 /**
- * The workflow report (layout B): In short first, then one row per section with its gist. The chat card, the side panel and the
- * full page draw this one component. Everything under In short is code's own words. Settings opens by itself while an answer is needed.
+ * The workflow report (layout B): In short first, then one row per section with its gist. The chat's Explain answer draws it.
+ * Everything under In short is code's own words. Settings opens by itself while an answer is needed.
  */
-export function Report({ report, code = false, onWording, rest = false, flagsOpen = false }: ReportProps) {
-  useEffect(() => {
-    if (flagsOpen) document.getElementById(FLAGS_ANCHOR)?.scrollIntoView({ block: 'start' })
-  }, [flagsOpen])
+export function Report({ report, code = false, onWording }: ReportProps) {
   const rewordedShown = report.reworded !== null && !code
-  const thenGrade = report.then === null ? null : gradePill(report.then.grade).label
   return (
     <div className={styles['report']}>
-      {rest ? null : (
-        <p className={styles['short']} data-in-short>
-          <Words segments={rewordedShown && report.reworded !== null ? segmentsOfText(report.reworded) : report.in_short} />
-        </p>
-      )}
-      {report.reworded !== null && onWording && !rest ? (
+      <p className={styles['short']} data-in-short>
+        <Words segments={rewordedShown && report.reworded !== null ? segmentsOfText(report.reworded) : report.in_short} />
+      </p>
+      {report.reworded !== null && onWording ? (
         <p className={styles['wording']}>
           <span className={styles['label']}>{rewordedShown ? 'Reworded' : 'Code’s wording'}</span>
           <button type="button" className={styles['linkButton']} onClick={onWording}>
             {rewordedShown ? 'Show code’s wording' : 'Show the reworded one'}
           </button>
-        </p>
-      ) : null}
-      {report.then !== null && thenGrade !== null ? (
-        <p className={styles['version']}>
-          Version {report.then.number}. Checked again under today’s rules. Graded {thenGrade} when it was published, and {gradePill(report.grade).label} today.
         </p>
       ) : null}
       <div className={styles['sections']}>
@@ -161,56 +196,18 @@ export function Report({ report, code = false, onWording, rest = false, flagsOpe
             ))}
           </ol>
         </Section>
-        {rest ? null : (
-          <Section title="What it reads, writes and posts" gist={touchesGist(report.touches)} startOpen={false}>
-            <Touches touches={report.touches} />
-          </Section>
-        )}
-        <Section title="Flags" gist={flagsGist(report)} startOpen={flagsOpen} id={flagsOpen ? FLAGS_ANCHOR : undefined}>
+        <Section title="What it reads, writes and posts" gist={touchesGist(report.touches)} startOpen={false}>
+          <Touches touches={report.touches} />
+        </Section>
+        <Section title="Flags" gist={flagsGist(report)} startOpen={false}>
           {report.flags.length === 0 ? <p>No flags.</p> : <ul className={styles['rows']}>{report.flags.map((flag, index) => <Flag key={index} flag={flag} />)}</ul>}
-          {report.fixed.length > 0 ? (
-            <>
-              <p className={styles['sub']}>Fixed for you</p>
-              <ul className={styles['ok']}>
-                {report.fixed.map((item) => (
-                  <li key={item.rule}>{item.words}</li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {report.passed.length > 0 ? (
-            <>
-              <p className={styles['sub']}>Passed</p>
-              <ul className={styles['ok']}>
-                {report.passed.map((item) => (
-                  <li key={item.rule}>{item.words}</li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+          <Checks report={report} />
         </Section>
         <Section title="Who approves each write" gist={approvesGist(report.approves)} startOpen={false}>
-          {report.approves.length === 0 ? (
-            <p>It writes nothing, so nobody approves a write.</p>
-          ) : (
-            <ul className={styles['rows']}>
-              {report.approves.map((write, index) => (
-                <li key={index}>
-                  <b>
-                    <Quoted text={write.block} />
-                  </b>
-                  <span className={styles['s']}>{write.words}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <WhoApproves approves={report.approves} />
         </Section>
         <Section title="Settings" gist={settingsGist(report.settings)} startOpen={report.needs_an_answer > 0}>
-          <ul className={styles['rows']}>
-            {report.settings.map((setting, index) => (
-              <Setting key={index} setting={setting} />
-            ))}
-          </ul>
+          <Settings settings={report.settings} />
         </Section>
         <Section title="Approval" gist={approvalGist(report.approval)} startOpen={false}>
           <p>{report.approval}</p>

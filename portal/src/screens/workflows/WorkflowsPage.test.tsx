@@ -277,25 +277,23 @@ const navNames = (html: string) =>
 const primaries = (html: string) => (html.match(/<(?:a|button)\b[^>]*class="[^"]*_primary_[^"]*"[^>]*>/g) ?? []).length
 const labelsOf = (html: string, ...label: string[]) => label.flatMap((words) => [...html.matchAll(new RegExp(`>${words}<`, 'g'))])
 
-describe('Explain beside each row', () => {
-  const explains = (html: string, id: string) => [...rowOf(html, id).matchAll(/<a\b[^>]*href="([^"]*explain[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [text(m[2] ?? ''), m[1]])
+describe('each row', () => {
+  const links = (html: string, id: string) => [...rowOf(html, id).matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>/g)].map((m) => m[1])
 
-  it('puts an Explain link to the workflow’s report beside every workflow row, for an Operator and for an Approver', () => {
+  it('has one link, to the workflow’s page, and no Explain, for an Operator and for an Approver', () => {
     for (const me of [ALICE, BOB]) {
       const html = render({ me, useCases: [STOPPED_BUGS, LANGGRAPH] })
-      expect(explains(html, 'uc_bugs'), me.id).toEqual([['Explain Morning bug report check', '/workflows/uc_bugs/explain']])
-      expect(explains(html, 'uc_lang'), me.id).toEqual([[`Explain ${LANGGRAPH.name}`, '/workflows/uc_lang/explain']])
+      expect(links(html, 'uc_bugs'), me.id).toEqual(['/workflows/uc_bugs'])
+      expect(links(html, 'uc_lang'), me.id).toEqual(['/workflows/uc_lang'])
+      expect(text(mainOf(html)), me.id).not.toMatch(/\bExplain\b/)
+      expect(mainOf(html), me.id).not.toContain('/explain')
     }
   })
 
-  it('keeps the row’s own link as it was, so the row still opens the workflow', () => {
-    const row = rowOf(render({ useCases: [STOPPED_BUGS] }), 'uc_bugs')
-    expect(row).toMatch(/<a\b[^>]*href="\/workflows\/uc_bugs"/)
-  })
-
-  it('gives the Software watchlist its Explain too, and its row opens its workflow page', () => {
+  it('opens the Software watchlist’s workflow page, with no Explain beside it', () => {
     const html = render({ useCases: [WAITING_WATCHLIST] })
-    expect(explains(html, 'uc_01JB7')).toEqual([[`Explain ${WAITING_WATCHLIST.name}`, '/workflows/uc_01JB7/explain']])
+    expect(links(html, 'uc_01JB7')).toEqual(['/workflows/uc_01JB7'])
+    expect(text(rowOf(html, 'uc_01JB7'))).not.toMatch(/\bExplain\b/)
   })
 })
 

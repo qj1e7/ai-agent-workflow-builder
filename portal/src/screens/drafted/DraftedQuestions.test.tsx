@@ -140,7 +140,7 @@ describe('Edit in n8n', () => {
     expect(text(html)).toContain('Open in your own n8n space, without its keys.')
     expect(html).toContain('href="https://n8n.example/workflow/wfDraftEdit01"')
     expect(html).toContain('target="_blank"')
-    expect(buttons(html)).toEqual(['See the report', 'Open n8n (opens in a new tab)', 'Done in n8n'])
+    expect(buttons(html)).toEqual(['Open n8n (opens in a new tab)', 'Done in n8n'])
     expect(text(html)).not.toContain('Answer')
   })
 
@@ -159,7 +159,7 @@ describe('Edit in n8n', () => {
   it('tells anyone else who has it open, with no buttons for it', () => {
     const html = card({ ...IN_N8N, in_n8n: { ...IN_N8N.in_n8n!, editor_url: null } })
     expect(text(html)).toContain('Carol has it open in n8n.')
-    expect(buttons(html)).toEqual(['See the report'])
+    expect(buttons(html), 'nothing for its author to press').toEqual([])
   })
 
   it('has its own pill, while the server state stays draft', () => {

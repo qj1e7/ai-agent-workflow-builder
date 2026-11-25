@@ -53,7 +53,7 @@ function Missing({ looked }: { looked: string }) {
 function ExplainCard({ useCaseId, name }: { useCaseId: string; name: string | null }) {
   const memory = useContext(CardMemoryContext)
   const [code, setCode] = useState(() => memory.wording.kept() ?? false)
-  const query = useExplain(useCaseId, { reworded: true })
+  const query = useExplain(useCaseId)
   const state = explainStateOf(query)
   const swap = () => {
     memory.wording.keep(!code)

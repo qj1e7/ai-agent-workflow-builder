@@ -58,7 +58,7 @@
       "quoted": true
     },
     {
-      "text": ", each after a yes",
+      "text": ", each after approval",
       "quoted": false
     },
     {
@@ -70,7 +70,7 @@
       "quoted": false
     }
   ],
-  "reworded": "Every day at 8:00, it reads GitHub \u201cfastapi/fastapi\u201d and Jira \u201cMOCK\u201d. It can create Jira tickets in \u201cMOCK\u201d, each after a yes, and changes nothing else.",
+  "reworded": "Every day at 8:00, it reads GitHub \u201cfastapi/fastapi\u201d and Jira \u201cMOCK\u201d. It can create Jira tickets in \u201cMOCK\u201d, each after approval, and changes nothing else.",
   "steps": [
     {
       "name": "Daily 8:00",
@@ -106,13 +106,13 @@
       "name": "Ask for a yes",
       "ours": true,
       "block_type": null,
-      "tag": "Waits for a yes"
+      "tag": "Waits for approval"
     },
     {
       "name": "Create ticket",
       "ours": true,
       "block_type": null,
-      "tag": "Writes after a yes"
+      "tag": "Writes after approval"
     },
     {
       "name": "Nothing to change",
@@ -192,7 +192,7 @@
           "quoted": true
         },
         {
-          "text": ", each after a yes",
+          "text": ", each after approval",
           "quoted": false
         }
       ],
@@ -329,7 +329,7 @@
       "block": "Create ticket",
       "decides": "each_run",
       "approvers": 1,
-      "words": "Waits for a yes in Teams on each run. Nobody who started the run or made the workflow can give it."
+      "words": "Waits for an Approver in Teams on each run. Nobody who started the run or made the workflow can approve it."
     }
   ],
   "settings": [
@@ -438,6 +438,6 @@
       "said": "Set in the Portal"
     }
   ],
-  "approval": "None needed. The Planner laid it out, and each write through our blocks waits for a yes.",
+  "approval": "None needed. The Planner laid it out, and each write through our blocks waits for approval.",
   "needs_an_answer": 0
 }

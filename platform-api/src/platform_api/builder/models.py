@@ -1102,9 +1102,9 @@ FixReason = Literal["needs_a_fix", "writes_refused"]
 
 def fix_of(view: UseCaseView, operator: bool) -> FixReason | None:
     """Why a workflow that is on can't run, for a person who has a button for it. A version that
-    needs a fix is for everyone, because Explain opens for both roles. Refused writes are for an
-    Operator, who can add the yes back. A workflow that could not move to n8n has no button, so
-    it is not here. One rule for the pill and for Home's Needs you row."""
+    needs a fix is for everyone, because its page says what to fix to both roles. Refused writes
+    are for an Operator, who can put the approval back. A workflow that could not move to n8n has no
+    button, so it is not here. One rule for the pill and for Home's Needs you row."""
     if view.state != "on":
         return None
     if view.grade == "needs_a_fix":

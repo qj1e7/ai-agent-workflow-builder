@@ -49,12 +49,6 @@
   outline-offset: 2px;
 }
 
-.version {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
 .quoted {
   padding: 0 4px;
   border-radius: 4px;
@@ -206,10 +200,4 @@
 .problem {
   margin: 0;
   color: var(--red-ink);
-}
-
-.name {
-  margin: 0 0 4px;
-  font-size: 1.05rem;
-  overflow-wrap: anywhere;
 }

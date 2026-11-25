@@ -11,7 +11,7 @@ import { AskTheTeam } from '../home/AskTheTeam'
 import { Building, DraftPill } from '../home/Building'
 import { useAskForChange, useShowRevision } from '../home/ChatProvider'
 import { useMainButton } from '../home/primary'
-import { Report, Words } from '../explain/Report'
+import { Flag, Words } from '../explain/Report'
 import { RunLine } from '../run/RunLine'
 import { WithN8nLogin } from '../workflows/N8nLoginHint'
 import { workingWords } from '../run/words'
@@ -164,7 +164,7 @@ function EditInN8n({ view, onProblem }: { view: DraftedWorkflowView; onProblem: 
   )
 }
 
-function Foot({ view, life, onReport, onProblem }: { view: DraftedWorkflowView; life: UseCaseState | undefined; onReport: () => void; onProblem: (words: string | null) => void }) {
+function Foot({ view, life, onProblem }: { view: DraftedWorkflowView; life: UseCaseState | undefined; onProblem: (words: string | null) => void }) {
   const main = useMainButton()
   const words = useErrorWords()
   const send = useSendDrafted(view.drafted_id)
@@ -173,12 +173,7 @@ function Foot({ view, life, onReport, onProblem }: { view: DraftedWorkflowView; 
   const askForChange = useAskForChange()
   const line = setUpLine(view.set_up)
   const open = view.state === 'approved' && line.kind === 'set_up' && line.useCaseId !== null ? line.useCaseId : null
-  const report = (
-    <Button key="report" onClick={onReport}>
-      See the report
-    </Button>
-  )
-  const actions: ReactNode[] = [report]
+  const actions: ReactNode[] = []
   const inN8n = view.state === 'draft' && view.in_n8n !== null
   if (inN8n) {
     actions.push(<InN8nActions key="in-n8n" view={view} onProblem={onProblem} />)
@@ -241,7 +236,6 @@ function DraftedSimulation({ view, simulation }: { view: DraftedWorkflowView; si
 
 /** A revision that has been read: the step line, In short, what was added, the flags, and where it stands. */
 function Revision({ view }: { view: DraftedWorkflowView }) {
-  const [shown, setShown] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const setUpId = setUpAs(view)
   const life = useUseCase(setUpId ?? '', setUpId !== null).data?.state
@@ -255,7 +249,7 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
       title={draftedTitle(view)}
       pill={<Head view={view} revision={view.revision} life={life} />}
       status={inN8nWords(view) ?? undefined}
-      actions={<Foot view={view} life={life} onReport={() => setShown((was) => !was)} onProblem={setProblem} />}
+      actions={<Foot view={view} life={life} onProblem={setProblem} />}
     >
       {stations.length > 0 ? <RunLine stations={stations} arrivedLive={null} settled={null} small /> : null}
       {report ? (
@@ -267,12 +261,20 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
       {view.refinement ? <Refinement view={view} refinement={view.refinement} /> : null}
       {added ? <p className={styles['note']}>{added}</p> : null}
       {view.flags > 0 ? (
-        <p className={styles['said']}>
-          {flagsWords(view.flags)}{' '}
-          <button type="button" className={styles['linkButton']} onClick={() => setShown(true)}>
-            See them
-          </button>
-        </p>
+        report && report.flags.length > 0 ? (
+          <details className={styles['flags']}>
+            <summary>
+              {flagsWords(view.flags)} <span className={styles['see']}>See them</span>
+            </summary>
+            <ul className={styles['rows']}>
+              {report.flags.map((flag, index) => (
+                <Flag key={index} flag={flag} />
+              ))}
+            </ul>
+          </details>
+        ) : (
+          <p className={styles['said']}>{flagsWords(view.flags)}</p>
+        )
       ) : null}
       <CheckLine view={view} />
       {view.replaced_waiting ? <p className={styles['note']}>{CANCELLED_WAITING_WORDS}</p> : null}
@@ -295,7 +297,6 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
           {problem}
         </p>
       ) : null}
-      {shown && report ? <Report report={report} /> : null}
     </Card>
   )
 }
