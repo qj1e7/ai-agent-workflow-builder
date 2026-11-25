@@ -293,6 +293,7 @@ const GUESS: ProjectGuess = {
   releases: 'published',
   newest: '1.2.20',
   already_listed: null,
+  found_by: 'reviewed_list',
 }
 const TERRAFORM: ProjectGuess = { ...GUESS, repo: 'hashicorp/terraform', what: 'Terraform itself, from HashiCorp', newest: 'v1.9.8' }
 const OPENTOFU: ProjectGuess = { ...GUESS, repo: 'opentofu/opentofu', what: 'OpenTofu, an open-source fork of Terraform', newest: 'v1.8.5' }
@@ -860,6 +861,7 @@ describe('add a Maven Central or npm package (ADR 0025)', () => {
     releases: 'published',
     newest: '2.24.3',
     already_listed: null,
+    found_by: 'reviewed_list',
   }
 
   it('shows a known package as itself, links its registry, and says its version is looked up for vulnerabilities', () => {

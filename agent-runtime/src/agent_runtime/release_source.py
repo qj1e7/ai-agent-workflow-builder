@@ -42,6 +42,16 @@ class Release:
     notes: str | None = None
 
 
+@dataclass(frozen=True)
+class FoundRepo:
+    """One repository GitHub's search found. Its description is GitHub's data, shown to a person
+    and never given to a model."""
+
+    repo: str
+    description: str | None
+    stars: int
+
+
 class SourceUnavailable(Exception):
     def __init__(self, status: int | None) -> None:
         super().__init__(status)

@@ -1,11 +1,18 @@
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from urllib.parse import quote
 
 import httpx
-from pydantic import BaseModel, TypeAdapter, ValidationError
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from agent_runtime.contract import GitHubCheckResult, GitHubProblem, GitHubWorking
-from agent_runtime.release_source import Fetched, Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import (
+    Fetched,
+    FoundRepo,
+    Release,
+    SourceRejected,
+    SourceUnavailable,
+)
 
 PAGE_SIZE = 30
 NOTES_LENGTH = 400
@@ -31,8 +38,20 @@ class _GitHubRepo(BaseModel):
     full_name: str
 
 
+class _SearchHit(BaseModel):
+    full_name: str
+    description: str | None = None
+    stargazers_count: int = Field(default=0, ge=0)
+    archived: bool = False
+
+
+class _SearchAnswer(BaseModel):
+    items: list[_SearchHit]
+
+
 _RELEASES = TypeAdapter(list[_GitHubRelease])
 _REPO = TypeAdapter(_GitHubRepo)
+_SEARCH = TypeAdapter(_SearchAnswer)
 
 
 def _headers_for(token: str | None) -> dict[str, str]:
@@ -117,6 +136,21 @@ class GitHubReleaseSource:
         ]
         return Fetched(releases, redirected)
 
+    def search(self, words: str, limit: int) -> list[FoundRepo]:
+        """GitHub's public repository search, best match first. It only reads. Forks are left out
+        by GitHub, and archived repositories by the query and again here. `words` must already
+        be plain words (find_software.search_words), so the query holds no qualifier."""
+        answer, _ = self._ask(
+            f"{self._base_url}/search/repositories",
+            {"q": f"{words} archived:false", "per_page": limit},
+            _SEARCH,
+        )
+        return [
+            FoundRepo(hit.full_name, hit.description, hit.stargazers_count)
+            for hit in answer.items
+            if not hit.archived
+        ]
+
     def _get[T](
         self,
         repo: str,
@@ -128,12 +162,13 @@ class GitHubReleaseSource:
         if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
             raise SourceRejected(400)
         owner, name = (quote(part, safe="") for part in parts)
+        return self._ask(f"{self._base_url}/repos/{owner}/{name}{tail}", params, shape)
+
+    def _ask[T](
+        self, url: str, params: Mapping[str, int | str] | None, shape: TypeAdapter[T]
+    ) -> tuple[T, bool]:
         try:
-            response = self._client.get(
-                f"{self._base_url}/repos/{owner}/{name}{tail}",
-                params=params,
-                headers=self._headers,
-            )
+            response = self._client.get(url, params=params, headers=self._headers)
         except httpx.TransportError as error:
             raise SourceUnavailable(None) from error
         status = response.status_code

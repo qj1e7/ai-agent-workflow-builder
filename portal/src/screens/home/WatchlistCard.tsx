@@ -8,7 +8,7 @@ import { stillChecksWords, watchlistRunsWords, watchSavedWords } from './answers
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { IconCheck } from '../../ui/icons'
-import { alreadyWords, kindOf, verdictOf } from '../software/addByName'
+import { alreadyWords, chooseWords, clearMatch, kindOf, verdictOf } from '../software/addByName'
 import { describedBy, Field } from '../software/Field'
 import { addedVulnerabilityWords, checkName, homeAdd, isPackage, HOME_PACKAGE_VERSION_HELP, NAME_HELP, refOf, SOURCE_NAMES } from '../software/software'
 import { useMainButton } from './primary'
@@ -93,11 +93,12 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
       </p>,
     )
   }
-  const [only, ...others] = answer.matches
-  if (only === undefined || others.length > 0) {
+  // Only a single match from our reviewed list is offered here. A match found by searching GitHub is always the person's choice.
+  const only = clearMatch(answer.matches)
+  if (only === undefined) {
     return unmoved(
       <p>
-        More than one project could be {name}. <Link to={WATCHLIST}>Choose on the Software watchlist</Link>.
+        {chooseWords(name, answer.matches)} <Link to={WATCHLIST}>Choose on the Software watchlist</Link>.
       </p>,
     )
   }

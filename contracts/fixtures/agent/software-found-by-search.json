@@ -1,0 +1,25 @@
+{
+  "status": "found",
+  "matches": [
+    {
+      "kind": "github",
+      "repo": "encode/httpx",
+      "what": "A next generation HTTP client for Python",
+      "why": "Found by searching GitHub, so make sure it's the one you mean. It has 15,854 stars.",
+      "releases": "published",
+      "newest": "0.28.1",
+      "found_by": "github_search",
+      "stars": 15854
+    },
+    {
+      "kind": "github",
+      "repo": "projectdiscovery/httpx",
+      "what": "httpx is a fast and multi-purpose HTTP toolkit",
+      "why": "Found by searching GitHub, so make sure it's the one you mean. It has 10,658 stars.",
+      "releases": "published",
+      "newest": "v1.6.10",
+      "found_by": "github_search",
+      "stars": 10658
+    }
+  ]
+}

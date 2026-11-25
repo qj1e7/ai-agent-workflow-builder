@@ -31,6 +31,7 @@ from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
 from platform_api.wire import (
     MAVEN_COORDINATE_PATTERN,
     NPM_PACKAGE_PATTERN,
+    FoundBy,
     PackageKind,
     RepoName,
     SourceKind,
@@ -509,14 +510,28 @@ class ProjectGuess(WireModel):
     already_listed: str | None = Field(
         description="The name this project already has on the watchlist, or null."
     )
+    found_by: FoundBy = Field(
+        default="reviewed_list",
+        description="reviewed_list when the name is on our reviewed list of known software. "
+        "github_search when the list has no such name and GitHub's public repository search "
+        "found this project. A search match is only ever a choice: never pick it for the "
+        "person, even when it is the only match.",
+    )
+    stars: int | None = Field(
+        default=None,
+        description="How many stars the repository has on GitHub, for a search match. Null for "
+        "a match from the reviewed list.",
+    )
 
 
 class FoundProjects(WireModel):
     status: Literal["found"] = "found"
     matches: list[ProjectGuess] = Field(
         min_length=1,
-        description="Every project the name could mean. More than one means the person "
-        "chooses. Each is a guess from a reviewed list, never a certainty.",
+        description="Every project the name could mean, each checked just now. Only one match "
+        "from the reviewed list may be confirmed as it is. More than one, or any match found by "
+        "searching GitHub (at most 3), means the person chooses. Each is a guess, never a "
+        "certainty.",
     )
 
 
