@@ -17,6 +17,7 @@ from platform_api.orchestration.agents import (
     CardDraft,
     CardInput,
     CardSpec,
+    CardToolId,
     CauseFound,
     CheckPartResult,
     CheckWorkflowsAnswer,
@@ -254,6 +255,7 @@ from platform_api.orchestration.simulation_driver import (
 from platform_api.orchestration.simulation_gateway import PlanOut, ResultOut, SimulationOut
 from platform_api.orchestration.slack_channels import ChannelList, SlackChannels
 from platform_api.orchestration.spec import (
+    PACKAGE_VERSION_PATTERN,
     CardRun,
     CardsTask,
     N8nTarget,
@@ -602,6 +604,7 @@ __all__ = [
     "WatchPart",
     "RuntimeDown",
     "Stopped",
+    "CardToolId",
     "ToolId",
     "ToolKind",
     "ToolRule",
@@ -638,6 +641,7 @@ __all__ = [
     "ScheduleHold",
     "held_words",
     "SoftwareFacts",
+    "PACKAGE_VERSION_PATTERN",
     "SoftwareSource",
     "Standing",
     "Status",

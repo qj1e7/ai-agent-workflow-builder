@@ -1,0 +1,429 @@
+"""The watchlist check with the sources ADR 0025 adds: package registries and vulnerabilities."""
+
+from collections.abc import Sequence
+from datetime import timedelta
+from typing import Any
+
+import pytest
+from pydantic import ValidationError
+
+from agent_runtime.capped import CHECK_SECONDS
+from agent_runtime.contract import (
+    AgentMessageEvent,
+    GithubSource,
+    MavenSource,
+    NpmSource,
+    SoftwareToCheck,
+    TaskFailed,
+    TaskFinished,
+    TaskRequest,
+    WatchlistInputs,
+)
+from agent_runtime.contracts import urgent_output, urgent_request, watchlist_request
+from agent_runtime.events import EventLog
+from agent_runtime.planner import FixedPlanner, run_task
+from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
+from agent_runtime.summary import TemplateSummarizer
+from agent_runtime.version_checker import VersionChecker
+from agent_runtime.vulnerabilities import AdvisoryReader
+from tests.fakes import FakeClock, FakeSource
+from tests.test_vulnerabilities import LOG4J, Services, nvd_answer, osv_record
+
+LOG4J_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2L"
+EXPRESS_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2M"
+GITHUB_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2N"
+
+
+class Registry:
+    """A registry with fixed versions per package, or a lasting outage or refusal."""
+
+    def __init__(
+        self, versions: dict[str, list[str]], down: int | None = None, refused: int | None = None
+    ) -> None:
+        self.versions = versions
+        self.down = down
+        self.refused = refused
+        self.calls: list[str] = []
+
+    def fetch(self, repo: str) -> list[Release]:
+        self.calls.append(repo)
+        if self.refused:
+            raise SourceRejected(self.refused)
+        if self.down:
+            raise SourceUnavailable(self.down)
+        return [Release(tag=v) for v in self.versions[repo]]
+
+
+LOG4J_VERSIONS = ["2.14.1", "2.17.1", "2.24.3", "2.25.0-beta1"]
+LOG4SHELL = [
+    osv_record("GHSA-jfh8-c2jp-5v3q", ["CVE-2021-44228"], "CRITICAL", "2.15.0", "Log4Shell")
+]
+
+
+def log4j(our: str | None = "2.14.1", from_first_check: bool = False) -> SoftwareToCheck:
+    return SoftwareToCheck(
+        id=LOG4J_ID,
+        name="Log4j",
+        source=MavenSource(ref=LOG4J),
+        our_version=our,
+        from_first_check=from_first_check,
+    )
+
+
+def express(our: str = "4.21.2") -> SoftwareToCheck:
+    return SoftwareToCheck(
+        id=EXPRESS_ID, name="Express", source=NpmSource(ref="express"), our_version=our
+    )
+
+
+def on_github(our: str = "1.2.14") -> SoftwareToCheck:
+    return SoftwareToCheck(
+        id=GITHUB_ID,
+        name="LangGraph",
+        source=GithubSource(ref="langchain-ai/langgraph"),
+        our_version=our,
+    )
+
+
+def request_for(*software: SoftwareToCheck) -> TaskRequest:
+    request = watchlist_request("run_01JC2")
+    assert isinstance(request.inputs, WatchlistInputs)
+    inputs = request.inputs.model_copy(update={"software": list(software)})
+    return request.model_copy(update={"inputs": inputs})
+
+
+class Check:
+    def __init__(
+        self,
+        maven: Registry | None = None,
+        npm: Registry | None = None,
+        services: Services | None = None,
+        github: FakeSource | None = None,
+    ) -> None:
+        self.clock = FakeClock()
+        registries = {}
+        if maven:
+            registries["maven"] = maven
+        if npm:
+            registries["npm"] = npm
+        self.services = services
+        advisories: AdvisoryReader | None = services.reader(self.clock) if services else None
+        self.checker = VersionChecker(
+            github or FakeSource(["1.2.16", "1.2.14"]),
+            TemplateSummarizer(),
+            sleep=self.clock.sleep,
+            registries=registries,
+            advisories=advisories,
+            clock=lambda: self.clock.now.timestamp(),
+        )
+
+    def run(self, *software: SoftwareToCheck) -> TaskFinished | TaskFailed:
+        log = EventLog(self.clock, lambda event: None)
+        result = run_task(request_for(*software), FixedPlanner(), self.checker, log)
+        assert isinstance(result, TaskFinished | TaskFailed)
+        return result
+
+
+def room_texts(events: Sequence[object]) -> list[str]:
+    return [e.data.text for e in events if isinstance(e, AgentMessageEvent)]
+
+
+def test_the_urgent_fixture_platform_api_reviews_is_what_the_check_answers():
+    """platform-api's review() reads this pair from contracts/ (test_watch.py), so the urgent
+    title it must accept is the runtime's own, not a copy."""
+    services = Services(LOG4SHELL, {"CVE-2021-44228": nvd_answer(10.0, "CRITICAL")})
+    check = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services)
+    request = urgent_request("run_01JC3")
+    assert isinstance(request.inputs, WatchlistInputs)
+    result = check.run(*request.inputs.software)
+    assert isinstance(result, TaskFinished)
+    assert result.output == urgent_output()
+
+
+def test_a_maven_package_behind_with_a_critical_flaw_gets_an_urgent_ticket_with_the_evidence():
+    services = Services(LOG4SHELL, {"CVE-2021-44228": nvd_answer(10.0, "CRITICAL")})
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    found = result.output.findings[0]
+    assert (found.state, found.newest, found.new_versions) == (
+        "behind",
+        "2.24.3",
+        ["2.24.3", "2.17.1"],
+    )
+    assert found.vulnerability_check == "checked"
+    assert [v.id for v in found.vulnerabilities] == ["CVE-2021-44228"]
+    [ticket] = result.output.proposed
+    assert ticket.fields["title"] == "Urgent: Upgrade Log4j from 2.14.1 to 2.24.3"
+    body = ticket.fields["body"]
+    assert body.startswith(f"Log4j has 2 new releases on Maven Central ({LOG4J}) newer than")
+    assert (
+        "- CVE-2021-44228 (critical, CVSS 10, reported by OSV and NVD). Log4Shell Fixed in "
+        "2.15.0. https://nvd.nist.gov/vuln/detail/CVE-2021-44228" in body
+    )
+    assert ticket.reason.endswith("which has a critical known vulnerability")
+    assert "Log4j 2.14.1 has 1 known vulnerability, 1 critical." in result.output.summary
+    texts = room_texts(result.events)
+    assert any("The worst is CVE-2021-44228 (critical, CVSS 10)" in t for t in texts)
+
+
+def test_a_flaw_below_critical_leaves_the_ticket_as_it_was_but_lists_the_flaw():
+    services = Services(
+        [osv_record("GHSA-1", ["CVE-2024-0001"], "HIGH")],
+        {"CVE-2024-0001": nvd_answer(7.5, "HIGH")},
+    )
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    [ticket] = result.output.proposed
+    assert ticket.fields["title"] == "Upgrade Log4j from 2.14.1 to 2.24.3"
+    assert "CVE-2024-0001 (high, CVSS 7.5" in ticket.fields["body"]
+
+
+def test_an_npm_package_up_to_date_with_none_known_says_so():
+    services = Services([])
+    result = Check(npm=Registry({"express": ["4.21.2", "5.0.0-beta.3"]}), services=services).run(
+        express()
+    )
+    assert isinstance(result, TaskFinished)
+    found = result.output.findings[0]
+    assert (found.state, found.vulnerability_check, found.vulnerabilities) == (
+        "up_to_date",
+        "checked",
+        [],
+    )
+    assert result.output.proposed == []
+    assert "OSV lists no known vulnerabilities in Express 4.21.2." in room_texts(result.events)
+
+
+def test_a_github_source_and_a_version_only_the_first_check_read_are_never_looked_up():
+    services = Services(LOG4SHELL)
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(
+        on_github(), log4j("2.14.1", from_first_check=True)
+    )
+    assert isinstance(result, TaskFinished)
+    assert [f.vulnerability_check for f in result.output.findings] == ["not_checked", "not_checked"]
+    assert services.osv_bodies == []
+
+
+def test_osv_down_is_said_plainly_and_does_not_stop_the_version_check():
+    services = Services([], osv_status=503)
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    found = result.output.findings[0]
+    assert (found.state, found.vulnerability_check) == ("behind", "could_not_check")
+    assert "Vulnerabilities could not be looked up for Log4j." in result.output.summary
+    assert any("This does not mean it has none." in t for t in room_texts(result.events))
+
+
+def test_a_registry_outage_is_retried_and_named_as_that_registry():
+    check = Check(maven=Registry({}, down=503))
+    result = check.run(log4j())
+    assert isinstance(result, TaskFailed)
+    assert result.error.message == (
+        "Could not check Log4j: Maven Central returned 503 Service Unavailable three times"
+    )
+    assert (
+        "Maven Central answered 503 Service Unavailable (try 1 of 3). "
+        "Waiting 2 s before trying again." in room_texts(result.events)
+    )
+
+
+def test_an_unknown_package_names_the_registry_that_refused():
+    result = Check(npm=Registry({}, refused=404)).run(express(), on_github())
+    assert isinstance(result, TaskFinished)
+    unknown = result.output.findings[0]
+    assert unknown.state == "cant_check"
+    assert unknown.detail == "npm answered 404 Not Found."
+    # The not_found flag is GitHub's, for a moved repository, so a registry never sets it.
+    assert not unknown.not_found
+
+
+def test_a_kind_with_no_reader_set_up_cannot_be_checked():
+    result = Check().run(log4j(), on_github())
+    assert isinstance(result, TaskFinished)
+    assert result.output.findings[0].detail == (
+        "This runtime has no reader for Maven Central set up."
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "ref"),
+    [
+        (MavenSource, "org..evil:x"),
+        (MavenSource, "no-artifact"),
+        (MavenSource, "org.example:.hidden"),
+        (NpmSource, "../etc"),
+        (NpmSource, "UPPER"),
+        (NpmSource, "@scope/"),
+    ],
+)
+def test_a_package_name_a_registry_would_not_hold_is_refused_at_the_door(
+    source: type[MavenSource] | type[NpmSource], ref: str
+):
+    with pytest.raises(ValidationError):
+        source(ref=ref)
+
+
+GUAVA = "com.google.guava:guava"
+NETTY = "io.netty:netty-all"
+
+
+def on_maven(name: str, ref: str, our: str) -> SoftwareToCheck:
+    return SoftwareToCheck(id=LOG4J_ID, name=name, source=MavenSource(ref=ref), our_version=our)
+
+
+@pytest.mark.parametrize(
+    ("name", "ref", "versions", "our", "title"),
+    [
+        (
+            "Guava",
+            GUAVA,
+            ["33.2.0-jre", "33.2.0-android", "33.3.1-jre", "33.3.1-android", "33.4.0-rc1"],
+            "33.2.0-jre",
+            "Upgrade Guava from 33.2.0-jre to 33.3.1-jre",
+        ),
+        (
+            "Guava",
+            GUAVA,
+            ["33.2.0-jre", "33.2.0-android", "33.3.1-jre", "33.3.1-android"],
+            "33.2.0-android",
+            "Upgrade Guava from 33.2.0-android to 33.3.1-android",
+        ),
+        (
+            "Netty",
+            NETTY,
+            ["4.1.114.Final", "4.1.115.Final", "5.0.0.Alpha2"],
+            "4.1.114.Final",
+            "Upgrade Netty from 4.1.114.Final to 4.1.115.Final",
+        ),
+    ],
+)
+def test_guava_and_netty_are_checked_in_the_build_the_team_runs(
+    name: str, ref: str, versions: list[str], our: str, title: str
+):
+    check = Check(maven=Registry({ref: versions}), services=Services([]))
+    result = check.run(on_maven(name, ref, our))
+    assert isinstance(result, TaskFinished)
+    assert result.output.findings[0].state == "behind"
+    [ticket] = result.output.proposed
+    assert ticket.fields["title"] == title
+
+
+class SlowRegistry(Registry):
+    """A registry each read of which takes `seconds` of the check's time."""
+
+    def __init__(self, seconds: float, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.clock: FakeClock | None = None
+        self.seconds = seconds
+
+    def fetch(self, repo: str) -> list[Release]:
+        assert self.clock is not None, "give it the check's clock"
+        self.clock.now += timedelta(seconds=self.seconds)
+        return super().fetch(repo)
+
+
+def test_a_slow_registry_leaves_osv_no_time_so_only_the_lookup_is_given_up():
+    services = Services(LOG4SHELL, {"CVE-2021-44228": nvd_answer(10.0, "CRITICAL")})
+    slow = SlowRegistry(CHECK_SECONDS + 1, versions={LOG4J: LOG4J_VERSIONS})
+    check = Check(maven=slow, services=services)
+    slow.clock = check.clock
+    result = check.run(log4j())
+    assert isinstance(result, TaskFinished)
+    [found] = result.output.findings
+    assert (found.state, found.newest) == ("behind", "2.24.3")
+    assert found.vulnerability_check == "could_not_check"
+    assert services.osv_bodies == [] and services.nvd_asked == []
+    texts = room_texts(result.events)
+    assert any("the check ran out of time before OSV answered" in t for t in texts)
+
+
+def test_a_registry_outage_stops_trying_when_the_next_try_would_not_fit():
+    slow = SlowRegistry(CHECK_SECONDS / 2, versions={}, down=503)
+    check = Check(maven=slow)
+    slow.clock = check.clock
+    result = check.run(log4j())
+    assert len(slow.calls) == 2
+    assert isinstance(result, TaskFailed)
+    assert "Maven Central returned 503 Service Unavailable two times" in result.error.message
+
+
+def test_one_bad_record_for_a_package_leaves_the_other_software_checked():
+    services = Services([osv_record("GHSA-" + "x" * 70, [], "HIGH")])
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(
+        log4j(), on_github()
+    )
+    assert isinstance(result, TaskFinished)
+    package, github = result.output.findings
+    assert (package.state, package.vulnerability_check) == ("behind", "could_not_check")
+    assert github.state == "behind"
+
+
+def test_a_list_osv_cut_off_says_at_least_in_the_finding_the_ticket_and_the_summary():
+    services = Services(
+        LOG4SHELL, {"CVE-2021-44228": nvd_answer(10.0, "CRITICAL")}, more_pages=True
+    )
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    [found] = result.output.findings
+    assert found.vulnerability_check == "checked" and not found.vulnerabilities_complete
+    [ticket] = result.output.proposed
+    assert (
+        "Our version has at least 1 known vulnerability. OSV lists more than one check reads"
+        in (ticket.fields["body"])
+    )
+    assert "Log4j 2.14.1 has at least 1 known vulnerability, 1 critical." in result.output.summary
+
+
+def test_a_full_list_says_no_at_least():
+    services = Services(LOG4SHELL, {"CVE-2021-44228": nvd_answer(10.0, "CRITICAL")})
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    assert result.output.findings[0].vulnerabilities_complete
+    assert "at least" not in result.output.proposed[0].fields["body"]
+
+
+def test_a_package_far_behind_lists_only_the_newest_versions_and_the_worst_vulnerabilities():
+    """A registry returns every version ever published, so a ticket lists the newest 30 and
+    the 20 worst vulnerabilities, and counts the rest."""
+    versions = [f"2.{minor}.0" for minor in range(100, 14, -1)] + ["2.14.1"]
+    services = many_services(25)
+    result = Check(maven=Registry({LOG4J: versions}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    [found] = result.output.findings
+    assert len(found.new_versions) == 86 and len(found.vulnerabilities) == 25
+    body = result.output.proposed[0].fields["body"]
+    listed = [line for line in body.splitlines() if line.startswith("- 2.")]
+    assert listed == [f"- 2.{minor}.0" for minor in range(100, 70, -1)]
+    assert "\nand 56 older ones.\n" in body
+    assert "Our version has 25 known vulnerabilities. These are the 20 worst:" in body
+    assert sum(1 for line in body.splitlines() if line.startswith("- CVE-")) == 20
+
+
+def test_a_lookup_that_failed_is_said_in_the_ticket_so_it_never_reads_as_none():
+    services = Services([], osv_status=503)
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    body = result.output.proposed[0].fields["body"]
+    assert (
+        "Known vulnerabilities in our version could not be looked up at this check. This does "
+        "not mean it has none." in body
+    )
+
+
+def test_a_lookup_that_found_none_says_so_in_the_ticket():
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=Services([])).run(log4j())
+    assert isinstance(result, TaskFinished)
+    body = result.output.proposed[0].fields["body"]
+    assert "OSV lists no known vulnerabilities in our version." in body
+
+
+def test_a_github_ticket_says_nothing_about_vulnerabilities_it_never_looked_up():
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=Services([])).run(on_github())
+    assert isinstance(result, TaskFinished)
+    body = result.output.proposed[0].fields["body"]
+    assert "vulnerabilit" not in body.lower()
+
+
+def many_services(count: int) -> Services:
+    records = [osv_record(f"GHSA-{n}", [f"CVE-2024-{n:04d}"], "HIGH") for n in range(count)]
+    return Services(records)

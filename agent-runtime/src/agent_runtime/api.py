@@ -80,6 +80,12 @@ from agent_runtime.monitoring.tracing import NoTracing, Tracing
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
 from agent_runtime.planner_led import PLANNER_MODES, PlannerMode, led
+from agent_runtime.registries import (
+    DEFAULT_MAVEN_BASE,
+    DEFAULT_NPM_BASE,
+    MavenCentralSource,
+    NpmRegistrySource,
+)
 from agent_runtime.release_source import ReleaseSource, releases_of
 from agent_runtime.scenario_explaining import explain_failures
 from agent_runtime.scenario_writing import write_scenarios
@@ -93,6 +99,13 @@ from agent_runtime.summary import (
 from agent_runtime.tools import tool_list, value_problem
 from agent_runtime.troubleshooting import find_cause
 from agent_runtime.version_checker import VersionChecker
+from agent_runtime.vulnerabilities import (
+    DEFAULT_NVD_BASE,
+    DEFAULT_OSV_BASE,
+    AdvisoryReader,
+    Nvd,
+    Osv,
+)
 from agent_runtime.workflow_drafter import DEFAULT_DRAFTER_MODEL, draft_workflow
 
 log = logging.getLogger(__name__)
@@ -113,11 +126,15 @@ AGENT_CARDS = AgentCards(
         AgentCard(
             id="version_checker",
             display="Version checker",
-            description="Reads the GitHub releases of each watched software, compares them with "
-            "the version the team runs, and suggests an upgrade ticket for each one that is "
-            "behind.",
+            description="Reads the newest version of each watched software from GitHub "
+            "releases, Maven Central or npm, compares it with the version the team runs, and "
+            "suggests an upgrade ticket for each one that is behind. For a Maven Central or npm "
+            "package whose version someone gave, it also looks up known vulnerabilities in "
+            "that version.",
             capabilities=[
                 "read GitHub releases",
+                "read Maven Central and npm versions",
+                "look up known vulnerabilities in OSV and NVD",
                 "compare with the version the team runs",
                 "suggest upgrade tickets",
             ],
@@ -210,6 +227,38 @@ def _github_token(env: Mapping[str, str]) -> str | None:
     return token or None
 
 
+def _nvd_key(env: Mapping[str, str]) -> str | None:
+    key = env.get("NVD_API_KEY", "").strip()
+    if not all(33 <= ord(character) < 127 for character in key):
+        raise SettingsError(
+            "NVD_API_KEY holds a space, a line break or a character that is not a plain "
+            "letter, digit or symbol. Paste the key again."
+        )
+    return key or None
+
+
+@dataclass(frozen=True)
+class Sources:
+    """Where the Version checker reads, besides GitHub (ADR 0025). Each has a default on the
+    open internet. Inside DevNet each needs an allowed route or an internal mirror."""
+
+    maven_base: str = DEFAULT_MAVEN_BASE
+    npm_base: str = DEFAULT_NPM_BASE
+    osv_base: str = DEFAULT_OSV_BASE
+    nvd_base: str = DEFAULT_NVD_BASE
+    nvd_api_key: str | None = field(default=None, repr=False)
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str]) -> Sources:
+        return cls(
+            maven_base=env.get("MAVEN_REPO_BASE") or DEFAULT_MAVEN_BASE,
+            npm_base=env.get("NPM_REGISTRY_BASE") or DEFAULT_NPM_BASE,
+            osv_base=env.get("OSV_API_BASE") or DEFAULT_OSV_BASE,
+            nvd_base=env.get("NVD_API_BASE") or DEFAULT_NVD_BASE,
+            nvd_api_key=_nvd_key(env),
+        )
+
+
 @dataclass(frozen=True)
 class Settings:
     agent_api_key: str
@@ -221,6 +270,7 @@ class Settings:
     model_api_key: str | None
     model_private_hosts: frozenset[str] = frozenset()
     platform_jira_url: str | None = None
+    sources: Sources = field(default_factory=Sources)
     free_reply: bool = True
     """PLANNER_FREE_REPLY=off gives every dead end the fixed fallback, with no model call
     (ADR 0047)."""
@@ -260,6 +310,7 @@ class Settings:
                 if host.strip()
             ),
             platform_jira_url=_platform_jira_url(env, origins),
+            sources=Sources.from_env(env),
             free_reply=env.get("PLANNER_FREE_REPLY", "").strip().casefold() != "off",
             verifier_model=env.get("PLANNER_VERIFIER_MODEL", "").strip() or None,
             langfuse=_langfuse(env),
@@ -381,8 +432,22 @@ def build_runtime(settings: Settings) -> Runtime:
     confluence_for: ConfluenceReaderFor = (
         PlatformConfluenceFor(platform) if platform else no_confluence
     )
+    found = settings.sources
+    registries: dict[str, ReleaseSource] = {
+        "maven": MavenCentralSource(found.maven_base),
+        "npm": NpmRegistrySource(found.npm_base),
+    }
+    advisories = AdvisoryReader(
+        Osv(found.osv_base), Nvd(found.nvd_base, api_key=found.nvd_api_key), sleep=time.sleep
+    )
     return Runtime(
-        checker=VersionChecker(source, build_summarizer(settings), sleep=time.sleep),
+        checker=VersionChecker(
+            source,
+            build_summarizer(settings),
+            sleep=time.sleep,
+            registries=registries,
+            advisories=advisories,
+        ),
         planner=FixedPlanner(),
         clock=utc_now,
         callbacks=HttpCallbacks(),
@@ -390,7 +455,7 @@ def build_runtime(settings: Settings) -> Runtime:
         cards=CardRunner(source, jira_for, sleep=time.sleep, confluence_for=confluence_for),
         chat_source=chat_source,
         github=GitHubConnection(settings.github_api_base, token=settings.github_token),
-        finder=SoftwareFinder(source),
+        finder=SoftwareFinder(source, registries),
         releases=source,
     )
 

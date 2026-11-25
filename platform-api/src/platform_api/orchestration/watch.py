@@ -11,13 +11,13 @@ from typing import Literal
 
 from platform_api.orchestration.agents import (
     Finding,
-    GithubSource,
     ProposedIntentIn,
     SoftwareToCheck,
     TaskError,
     WatchlistInputs,
+    source_in,
 )
-from platform_api.orchestration.spec import WatchlistTask
+from platform_api.orchestration.spec import PACKAGE_VERSION_PATTERN, WatchlistTask
 from platform_api.shared import ApprovalId, ProposalId, RunId, SoftwareId
 
 
@@ -116,7 +116,13 @@ ATTENTION_ORDER: tuple[Status, ...] = (
 
 
 # The project prefix some tags carry, such as docker-v, n8n@ or langchain==, then an optional v.
-_PREFIX = re.compile(r"(?:[A-Za-z][A-Za-z0-9._-]*?[@=-]+)?[vV]?(\d+(?:\.\d+)*)", re.ASCII)
+# A package version may end in a qualifier that marks a final build (ADR 0025), as 4.1.115.Final
+# or 33.3.1-jre; it compares as its numbers.
+_PREFIX = re.compile(
+    r"(?:[A-Za-z][A-Za-z0-9._-]*?[@=-]+)?[vV]?(\d+(?:\.\d+)*)"
+    r"(?:\.Final|\.RELEASE|\.GA|-jre|-android)?",
+    re.ASCII,
+)
 
 
 def _numbers(version: str) -> tuple[int, ...] | None:
@@ -203,6 +209,20 @@ class Unusable:
     detail: str
 
 
+URGENT_SCORE = 9.0
+"""A known vulnerability scored this high or more makes the upgrade ticket urgent (ADR 0025).
+The same rule as the Version checker's, so the platform knows which titles to expect."""
+URGENT_PREFIX = "Urgent: "
+
+
+def is_urgent(finding: Finding) -> bool:
+    """Whether the finding's checked vulnerabilities make its upgrade ticket urgent: one is
+    critical, or scored URGENT_SCORE or more. An unchecked or failed lookup is never urgent."""
+    return finding.vulnerability_check == "checked" and any(
+        v.severity == "critical" or (v.score or 0) >= URGENT_SCORE for v in finding.vulnerabilities
+    )
+
+
 def review(
     task: WatchlistTask, findings: Sequence[Finding], proposed: Sequence[ProposedIntentIn]
 ) -> Reviewed | Unusable:
@@ -212,11 +232,13 @@ def review(
     until it fits the list: exactly one finding per listed software, every version shaped like
     the tag pattern, a starting point only where the platform sent no version, and a ticket only
     for listed software that is behind, not held, and titled with the versions the platform
-    knows, so the version our version moves to on Done is the one the Approver saw.
+    knows, so the version our version moves to on Done is the one the Approver saw. The title
+    starts "Urgent: " exactly when the finding's own vulnerabilities make it urgent.
     """
     listed = {software.id: software for software in task.software}
     # ASCII and fullmatch: "$" alone would allow a trailing newline, and "\d" other scripts.
     tag = re.compile(task.tag_pattern, re.ASCII)
+    package = re.compile(PACKAGE_VERSION_PATTERN, re.ASCII)
     learned: list[Learned] = []
     read: dict[SoftwareId, Finding] = {}
     for finding in findings:
@@ -226,7 +248,9 @@ def review(
             return Unusable(f"The agents reported on {software_id}, which is not on the list")
         if any(entry.software_id == software_id for entry in learned):
             return Unusable(f"The agents reported twice on {software.name}")
-        if any(tag.fullmatch(version) is None for version in finding.new_versions):
+        # A package's versions follow its registry's rule, not the GitHub tag pattern (ADR 0025).
+        counts = tag if software.source.kind == "github" else package
+        if any(counts.fullmatch(version) is None for version in finding.new_versions):
             return Unusable(f"The agents named a version for {software.name} that is not a tag")
         if finding.not_found and finding.full_name is not None:
             return Unusable(
@@ -241,7 +265,7 @@ def review(
             return Unusable(
                 f"The agents gave no newest version for {software.name} ({finding.state})"
             )
-        if tag.fullmatch(finding.newest) is None:
+        if counts.fullmatch(finding.newest) is None:
             return Unusable(f"The agents named a version for {software.name} that is not a tag")
         starting_point = finding.state == "starting_point"
         if starting_point != (software.our_version is None):
@@ -292,6 +316,8 @@ def review(
             if software.from_first_check
             else f"Upgrade {software.name} from {software.our_version} to {finding.newest}"
         )
+        if is_urgent(finding):
+            expected = f"{URGENT_PREFIX}{expected}"
         if intent.fields.get("title") != expected:
             return Unusable(
                 f'The agents titled the ticket for {software.name} differently from "{expected}"'
@@ -308,7 +334,7 @@ def watchlist_inputs(task: WatchlistTask) -> WatchlistInputs:
             SoftwareToCheck(
                 id=s.id,
                 name=s.name,
-                source=GithubSource(ref=s.source.ref),
+                source=source_in(s.source.kind, s.source.ref),
                 our_version=s.our_version,
                 open_ticket=s.open_ticket,
                 awaiting_approval=s.awaiting_approval,

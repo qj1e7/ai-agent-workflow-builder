@@ -328,6 +328,20 @@ async def test_a_read_block_may_read_the_repositories_the_version_checker_watche
     assert await facts.places("confluence_page") == []
 
 
+async def test_a_watched_package_is_never_a_github_place(n8n_lab: N8nLab):
+    """ADR 0025: a Maven Central or npm package is read from its registry, so a Read block that
+    reads GitHub releases is never offered its name as a repository."""
+    for body in (
+        {"name": "Grafana", "repo": "grafana/grafana", "package": None, "our_version": None},
+        {"name": "Express", "repo": None, "package": {"kind": "npm", "ref": "express"}},
+    ):
+        added = await n8n_lab.lab.call("alice", "POST", "/api/v1/watchlist/software", body)
+        assert added.status_code in (200, 201), added.text
+    places = [option.id for option in await n8n_lab.facts().places("github_releases")]
+    assert "grafana/grafana" in places
+    assert "express" not in places
+
+
 async def test_a_read_block_gets_the_releases_newest_first_or_github_s_trouble(n8n_lab: N8nLab):
     read = ReleasesRead(
         releases=[

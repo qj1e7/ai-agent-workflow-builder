@@ -272,7 +272,7 @@ describe('what the run didn’t check', () => {
     capabilities.map((c) => (c.tools.includes('jira.search') ? { ...c, agents: [...c.agents, ...SUMMARY_CARD] } : c))
   const UNREAD = ['Grafana', 'LangServe', 'PostgreSQL', 'Python']
   const SUMMARY_LINES = ['The platform can’t yet see a ticket’s component or priority.', 'The platform can’t yet look past the 50 newest tickets.']
-  const SOFTWARE_LINES = ['Grafana, LangServe, PostgreSQL and Python couldn’t be read, so no ticket is proposed for them.', 'The platform can’t yet check registries or security advisories.']
+  const SOFTWARE_LINES = ['Grafana, LangServe, PostgreSQL and Python couldn’t be read, so no ticket is proposed for them.', 'The platform can’t yet check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using.']
 
   it('names the software a check couldn’t read, then what the registry says the platform can’t check yet', () => {
     expect(notCheckedWords(UNREAD, VERSION_CHECKER, CAPABILITIES)).toEqual(SOFTWARE_LINES)
@@ -290,7 +290,7 @@ describe('what the run didn’t check', () => {
   })
 
   it('gives a release check the release line, though its agent also reads Jira for the tickets it raised', () => {
-    expect(notCheckedWords([], VERSION_CHECKER, CAPABILITIES)).toEqual(['The platform can’t yet check registries or security advisories.'])
+    expect(notCheckedWords([], VERSION_CHECKER, CAPABILITIES)).toEqual(['The platform can’t yet check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using.'])
   })
 
   it('never lists what the registry says is Ready, and claims nothing while the registry is not in', () => {

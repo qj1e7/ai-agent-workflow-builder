@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client'
 import { lowerStart } from '../../api/labels'
-import type { Day, ScheduleHold, ScheduleView, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import type { AddSoftware, Day, ScheduleHold, ScheduleView, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { sentence, type NextRun } from '../run/words'
 import { dateAndClock, lineWhen, scheduleZoneName, timesZone } from '../workflows/times'
 
@@ -272,14 +272,101 @@ export const dayOption: Record<Day, string> = {
 const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
 const DOT_SEGMENT = /\/\.\.?$/
 const VERSION = /^[vV]?\d+\.\d+\.\d+$/
+/** A Maven or npm package's version (ADR 0025): three numbers and at most one qualifier that marks a final build. platform-api holds the same rule. */
+const PACKAGE_VERSION = /^\d+\.\d+\.\d+(?:\.Final|\.RELEASE|\.GA|-jre|-android)?$/
 const CLOCK = /^([01][0-9]|2[0-3]):[0-5][05]$/
 const NAME_LIMIT = 80
 
-export const NAME_HELP = 'Type the name, such as Kubernetes. I’ll find its GitHub project.'
+export const NAME_HELP = 'I know common software, such as Kubernetes. If I don’t know yours, you can choose where it’s published.'
 
 export const REPO_HELP = 'Paste the project’s GitHub link, or type owner/name.'
 const REPO_BAD = 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.'
 const REPO_EMPTY = `Type its GitHub repository. ${REPO_HELP}`
+
+/** Where a watched software is published (ADR 0025). The Version checker reads each one. */
+export type SourceKind = 'github' | 'maven' | 'npm'
+export const SOURCE_KINDS: readonly SourceKind[] = ['github', 'maven', 'npm']
+export const SOURCE_NAMES: Readonly<Record<SourceKind, string>> = { github: 'GitHub', maven: 'Maven Central', npm: 'npm' }
+
+/** A package's known vulnerabilities are looked up at each check. A GitHub project names no package to look up. */
+export const isPackage = (kind: SourceKind): boolean => kind !== 'github'
+
+/** The field that names the software at its source: its label, an example and the help under it. */
+export const SOURCE_FIELDS: Readonly<Record<SourceKind, { readonly label: string; readonly placeholder: string; readonly help: string }>> = {
+  github: { label: 'GitHub repository', placeholder: 'owner/name', help: REPO_HELP },
+  maven: { label: 'Maven coordinates', placeholder: 'groupId:artifactId', help: 'Type groupId:artifactId, for example org.apache.logging.log4j:log4j-core.' },
+  npm: { label: 'npm package', placeholder: 'package-name', help: 'Type the package name, for example express or @nestjs/core.' },
+}
+
+// The same shapes platform-api and the agent runtime accept (MAVEN_COORDINATE_PATTERN, NPM_PACKAGE_PATTERN).
+const PACKAGE: Readonly<Record<Exclude<SourceKind, 'github'>, RegExp>> = {
+  maven: /^[A-Za-z0-9_-]{1,60}(?:\.[A-Za-z0-9_-]{1,60}){0,10}:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$/,
+  npm: /^(?:@[a-z0-9~-][a-z0-9._~-]{0,100}\/)?[a-z0-9~-][a-z0-9._~-]{0,113}$/,
+}
+const PACKAGE_BAD: Readonly<Record<Exclude<SourceKind, 'github'>, string>> = {
+  maven: 'That doesn’t look like Maven coordinates. Type groupId:artifactId, for example org.apache.logging.log4j:log4j-core.',
+  npm: 'That doesn’t look like an npm package name. Type it in small letters, for example express or @nestjs/core.',
+}
+
+/** The page that lists the versions the check reads. */
+export function sourceUrl(kind: SourceKind, ref: string): string {
+  if (kind === 'maven') {
+    const [group = '', artifact = ''] = ref.split(':')
+    return `https://central.sonatype.com/artifact/${group}/${artifact}/versions`
+  }
+  if (kind === 'npm') return `https://www.npmjs.com/package/${ref}?activeTab=versions`
+  return `https://github.com/${ref}`
+}
+
+/** Where a watched software is read, as the software page's Source fact says it, as the sketch draws it (ADR 0025). */
+export function sourceAt(kind: SourceKind, ref: string): string {
+  if (kind === 'maven') return `central.sonatype.com/artifact/${ref.replace(':', '/')}`
+  if (kind === 'npm') return `npmjs.com/package/${ref}`
+  return `github.com/${ref}`
+}
+
+/** One watched source: what the list already holds, to refuse the same one twice. A change of case is the same source. */
+export interface Watched {
+  readonly kind: SourceKind
+  readonly ref: string
+}
+
+const sameSource = (a: Watched, b: Watched) => a.kind === b.kind && a.ref.toLowerCase() === b.ref.toLowerCase()
+
+/** The name of a software at its source, as the platform wants it, or what is wrong. */
+export function checkSource(kind: SourceKind, text: string, watched: readonly Watched[] = []): Checked<string> {
+  if (kind === 'github') return checkRepo(text, watched.filter((w) => w.kind === 'github').map((w) => w.ref))
+  const ref = text.trim()
+  if (ref === '') return { ok: false, words: `Type its ${kind === 'maven' ? 'Maven coordinates' : 'npm package name'}. ${SOURCE_FIELDS[kind].help}` }
+  if (!PACKAGE[kind].test(ref)) return { ok: false, words: PACKAGE_BAD[kind] }
+  if (watched.some((w) => sameSource(w, { kind, ref }))) return { ok: false, words: `${ref} is already on the list.` }
+  return { ok: true, value: ref }
+}
+
+/** The add body: a GitHub project as repo, a package as package with its registry. */
+export function addBody(name: string, kind: SourceKind, ref: string, version: string | null): AddSoftware {
+  const where = kind === 'github' ? { repo: ref } : { package: { kind, ref } }
+  return { name, ...where, ...(version === null ? {} : { our_version: version }) }
+}
+
+/**
+ * What Home's card sends to add a match: a package with the version typed on the card, if any, which is the one its known
+ * vulnerabilities are looked up in. A GitHub project sends no version, as before.
+ */
+export function homeAdd(name: string, kind: SourceKind, ref: string, typed: string): Checked<AddSoftware> {
+  if (!isPackage(kind)) return { ok: true, value: addBody(name, kind, ref, null) }
+  const version = checkVersion(typed, kind)
+  return version.ok ? { ok: true, value: addBody(name, kind, ref, version.value) } : version
+}
+
+/** What Home's card says about known vulnerabilities once a package is on the watchlist. Nothing for a GitHub project. */
+export function addedVulnerabilityWords(body: AddSoftware): string {
+  if (!body.package) return ''
+  return body.our_version ? `Each check also looks up known vulnerabilities in ${body.our_version}.` : 'Without your version, known vulnerabilities aren’t looked up.'
+}
+
+/** The ref an add body names, for messages. */
+export const refOf = (body: AddSoftware): string => body.package?.ref ?? body.repo ?? ''
 
 type Checked<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly words: string }
 
@@ -307,13 +394,48 @@ export function checkName(text: string, watched: readonly string[] = []): Checke
 }
 
 export const VERSION_HELP = 'Leave it empty if you don’t know. It shows as Not known, and the check tells you about releases newer than the newest one it first reads.'
+/** Where a package's known vulnerabilities show. The Software page keeps no copy of them (ADR 0025). */
+export const VULNERABILITIES_WHERE = 'The last check’s run says how many there are and names the worst. An upgrade ticket lists each one, linked to NVD or OSV.'
+export const PACKAGE_VERSION_HELP = `${VERSION_HELP} Give it, and each check also looks up known vulnerabilities in it. ${VULNERABILITIES_WHERE}`
+/** The version help on Home's card for a package: the only place it can be given there (ADR 0025). */
+export const HOME_PACKAGE_VERSION_HELP = 'Give it, and each check also looks up known vulnerabilities in it. Without it, they aren’t looked up.'
+
+/**
+ * What the Software page says about a package's known vulnerabilities, or null for a GitHub project, which names no package. They are
+ * looked up only in a version someone gave or an upgrade ticket set when marked Done, never in one the first check read.
+ */
+export const VULNERABILITIES_NEXT = 'Not looked up yet. The next check looks them up in this version.'
+
+/**
+ * What a package's page says about its known vulnerabilities, and the run to open: only the last check, and only when that
+ * check looked this version up, so the link never leads to a run without them (ADR 0025).
+ */
+export function vulnerabilityFact(
+  row: WatchedSoftwareView,
+  lastCheck: { readonly run_id: string; readonly started_at: string } | null,
+): { readonly words: string; readonly run: string | null } | null {
+  if (!isPackage(row.source.kind)) return null
+  const given = row.our_version_source
+  if (row.our_version === null || given?.kind === 'first_check') {
+    return { words: 'Not looked up. They’re looked up only in a version someone gave, or one an upgrade ticket set when marked Done.', run: null }
+  }
+  const started = lastCheck ? Date.parse(lastCheck.started_at) : NaN
+  const checked = row.checked_at ? Date.parse(row.checked_at) : NaN
+  // A version kept from before versions had a source has no time, and was given before any check here.
+  const givenAt = given ? Date.parse(given.at) : -Infinity
+  const lookedUp = lastCheck !== null && givenAt <= started && checked >= started
+  return lookedUp ? { words: VULNERABILITIES_WHERE, run: lastCheck.run_id } : { words: VULNERABILITIES_NEXT, run: null }
+}
 
 const VERSION_BAD = 'Type the version as three numbers, such as 1.2.14.'
+const PACKAGE_VERSION_BAD = 'Type the version as three numbers, such as 1.2.14. A final build’s ending, such as .Final or -jre, can follow them.'
 
-export function checkVersion(text: string): Checked<string | null> {
+/** A package's version may end as its registry writes a final build, as 4.1.115.Final or 33.3.1-jre. A GitHub version may not. */
+export function checkVersion(text: string, kind: SourceKind = 'github'): Checked<string | null> {
   const version = text.trim()
   if (version === '') return { ok: true, value: null }
-  if (!VERSION.test(version)) return { ok: false, words: VERSION_BAD }
+  const pkg = isPackage(kind)
+  if (!(pkg ? PACKAGE_VERSION : VERSION).test(version)) return { ok: false, words: pkg ? PACKAGE_VERSION_BAD : VERSION_BAD }
   return { ok: true, value: version }
 }
 
@@ -324,7 +446,7 @@ export interface FormErrors {
   readonly form?: string
 }
 
-const REFUSED_FIELD: Record<string, keyof FormErrors> = { name: 'name', repo: 'repo', our_version: 'version' }
+const REFUSED_FIELD: Record<string, keyof FormErrors> = { name: 'name', repo: 'repo', ref: 'repo', package: 'repo', our_version: 'version' }
 const REFUSED_WORDS: Record<keyof FormErrors, string> = {
   name: `Give the software a name of ${NAME_LIMIT} letters or fewer.`,
   repo: REPO_BAD,

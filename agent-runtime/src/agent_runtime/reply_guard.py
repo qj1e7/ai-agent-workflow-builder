@@ -400,7 +400,11 @@ NOT_READY: Final[dict[str, Callable[[str], bool]]] = {
     ),
     "registries.check": _found(
         re.compile(
-            r"\bregistr(?:y|ies)\b|\bpypi\b|\bnpm\b|\bdocker\s+hub\b|\bmaven\b|\badvisor(?:y|ies)\b",
+            # Maven Central and npm are read (ADR 0025), so only the planned sources count. A
+            # registry is still one, as "any package registry", except npm's and Maven's own.
+            r"\bpypi\b|\bnuget\b|\bdocker\s*hub\b|\bend[\s-]+of[\s-]+life\b|"
+            r"\bsupport\s+end\s+dates?\b|\bexploited\b|"
+            r"(?<!\bnpm\s)(?<!\bmaven\s)(?<!\bmaven\scentral\s)\bregistr(?:y|ies)\b",
             re.IGNORECASE,
         )
     ),
