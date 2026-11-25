@@ -155,24 +155,53 @@ def _severity_words(vulnerability: Vulnerability) -> str:
     return f"{vulnerability.severity}{score}"
 
 
+TICKET_VERSIONS = 30
+"""The newest versions an upgrade ticket lists. A registry returns every version ever published,
+so a package far behind could have hundreds, past what one ticket's description can hold."""
+TICKET_VULNERABILITIES = 20
+"""The worst known vulnerabilities an upgrade ticket lists, for the same reason."""
+NOT_LOOKED_UP = (
+    "\n\nKnown vulnerabilities in our version could not be looked up at this check. This does "
+    "not mean it has none."
+)
+NONE_LISTED = "\n\nOSV lists no known vulnerabilities in our version."
+
+
+def version_lines(new_versions: list[str]) -> str:
+    """The ticket's list of newer versions, newest first, up to TICKET_VERSIONS of them."""
+    shown = new_versions[:TICKET_VERSIONS]
+    lines = "\n".join(f"- {tag}" for tag in shown)
+    more = len(new_versions) - len(shown)
+    return f"{lines}\nand {plural(more, 'older one')}." if more else lines
+
+
 def vulnerability_lines(finding: Finding) -> str:
     """The ticket's section on known vulnerabilities. Each line links its record, so the
-    Approver checks the evidence, not our summary of it."""
-    if finding.vulnerability_check != "checked" or not finding.vulnerabilities:
+    Approver checks the evidence, not our summary of it. A package's ticket always says what the
+    lookup found, so a lookup that failed never reads as none (ADR 0025)."""
+    if finding.vulnerability_check == "could_not_check":
+        return NOT_LOOKED_UP
+    if finding.vulnerability_check != "checked":
         return ""
+    if not finding.vulnerabilities:
+        return NONE_LISTED
     lines: list[str] = []
-    for v in finding.vulnerabilities:
+    for v in finding.vulnerabilities[:TICKET_VULNERABILITIES]:
         fix = f" Fixed in {v.fixed_in}." if v.fixed_in else ""
         about = f" {v.summary}" if v.summary else ""
         sources = " and ".join(v.reported_by)
         lines.append(f"- {v.id} ({_severity_words(v)}, reported by {sources}).{about}{fix} {v.url}")
+    count = vulnerability_count(len(finding.vulnerabilities))
+    least = "" if finding.vulnerabilities_complete else "at least "
+    head = f"\n\nOur version has {least}{count}"
     if not finding.vulnerabilities_complete:
         # OSV had more pages than one check reads, so these are only the first (ADR 0025).
-        return (
-            f"\n\nOur version has at least {vulnerability_count(len(lines))}. OSV lists more "
-            "than one check reads, so these are only the first:\n" + "\n".join(lines)
-        )
-    return f"\n\nOur version has {vulnerability_count(len(lines))}:\n" + "\n".join(lines)
+        head += ". OSV lists more than one check reads"
+    if len(finding.vulnerabilities) > len(lines):
+        head += f". These are the {len(lines)} worst"
+    elif not finding.vulnerabilities_complete:
+        head += ", so these are only the first"
+    return f"{head}:\n" + "\n".join(lines)
 
 
 def vulnerability_count(count: int) -> str:
@@ -191,7 +220,7 @@ def ticket_for(item: SoftwareToCheck, finding: Finding) -> ProposedIntent:
     if finding.full_name is not None and finding.full_name.casefold() != ref.casefold():
         ref = f"{ref}, which GitHub now calls {finding.full_name}"
     count = plural(len(finding.new_versions), "new release")
-    bullets = "\n".join(f"- {tag}" for tag in finding.new_versions)
+    bullets = version_lines(finding.new_versions)
     if item.from_first_check:
         title = f"Upgrade {name} to {finding.newest}"
         newer = f"newer than {our}, the newest the first check read"

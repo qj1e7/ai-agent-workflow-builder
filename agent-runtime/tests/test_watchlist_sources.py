@@ -380,3 +380,50 @@ def test_a_full_list_says_no_at_least():
     assert isinstance(result, TaskFinished)
     assert result.output.findings[0].vulnerabilities_complete
     assert "at least" not in result.output.proposed[0].fields["body"]
+
+
+def test_a_package_far_behind_lists_only_the_newest_versions_and_the_worst_vulnerabilities():
+    """A registry returns every version ever published, so a ticket lists the newest 30 and
+    the 20 worst vulnerabilities, and counts the rest."""
+    versions = [f"2.{minor}.0" for minor in range(100, 14, -1)] + ["2.14.1"]
+    services = many_services(25)
+    result = Check(maven=Registry({LOG4J: versions}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    [found] = result.output.findings
+    assert len(found.new_versions) == 86 and len(found.vulnerabilities) == 25
+    body = result.output.proposed[0].fields["body"]
+    listed = [line for line in body.splitlines() if line.startswith("- 2.")]
+    assert listed == [f"- 2.{minor}.0" for minor in range(100, 70, -1)]
+    assert "\nand 56 older ones.\n" in body
+    assert "Our version has 25 known vulnerabilities. These are the 20 worst:" in body
+    assert sum(1 for line in body.splitlines() if line.startswith("- CVE-")) == 20
+
+
+def test_a_lookup_that_failed_is_said_in_the_ticket_so_it_never_reads_as_none():
+    services = Services([], osv_status=503)
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    body = result.output.proposed[0].fields["body"]
+    assert (
+        "Known vulnerabilities in our version could not be looked up at this check. This does "
+        "not mean it has none." in body
+    )
+
+
+def test_a_lookup_that_found_none_says_so_in_the_ticket():
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=Services([])).run(log4j())
+    assert isinstance(result, TaskFinished)
+    body = result.output.proposed[0].fields["body"]
+    assert "OSV lists no known vulnerabilities in our version." in body
+
+
+def test_a_github_ticket_says_nothing_about_vulnerabilities_it_never_looked_up():
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=Services([])).run(on_github())
+    assert isinstance(result, TaskFinished)
+    body = result.output.proposed[0].fields["body"]
+    assert "vulnerabilit" not in body.lower()
+
+
+def many_services(count: int) -> Services:
+    records = [osv_record(f"GHSA-{n}", [f"CVE-2024-{n:04d}"], "HIGH") for n in range(count)]
+    return Services(records)
