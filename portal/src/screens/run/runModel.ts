@@ -116,7 +116,7 @@ export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
    * (an empty string when the platform gave no reason), and is never the same as a read that found nothing. `source` is where it
    * read, such as npm, Maven Central or GitHub, and `software` which software or repository.
    */
-  | { readonly kind: 'checked'; readonly newest: string | null; readonly problem: string | null; readonly source: string | null; readonly software: string | null }
+  | { readonly kind: 'checked'; readonly newest: string | null; readonly problem: string | null; readonly reason: string | null; readonly source: string | null; readonly software: string | null }
   /** The agents drafted these writes for approval. */
   | { readonly kind: 'drafted'; readonly count: number; readonly connector: string | null; readonly operation: string | null; readonly allTickets: boolean }
   /** What a Tell block did, in the platform's own words: sent, not confirmed, what a test run would have sent, or nothing to report. */
@@ -178,11 +178,12 @@ interface ReadOf {
   readonly read: boolean
   readonly release: Release | null
   readonly problem: string | null
+  readonly reason: string | null
   readonly source: string | null
   readonly software: string | null
 }
 
-const NOT_A_READ: ReadOf = { read: false, release: null, problem: null, source: null, software: null }
+const NOT_A_READ: ReadOf = { read: false, release: null, problem: null, reason: null, source: null, software: null }
 
 function readOf(data: { readonly step: string; readonly result: Readonly<Record<string, unknown>> }): ReadOf {
   const { step, result } = data
@@ -190,12 +191,13 @@ function readOf(data: { readonly step: string; readonly result: Readonly<Record<
   const text = (key: string) => (typeof result[key] === 'string' && result[key] !== '' ? result[key] : null)
   const source = text('source') ?? (step === 'github_read_releases' ? 'GitHub' : null)
   const software = text('software') ?? text('repo')
-  const problem = typeof result['problem'] === 'string' ? result['problem'] : result['state'] === 'cant_check' ? '' : null
+  const problem = typeof result['problem'] === 'string' ? result['problem'] : null
+  const reason = typeof result['reason'] === 'string' ? result['reason'] : result['state'] === 'cant_check' && problem === null ? '' : null
   const tags = Array.isArray(result['tags']) ? result['tags'] : []
   const newest = typeof result['newest'] === 'string' ? result['newest'] : tags.find((tag): tag is string => typeof tag === 'string')
-  if (problem !== null || newest === undefined || newest === '') return { read: true, release: null, problem, source, software }
+  if (problem !== null || reason !== null || newest === undefined || newest === '') return { read: true, release: null, problem, reason, source, software }
   const day = result['newest_published_at']
-  return { read: true, release: { version: newest, at: typeof day === 'string' && day !== '' ? day : null }, problem: null, source, software }
+  return { read: true, release: { version: newest, at: typeof day === 'string' && day !== '' ? day : null }, problem: null, reason: null, source, software }
 }
 
 export const emptyModel: RunModel = {
@@ -456,9 +458,9 @@ function apply(model: RunModel, event: RunEvent): RunModel {
       return touch(model, actorRef(event), event)
     case 'agent_step_finished': {
       const touched = touch(model, actorRef(event), event)
-      const { read, release, problem, source, software } = readOf(event.data)
+      const { read, release, problem, reason, source, software } = readOf(event.data)
       if (!read) return touched
-      return say({ ...touched, release: release ?? touched.release }, { kind: 'checked', seq: event.seq, at: event.at, newest: release?.version ?? null, problem, source, software })
+      return say({ ...touched, release: release ?? touched.release }, { kind: 'checked', seq: event.seq, at: event.at, newest: release?.version ?? null, problem, reason, source, software })
     }
     case 'agent_failed': {
       const touched = touch(model, actorRef(event), event)

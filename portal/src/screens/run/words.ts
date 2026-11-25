@@ -159,8 +159,12 @@ type Read = Extract<ChatItem, { kind: 'checked' }>
  * Express on npm: found 5.1.0"). A read that failed says so and why, and is never "no releases found": that is a read that worked
  * and found nothing a stable release rule counts.
  */
-export function checkedWords(read: Pick<Read, 'newest' | 'problem' | 'source' | 'software'>, named: boolean): string {
+export function checkedWords(read: Pick<Read, 'newest' | 'problem' | 'reason' | 'source' | 'software'>, named: boolean): string {
   const where = read.source ?? 'the release source'
+  if (read.reason !== null) {
+    const what = read.software ?? where
+    return read.reason === '' ? `Couldn’t check ${what}.` : `Couldn’t check ${what}: ${read.reason}`
+  }
   if (read.problem !== null) {
     const what = read.software ? `${read.software} on ${where}` : where
     return read.problem === '' ? `Couldn’t read ${what}.` : `Couldn’t read ${what}: ${read.problem}`
@@ -232,7 +236,7 @@ export function lineOf(item: ChatItem, nameOf: NameOf, declinedNext: string | nu
     case 'reported':
       return { speaker: app, text: `${nameOf(item.by)} reported this run to support.`, tone: 'plain' }
     case 'checked':
-      return { speaker: app, text: checkedWords(item, false), tone: item.problem === null ? 'plain' : 'bad' }
+      return { speaker: app, text: checkedWords(item, false), tone: item.problem === null && item.reason === null ? 'plain' : 'bad' }
     case 'drafted':
       return { speaker: app, text: draftedWords(item), tone: 'plain' }
     case 'told':
