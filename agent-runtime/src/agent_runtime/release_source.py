@@ -13,6 +13,7 @@ from agent_runtime.contract import (
     AgentStepStartedData,
     ReadReleasesResult,
     ReleaseRead,
+    ReleasesNotFound,
     ReleasesNotRead,
     ReleasesRead,
     RoomAddressee,
@@ -165,12 +166,15 @@ RELEASES_READ_LIMIT = 30
 
 def releases_of(source: ReleaseSource, repo: str, tag_pattern: str) -> ReadReleasesResult:
     """One read of a repository's stable releases that the tag rule counts, newest first, for the
-    platform's Read block. n8n tries a failed block again by itself, so this tries once."""
+    platform's Read block. n8n tries a failed block again by itself, so this tries once. A
+    repository GitHub doesn't have is not found, which the platform names in the run's stop."""
     try:
         releases = source.fetch(repo)
     except SourceRejected as refused:
         if refused.limited:
             return ReleasesNotRead(message=f"{LIMITED}.", retryable=True)
+        if refused.status == HTTPStatus.NOT_FOUND:
+            return ReleasesNotFound()
         message = f"{SOURCE_NAME} answered {phrase(refused.status)}."
         return ReleasesNotRead(message=message, retryable=False)
     except SourceUnavailable as unavailable:

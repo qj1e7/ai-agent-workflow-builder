@@ -527,7 +527,13 @@ class ReleasesNotRead(WireModel):
     retryable: bool
 
 
-type ReadReleasesResult = Annotated[ReleasesRead | ReleasesNotRead, Field(discriminator="status")]
+class ReleasesNotFound(WireModel):
+    status: Literal["not_found"] = "not_found"
+
+
+type ReadReleasesResult = Annotated[
+    ReleasesRead | ReleasesNotRead | ReleasesNotFound, Field(discriminator="status")
+]
 
 read_releases_result_adapter: TypeAdapter[ReadReleasesResult] = TypeAdapter(ReadReleasesResult)
 

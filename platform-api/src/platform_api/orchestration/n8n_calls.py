@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any, Literal, Protocol
 
-from platform_api.monitoring import NOTHING_READ_YET, stop_words
+from platform_api.monitoring import NOTHING_READ_YET, not_found_words, stop_words
 from platform_api.orchestration.agents import CardInput, CardSpec, InputKind
 from platform_api.orchestration.approvals import (
     ApprovalRequest,
@@ -231,10 +231,22 @@ class WorkflowFacts(Protocol):
 
 @dataclass(frozen=True)
 class ReadFailed:
+    """A read with no usable answer this time, as from a source that is down. n8n tries again."""
+
     detail: str
 
 
+@dataclass(frozen=True)
+class NotFoundAtSource:
+    """The source has no such place, as a repository GitHub doesn't have. Trying again finds
+    none, so the Read block is refused in words that name the source and the place (ADR 0056)."""
+
+    source: str
+    place: str
+
+
 type ReadItems = Sequence[Mapping[str, Json]]
+type SourceRead = ReadItems | ReadFailed | NotFoundAtSource
 
 
 class SourceReads(Protocol):
@@ -242,7 +254,7 @@ class SourceReads(Protocol):
 
     async def places(self, source: str) -> Sequence[NodeOption]: ...
 
-    async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed: ...
+    async def read(self, source: str, place: str, query: str | None) -> SourceRead: ...
 
 
 class ReadSources:
@@ -256,7 +268,7 @@ class ReadSources:
     async def places(self, source: str) -> Sequence[NodeOption]:
         return await self._own.get(source, self._rest).places(source)
 
-    async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
+    async def read(self, source: str, place: str, query: str | None) -> SourceRead:
         return await self._own.get(source, self._rest).read(source, place, query)
 
 
@@ -416,6 +428,20 @@ class TryLater:
 
 
 type CallResult = Answer | AskAnswer | WriteAnswer | Told | Refused | TryLater
+
+
+def read_answer(read: SourceRead) -> Answer | Refused | TryLater:
+    """What a Read block gets for its source's answer, in a real run and in a simulation alike,
+    so the two can't disagree: the items up to READ_LIMIT, a try again, or a refusal in words
+    that its stop names the source and the place with (`block_sources.source_stop`)."""
+    match read:
+        case ReadFailed(detail):
+            return TryLater(detail)
+        case NotFoundAtSource(source, place):
+            return Refused(404, not_found_words(source, place))
+        case _:
+            return Answer(tuple(read[:READ_LIMIT]), cut_off=len(read) > READ_LIMIT)
+
 
 NOT_OURS = Refused(403, "This workflow is not one our platform runs.")
 SELF_TEST_FAILS = Refused(

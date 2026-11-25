@@ -29799,6 +29799,16 @@
             },
             "description": "Refused by a safety rule, such as a start or a version that fails"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The source has no such place, as a repository GitHub doesn't have"
+          },
           "409": {
             "content": {
               "application/json": {
@@ -29898,6 +29908,16 @@
               }
             },
             "description": "Refused by a safety rule, such as a start or a version that fails"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The source has no such place, as a repository GitHub doesn't have"
           },
           "409": {
             "content": {
@@ -29999,6 +30019,16 @@
             },
             "description": "Refused by a safety rule, such as a start or a version that fails"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The source has no such place, as a repository GitHub doesn't have"
+          },
           "409": {
             "content": {
               "application/json": {
@@ -30098,6 +30128,16 @@
               }
             },
             "description": "Refused by a safety rule, such as a start or a version that fails"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The source has no such place, as a repository GitHub doesn't have"
           },
           "409": {
             "content": {
@@ -30199,6 +30239,16 @@
             },
             "description": "Refused by a safety rule, such as a start or a version that fails"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The source has no such place, as a repository GitHub doesn't have"
+          },
           "409": {
             "content": {
               "application/json": {
@@ -30298,6 +30348,16 @@
               }
             },
             "description": "Refused by a safety rule, such as a start or a version that fails"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The source has no such place, as a repository GitHub doesn't have"
           },
           "409": {
             "content": {

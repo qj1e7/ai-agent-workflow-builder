@@ -56,7 +56,6 @@ from platform_api.orchestration.n8n_calls import (
     NOT_OUR_ERROR_WORKFLOW,
     NOT_OURS,
     NOTHING_READ,
-    READ_LIMIT,
     SELF_TEST_FAILS,
     START_TOO_LATE,
     START_USED,
@@ -93,7 +92,6 @@ from platform_api.orchestration.n8n_calls import (
     PlatformWorkflow,
     ProposeCall,
     ReadCall,
-    ReadFailed,
     Refused,
     SourceReads,
     StopRun,
@@ -109,6 +107,7 @@ from platform_api.orchestration.n8n_calls import (
     decide_link,
     fail_by_report,
     failure_words,
+    read_answer,
     refuses_writes,
     rejoin,
     release_compared,
@@ -833,11 +832,8 @@ class NodeCalls:
             ):
                 return _read_watchlist(admitted.record.spec.task)
             case ReadCall(source, place, query):
-                read = await self._sources.read(source, place, query)
-                if isinstance(read, ReadFailed):
-                    return TryLater(read.detail)
-                items = tuple(read[:READ_LIMIT])
-                return Done(Answer(items, cut_off=len(read) > READ_LIMIT))
+                answer = read_answer(await self._sources.read(source, place, query))
+                return Done(answer) if isinstance(answer, Answer) else answer
             case AgentCall(agent) if agent == WATCHLIST_CHECKER.id:
                 return await self._check_watchlist(admitted)
             case AgentCall(agent, inputs):
@@ -874,7 +870,7 @@ class NodeCalls:
             case AgentToRun(card_run, release_of):
                 pass
         release = None if release_of is None else await self._newest_release(release_of)
-        if isinstance(release, TryLater):
+        if isinstance(release, Refused | TryLater):
             return release
         card = CardToRun(card=card_run.card, values=dict(card_run.values))
         request = await self._request(admitted, CardsInputs(agents=[card]))
@@ -989,14 +985,16 @@ class NodeCalls:
         async with self._db.transaction("orchestration") as uow:
             await self._watch.record_review(uow, record, reviewed, None)
 
-    async def _newest_release(self, repo: str) -> str | None | TryLater:
+    async def _newest_release(self, repo: str) -> str | None | Refused | TryLater:
         """Read by our API, not taken from the agent's words, so it can key the change across
-        runs. None when the repository has no release the tag rule counts."""
-        read = await self._sources.read(GITHUB_RELEASES, repo, None)
-        if isinstance(read, ReadFailed):
-            return TryLater(read.detail)
-        newest = read[0].get("id") if read else None
-        return newest if isinstance(newest, str) else None
+        runs. None when the repository has no release the tag rule counts. A Read block would get
+        the same refusal or try again (`read_answer`)."""
+        match read_answer(await self._sources.read(GITHUB_RELEASES, repo, None)):
+            case Answer(items):
+                newest = items[0].get("id") if items else None
+                return newest if isinstance(newest, str) else None
+            case not_read:
+                return not_read
 
     async def _tell(self, admitted: Admitted, call: NodeCall, tell: TellCall) -> Kept | TryLater:
         """A notice under the Tell rule (ENGINE-PLAN 2.3.12, D19): composed from what the run

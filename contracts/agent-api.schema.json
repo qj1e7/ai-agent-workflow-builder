@@ -3832,6 +3832,7 @@
     "ReadReleasesResult": {
       "discriminator": {
         "mapping": {
+          "not_found": "#/$defs/ReleasesNotFound",
           "not_read": "#/$defs/ReleasesNotRead",
           "read": "#/$defs/ReleasesRead"
         },
@@ -3843,6 +3844,9 @@
         },
         {
           "$ref": "#/$defs/ReleasesNotRead"
+        },
+        {
+          "$ref": "#/$defs/ReleasesNotFound"
         }
       ]
     },
@@ -3917,6 +3921,20 @@
         "published_at"
       ],
       "title": "ReleaseRead",
+      "type": "object"
+    },
+    "ReleasesNotFound": {
+      "additionalProperties": false,
+      "description": "GitHub has no such repository, or none it shows us. Trying again finds none.",
+      "properties": {
+        "status": {
+          "const": "not_found",
+          "default": "not_found",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "title": "ReleasesNotFound",
       "type": "object"
     },
     "ReleasesNotRead": {

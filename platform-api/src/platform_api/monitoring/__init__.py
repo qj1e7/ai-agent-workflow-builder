@@ -67,6 +67,8 @@ from platform_api.monitoring.source_stops import (
     REQUEST_LIMIT_SECONDS,
     SourceStop,
     delay_in,
+    not_found_in,
+    not_found_words,
     stop_words,
 )
 from platform_api.monitoring.traces import (
@@ -146,6 +148,8 @@ __all__ = [
     "RunSkippedData",
     "RunSucceededData",
     "SourceStop",
+    "not_found_in",
+    "not_found_words",
     "StepFinishedData",
     "StepRetriedData",
     "StepStartedData",

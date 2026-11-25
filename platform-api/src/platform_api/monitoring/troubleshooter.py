@@ -210,8 +210,17 @@ def _source_stop(failure: RunFailedData) -> SourceStop | None:
 
 
 def source_advice(stop: SourceStop) -> Advice:
-    """What a block that got no usable answer from its source tells, from the stop's own facts."""
+    """What a block that got no usable answer from its source tells, from the stop's own facts. A
+    place the source doesn't have is the same on a retry, so the advice is to check the name."""
     source = stop.source or "the source"
+    if stop.delay == "not_found":
+        return Advice(
+            explanation=headline(stop),
+            likely_cause=CAUSES[stop.delay],
+            suggested_action="ask_maintainer",
+            suggestion=f"Check that the workflow names the right one and that it still exists on "
+            f"{source}, then start a new run.",
+        )
     return Advice(
         explanation=headline(stop),
         likely_cause=CAUSES[stop.delay],
@@ -323,6 +332,7 @@ SOURCE_KINDS: Final[Mapping[Delay, FailureKind]] = {
     "cut_off": "no_answer",
     "unreachable": "no_answer",
     "refused": "refused",
+    "not_found": "not_found",
 }
 """The one kind each of ADR 0056's source stops shows."""
 
