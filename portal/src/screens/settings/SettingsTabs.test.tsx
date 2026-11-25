@@ -164,7 +164,7 @@ describe('the Connections tab', () => {
     expect(jira).toContain('Jira is working.')
     expect(jira).toContain('Checked today, 9:00')
     expect(jira).toContain('Practice copy')
-    expect(jira).toContain('What uses it Read Jira tickets; Find tickets by when they were last updated, their type or who owns them; Create a Jira ticket after a yes')
+    expect(jira).toContain('What uses it Read Jira tickets; Find tickets by when they were last updated, their type or who owns them; Create a Jira ticket after approval')
     expect(jira).toContain('Key Ends in 9c')
     expect(jira).not.toContain('Post messages')
   })

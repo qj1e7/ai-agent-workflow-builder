@@ -53,12 +53,12 @@
       "next": [
         {
           "exit": null,
-          "to": "Ask for a yes"
+          "to": "Ask for approval"
         }
       ]
     },
     {
-      "name": "Ask for a yes",
+      "name": "Ask for approval",
       "kind": "ask",
       "badge": "ours",
       "tag": null,
@@ -164,7 +164,7 @@
         "tag": "Shapes the change"
       },
       {
-        "name": "Ask for a yes",
+        "name": "Ask for approval",
         "ours": true,
         "block_type": null,
         "tag": "Waits for approval"
@@ -338,7 +338,7 @@
       },
       {
         "rule": "second_yes",
-        "words": "No path asks for a yes twice."
+        "words": "No path asks for approval twice."
       }
     ],
     "approves": [
@@ -396,7 +396,7 @@
       {
         "label": [
           {
-            "text": "Who says yes on each run",
+            "text": "Who approves on each run",
             "quoted": false
           }
         ],
@@ -495,17 +495,17 @@
     {
       "id": "approvers",
       "kind": "approvers",
-      "key": "Yes from",
+      "key": "Approval from",
       "label": [
         {
-          "text": "Who says yes on each run",
+          "text": "Who approves on each run",
           "quoted": false
         }
       ],
       "value": null,
       "mark": "needed",
       "said": "Needed",
-      "question": "Who says yes to \u201cMake the ticket\u201d on each run?",
+      "question": "Who approves \u201cMake the ticket\u201d on each run?",
       "choices": [
         {
           "value": "Any Approver on the team",

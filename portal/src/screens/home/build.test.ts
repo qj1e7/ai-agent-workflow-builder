@@ -142,10 +142,10 @@ describe('the canvas, drawn from the blocks and moved only by the test run’s e
   it('hides every block until the log says they were added, and the yes until the safety checker’s note', () => {
     expect(Object.values(canvasOf(BLOCKS, LOG, { laid: false, yes: false }, null, false).nodes).every((state) => state === 'off')).toBe(true)
     const before = canvasOf(BLOCKS, LOG, { laid: true, yes: false }, null, false)
-    expect(before.nodes['Ask for a yes']).toBe('off')
+    expect(before.nodes['Ask for approval']).toBe('off')
     expect(before.nodes['Read release']).toBe('idle')
-    expect(before.edges['Newer?->Ask for a yes']).toBe('off')
-    expect(canvasOf(BLOCKS, LOG, laid, null, false).nodes['Ask for a yes'], 'the yes the safety checker added is ringed').toBe('added')
+    expect(before.edges['Newer?->Ask for approval']).toBe('off')
+    expect(canvasOf(BLOCKS, LOG, laid, null, false).nodes['Ask for approval'], 'the yes the safety checker added is ringed').toBe('added')
   })
 
   it('lights the entry the test run came in by, and the agents’ blocks while they work, never the schedule', () => {
@@ -162,17 +162,17 @@ describe('the canvas, drawn from the blocks and moved only by the test run’s e
     expect(passed.nodes['Read release']).toBe('ok')
     expect(passed.nodes['Compare']).toBe('ok')
     expect(passed.nodes['Newer?']).toBe('ok')
-    expect(passed.nodes['Ask for a yes']).toBe('added')
+    expect(passed.nodes['Ask for approval']).toBe('added')
     expect(passed.nodes['Create ticket']).toBe('idle')
     expect(passed.edges['Read release->Compare']).toBe('ok')
-    expect(passed.edges['Newer?->Ask for a yes']).toBe('idle')
+    expect(passed.edges['Newer?->Ask for approval']).toBe('idle')
     const nothing = canvasOf(BLOCKS, LOG, laid, NOTHING_NEW, false)
     expect(nothing.nodes['Nothing to change']).toBe('ok')
     expect(nothing.edges['Newer?->Nothing to change']).toBe('ok')
   })
 
   it('drops the safety ring once the workflow is on', () => {
-    expect(canvasOf(BLOCKS, LOG, laid, PASSED, true).nodes['Ask for a yes']).toBe('idle')
+    expect(canvasOf(BLOCKS, LOG, laid, PASSED, true).nodes['Ask for approval']).toBe('idle')
   })
 })
 

@@ -109,7 +109,7 @@ def test_a_drafted_release_check_is_approved_by_another_and_set_up_as_a_draft(
     held = in_n8n(use_case_id)
     assert held["activeVersionId"] is None, "set up as a draft, not published"
     types = {node["name"]: node["type"] for node in held["nodes"]}
-    assert types["Ask for a yes"] == "CUSTOM.wabAskForYes"
+    assert types["Ask for approval"] == "CUSTOM.wabAskForYes"
     assert types["Start from the Portal"] == "CUSTOM.wabStartFromPortal"
 
     tickets = len(api.tickets())

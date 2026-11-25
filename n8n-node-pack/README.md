@@ -1,6 +1,6 @@
 # n8n node pack
 
-Our own n8n nodes: Start from the Portal, Read, Agent, Propose a change, Ask for a yes, Make the approved changes, Tell and Report a failure. `deploy/n8n/Dockerfile` builds them into our n8n image. The design is section 2.2 of `docs/design/chat-first/ENGINE-PLAN.md`.
+Our own n8n nodes: Start from the Portal, Read, Agent, Propose a change, Ask for approval, Make the approved changes, Tell and Report a failure. `deploy/n8n/Dockerfile` builds them into our n8n image. The design is section 2.2 of `docs/design/chat-first/ENGINE-PLAN.md`.
 
 ```sh
 npm ci --ignore-scripts
@@ -36,20 +36,20 @@ workflow id \n trigger's webhookId \n nonce \n kind \n expires
 - It accepts `expires` from one minute in the past to six minutes ahead (five minutes, plus a minute either way for the two clocks), and each nonce once while it remembers it.
 - It passes on `{"nonce", "kind", "workflow_id"}`, with no signature. Our API checks the nonce against its own records.
 
-**A wake**, sent to the resume URL that Ask for a yes gave our API, with the body `{"execution_id", "request_id", "decision", "mac"}`:
+**A wake**, sent to the resume URL that Ask for approval gave our API, with the body `{"execution_id", "request_id", "decision", "mac"}`:
 
 ```
 execution id \n request id \n decision
 ```
 
 - Key: `WAB_NODE_KEY`. `decision` is `yes`, `no` or `no_answer`.
-- Ask for a yes takes the wake only when the execution is the one waiting, and the request is the one our API answered the ask with. A wake without a valid mac gets 401 and picks no exit.
+- Ask for approval takes the wake only when the execution is the one waiting, and the request is the one our API answered the ask with. A wake without a valid mac gets 401 and picks no exit.
 
 ## What the nodes expect back
 
 - A 4xx with a text `detail` shows on the node in those words. n8n retries a node on any error, a refusal included, so our API must answer a repeated refusal the same way.
 - Read and Agent: `{"items": [{...}]}`, each passed on as one item.
-- Ask for a yes: `{"status": "waiting", "request_id": "..."}`, or `{"status": "nothing_to_change"}`.
+- Ask for approval: `{"status": "waiting", "request_id": "..."}`, or `{"status": "nothing_to_change"}`.
 - Make the approved changes: `{"made", "of", "results"}`. `made < of` fails the node with "2 of 3 made".
 - Tell: `{"status", "line"}`, where `status` is `sent`, `sending`, `not_confirmed`, `would_have_sent` (a test run) or `nothing_to_report`. Tell sends only `where` and `what`. Our API composes the notice from what the run read, and sends it at most once.
 - Report a failure: `{"status": "failed" | "left_as_is" | "self_test", "run_id", "detail"}`. A run that has ended is left as it is. `self_test` is the daily self-test's failure, which fails no run. Our API takes nothing in the report as said. It answers 403 unless the block runs in our error workflow, and 409 unless n8n's own record says the execution failed. It takes the failed block and its words from that record.

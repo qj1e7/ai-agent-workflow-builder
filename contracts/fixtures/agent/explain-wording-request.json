@@ -5,7 +5,7 @@
     "model": "claude-sonnet-5-5",
     "api_key": "example-key-not-a-secret"
   },
-  "wording": "Every day at 8:00, it reads GitHub \u201cfastapi/fastapi\u201d and Jira \u201cMOCK\u201d. It can create Jira tickets in \u201cMOCK\u201d, each after a yes. It changes nothing else.",
+  "wording": "Every day at 8:00, it reads GitHub \u201cfastapi/fastapi\u201d and Jira \u201cMOCK\u201d. It can create Jira tickets in \u201cMOCK\u201d, each after approval. It changes nothing else.",
   "facts": [
     {
       "kind": "runs",
@@ -39,7 +39,7 @@
         "create",
         "Jira",
         "MOCK",
-        "yes"
+        "approval"
       ],
       "negated": false
     },

@@ -13,7 +13,7 @@ import iconButton from './IconButton.module.css'
 import styles from './TeamsPanel.module.css'
 
 export const TEAMS_TITLE = 'Teams, practice copy'
-export const TEAMS_EMPTY_WORDS = 'No messages yet. When a run needs a yes, its message shows here.'
+export const TEAMS_EMPTY_WORDS = 'No messages yet. When a run needs approval, its message shows here.'
 const TEAMS_NOTE = 'Practice copy. Nothing reaches the real Teams.'
 
 export const BADGE_POLL_MS = 30_000

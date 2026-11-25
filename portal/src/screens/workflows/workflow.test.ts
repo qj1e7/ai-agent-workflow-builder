@@ -214,7 +214,7 @@ describe('a workflow row’s line', () => {
     const say = (state: LastRun['state'], change: Partial<LastRun> = {}) => statusOf({ ...UC, last_run: { ...LAST, state, ...change } })
     expect(say('failed'), 'a stopped run the platform does not list is only a note').toEqual({ four: 'on', label: 'On · last run stopped', tone: 'ok' })
     expect(say('lost')).toEqual({ four: 'on', label: 'On', tone: undefined })
-    expect(say('awaiting_approval', { you_can_decide: false })).toEqual({ four: 'on', label: 'On · waiting for an Approver’s yes', tone: 'wait' })
+    expect(say('awaiting_approval', { you_can_decide: false })).toEqual({ four: 'on', label: 'On · waiting for approval', tone: 'wait' })
     expect(say('working')).toEqual({ four: 'on', label: 'On', tone: undefined })
     for (const state of ['rejected', 'succeeded', 'skipped', 'expired'] as const) expect(say(state), state).toEqual({ four: 'on', label: 'On', tone: undefined })
     expect(statusOf({ ...UC, state: 'draft' })).toEqual({ four: 'draft', label: 'Draft', tone: undefined })
@@ -404,7 +404,7 @@ describe('the steps of what it does', () => {
     expect(WATCHLIST.plan.map((block) => stepTag(block.kind))).toEqual([
       { words: 'Reads only', writes: false },
       { words: 'Asks an Approver in Teams', writes: false },
-      { words: 'Changes data, waits for a yes', writes: true },
+      { words: 'Changes data, waits for approval', writes: true },
     ])
   })
 })
@@ -861,7 +861,7 @@ describe('the status banner', () => {
 
   /** Every state a run can end its stage in, with the workflow's pill and banner the page draws for it. They must say the same state. */
   const EVERY_STATE: Record<LastRun['state'], { readonly pill: string; readonly banner: string; readonly tone: string; readonly opens: boolean }> = {
-    awaiting_approval: { pill: 'On · waiting for an Approver’s yes', banner: 'Waiting for a yes.', tone: 'wait', opens: true },
+    awaiting_approval: { pill: 'On · waiting for approval', banner: 'Waiting for a yes.', tone: 'wait', opens: true },
     failed: { pill: 'Needs you', banner: 'Stopped today at 8:00. An agent could not finish its work.', tone: 'bad', opens: true },
     lost: { pill: 'On', banner: 'Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.', tone: 'bad', opens: true },
     expired: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
@@ -891,7 +891,7 @@ describe('who says yes', () => {
   })
 
   it('keeps the whole rule one tap away: the owner, a run’s starter and whoever retries it can’t say yes to it', () => {
-    expect(ownWorkRule(null)).toBe('Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
+    expect(ownWorkRule(null)).toBe('Nobody approves their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t approve that run.')
     expect(ownWorkRule({ owner_name: 'Carol' })).toMatch(/ A scheduled run starts as Carol\.$/)
     expect(ownWorkRule({ owner_name: null }), 'a schedule set in n8n has no owner').toBe(ownWorkRule(null))
   })
@@ -974,7 +974,7 @@ describe('the sentence on the workflow page', () => {
   const scheduledAt = (schedule: UseCaseView['schedule']) => ({ ...AGENTS, schedule })
 
   it('says when it runs, what it checks, and that a ticket is made only after a yes', () => {
-    expect(sentenceOf(scheduledAt(every))).toBe('Every day at 8:00, check langchain-ai/langgraph on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.')
+    expect(sentenceOf(scheduledAt(every))).toBe('Every day at 8:00, check langchain-ai/langgraph on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after approval.')
   })
 
   it('names a zone that is not Singapore, and a weekday', () => {
@@ -982,7 +982,7 @@ describe('the sentence on the workflow page', () => {
   })
 
   it('says it runs when an Operator presses Run now while it has no schedule, and never guesses a time', () => {
-    expect(sentenceOf(AGENTS)).toBe('Check langchain-ai/langgraph on GitHub for a new release when an Operator presses Run now. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.')
+    expect(sentenceOf(AGENTS)).toBe('Check langchain-ai/langgraph on GitHub for a new release when an Operator presses Run now. If there is one, create an upgrade ticket in Jira project MOCK, after approval.')
   })
 
   it('says it tells you here when the workflow writes nothing', () => {

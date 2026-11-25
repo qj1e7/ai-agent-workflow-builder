@@ -1113,7 +1113,7 @@ def scenario_write_request() -> ScenarioWriteRequest:
             ),
             ScenarioBlock(name="Compare", role="agent", plays=["recorded", "too_slow"]),
             ScenarioBlock(name="Propose a change", role="propose"),
-            ScenarioBlock(name="Ask for a yes", role="ask"),
+            ScenarioBlock(name="Ask for approval", role="ask"),
             ScenarioBlock(name="Make the approved changes", role="write"),
         ],
         kinds=[
@@ -1202,7 +1202,7 @@ def cause_request() -> CauseRequest:
             "Read releases",
             "Newer?",
             "Propose a change",
-            "Ask for a yes",
+            "Ask for approval",
             "Make the approved changes",
         ],
         stopped_at=["Read releases"],
@@ -1281,7 +1281,7 @@ def refine_start_request() -> RefineStart:
 def scenario_write_cover_request() -> ScenarioWriteRequest:
     """The writer aimed at a block no scenario reached yet, with the block that leads to it."""
     return scenario_write_request().model_copy(
-        update={"cover": [CoverBlock(name="Ask for a yes", after=["Propose a change"])]}
+        update={"cover": [CoverBlock(name="Ask for approval", after=["Propose a change"])]}
     )
 
 
@@ -1290,13 +1290,13 @@ def explain_wording_request() -> ExplainWordingRequest:
         ExplainFact(kind="runs", together=["day", "8:00"], negated=False),
         ExplainFact(kind="reads", together=["reads", "GitHub", "fastapi/fastapi"], negated=False),
         ExplainFact(kind="reads", together=["reads", "Jira", "MOCK"], negated=False),
-        ExplainFact(kind="writes", together=["create", "Jira", "MOCK", "yes"], negated=False),
+        ExplainFact(kind="writes", together=["create", "Jira", "MOCK", "approval"], negated=False),
         ExplainFact(kind="changes", together=["changes", "nothing", "else"], negated=True),
     ]
     return ExplainWordingRequest(
         model=draft_request().model,
         wording="Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can "
-        "create Jira tickets in “MOCK”, each after a yes. It changes nothing else.",
+        "create Jira tickets in “MOCK”, each after approval. It changes nothing else.",
         facts=facts,
     )
 
@@ -1366,8 +1366,8 @@ def answered_reply_clarify() -> Answered:
 
 def answered_reply_cant() -> Answered:
     text = (
-        "I can't send email yet. I can put the list in one new Jira ticket, after an Approver's "
-        "yes."
+        "I can't send email yet. I can put the list in one new Jira ticket, after an Approver "
+        "approves it."
     )
     envelope = ReplyEnvelope(form="cant", text=text, offer="jira.create")
     return _free_reply("email the bug list to my manager", envelope)
@@ -1455,7 +1455,7 @@ def fixtures() -> dict[str, WireModel]:
         "explain-wording-request.json": explain_wording_request(),
         "explain-wording-reworded.json": ExplainReworded(
             text="Each day at 8:00 it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can "
-            "create Jira tickets in “MOCK”, each after a yes. Nothing else changes."
+            "create Jira tickets in “MOCK”, each after approval. Nothing else changes."
         ),
         "explain-wording-kept.json": ExplainKept(why="negation"),
         "troubleshooter-cause-request.json": cause_request(),

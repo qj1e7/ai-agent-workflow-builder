@@ -91,7 +91,7 @@ def with_block(
 
 
 def gate_removed() -> Doc:
-    return link(without(release_check(), "Ask for a yes"), "Newer?", "Create ticket")
+    return link(without(release_check(), "Ask for approval"), "Newer?", "Create ticket")
 
 
 def graded(document: Doc) -> str:
@@ -112,10 +112,31 @@ def test_a_write_with_its_gate_removed_never_grades_safe() -> None:
     assert [f.block for f in result.findings] == ["Create ticket"]
 
 
+def renamed(document: Doc, old: str, new: str) -> Doc:
+    """Renames a block everywhere n8n names it: the node, its connections and the edges in."""
+    return json.loads(json.dumps(document).replace(json.dumps(old), json.dumps(new)))
+
+
+@pytest.mark.parametrize("gate", ["Ask for approval", "Ask for a yes"])
+def test_the_gate_counts_by_its_type_under_today_s_name_and_the_one_before_25_nov(
+    gate: str,
+) -> None:
+    """A workflow set up before 25 Nov 2026 keeps "Ask for a yes" in n8n. The checker knows the
+    block by its type, so either name lets the write through, and either removed refuses it."""
+    document = renamed(release_check(), "Ask for approval", gate)
+    assert graded(document) == "safe"
+    removed = link(without(deepcopy(document), gate), "Newer?", "Create ticket")
+    assert graded(removed) == "writes_refused"
+    with_yes = add_yes(removed, "uc_01JB8RELEASE")
+    asks = [n["name"] for n in with_yes.document["nodes"] if n["type"] == "CUSTOM.wabAskForYes"]
+    assert (asks, graded(with_yes.document)) == (["Ask for approval"], "safe")
+    assert add_yes(document, "uc_01JB8RELEASE").document == document, "an old name stays"
+
+
 @pytest.mark.parametrize("exit_name", ["No answer", "No", "Nothing to change"])
 def test_a_write_after_any_exit_but_yes_has_no_yes(exit_name: str) -> None:
     document = release_check()
-    link(document, "Ask for a yes", "Create ticket", ASK_EXITS.index(exit_name))
+    link(document, "Ask for approval", "Create ticket", ASK_EXITS.index(exit_name))
     assert graded(document) == "writes_refused"
 
 
@@ -135,7 +156,7 @@ def test_a_second_yes_on_one_path_needs_a_fix() -> None:
             "parameters": {},
         }
     )
-    link(without(document, "Create ticket"), "Ask for a yes", "Ask again", 1)
+    link(without(document, "Create ticket"), "Ask for approval", "Ask again", 1)
     assert graded(document) == "needs_a_fix"
 
 
@@ -148,9 +169,9 @@ def turned_off(document: Doc, *names: str) -> Doc:
 
 def test_a_yes_turned_off_in_n8n_is_no_yes() -> None:
     """n8n passes items straight through a turned-off block, so it asks nobody (ADR 0051)."""
-    result = grade(turned_off(release_check(), "Ask for a yes"), ERROR_WORKFLOW, TEAM_ZONE)
+    result = grade(turned_off(release_check(), "Ask for approval"), ERROR_WORKFLOW, TEAM_ZONE)
     assert result.grade == "writes_refused"
-    assert [f.text for f in result.findings] == ['"Create ticket" can run without a yes.']
+    assert [f.text for f in result.findings] == ['"Create ticket" can run without approval.']
 
 
 def test_a_write_turned_off_in_n8n_still_needs_its_yes() -> None:
@@ -161,7 +182,7 @@ def test_a_write_turned_off_in_n8n_still_needs_its_yes() -> None:
 
 
 def test_the_yes_put_back_after_a_turned_off_one_is_the_only_yes_on_its_path() -> None:
-    with_yes = add_yes(turned_off(release_check(), "Ask for a yes"), "uc_01JB8RELEASE")
+    with_yes = add_yes(turned_off(release_check(), "Ask for approval"), "uc_01JB8RELEASE")
     assert with_yes.added_before == ("Create ticket",)
     assert grade(with_yes.document, ERROR_WORKFLOW, TEAM_ZONE).findings == ()
 
@@ -1008,8 +1029,8 @@ def changed(make: Callable[[], Doc], name: str, *path: str, value: object) -> Ca
 
 
 def second_yes() -> Doc:
-    document = with_block(release_check(), "CUSTOM.wabAskForYes", "Ask again", "Ask for a yes")
-    return link(without(document, "Create ticket"), "Ask for a yes", "Ask again", 1)
+    document = with_block(release_check(), "CUSTOM.wabAskForYes", "Ask again", "Ask for approval")
+    return link(without(document, "Create ticket"), "Ask for approval", "Ask again", 1)
 
 
 def notice_channel(value: object) -> Callable[[], Doc]:

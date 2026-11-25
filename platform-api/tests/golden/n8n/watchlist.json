@@ -11,7 +11,7 @@
         -400
       ],
       "parameters": {
-        "content": "## Software watchlist\nChecks every watched software and raises a ticket for each one behind.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for a yes in Teams before it is made.",
+        "content": "## Software watchlist\nChecks every watched software and raises a ticket for each one behind.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for approval in Teams before it is made.",
         "height": 260,
         "width": 460
       }
@@ -89,8 +89,8 @@
       "waitBetweenTries": 2000
     },
     {
-      "id": "54622895-bfa6-5c6a-8204-037eea6b2e5c",
-      "name": "Ask for a yes",
+      "id": "f216b6cb-2b2d-5285-a00d-6807e5a7bac6",
+      "name": "Ask for approval",
       "type": "CUSTOM.wabAskForYes",
       "typeVersion": 1,
       "position": [
@@ -163,14 +163,14 @@
       "main": [
         [
           {
-            "node": "Ask for a yes",
+            "node": "Ask for approval",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Ask for a yes": {
+    "Ask for approval": {
       "main": [
         [],
         [

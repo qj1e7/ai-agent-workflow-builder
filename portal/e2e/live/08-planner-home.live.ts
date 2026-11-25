@@ -12,7 +12,7 @@ import { devContext, needsOnWorkflows, OUT, showEvery, shot } from './support/ui
 import { askAndWait, editCard, newestAnswer, rereadOf, scheduledWorkflow, shown, tag, versionsOf } from './support/edit'
 
 /** The sketch's question, Alice's Home heading; her greeting is the line above it. */
-const ALICE_HEADING = 'What should run by itself?'
+const ALICE_HEADING = 'What can I help you with today?'
 const OFFLINE = 'I can’t read new requests until an AI model is connected'
 /** A request the Planner answers with a set-up card. */
 const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'

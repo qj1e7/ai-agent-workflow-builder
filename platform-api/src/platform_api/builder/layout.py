@@ -270,7 +270,7 @@ def _note(canvas: _Canvas, name: str, portal_link: str, what: str) -> None:
     content = (
         f"## {name}\n{what}\n\nSet up in the Portal: {portal_link}\n\n"
         "Safe to change here: when it runs, and the words in a block. Every change to Jira "
-        "waits for a yes in Teams before it is made."
+        "waits for approval in Teams before it is made."
     )
     canvas.node(ABOUT, "note", 0, -2, {"content": content, "height": 260, "width": 460})
 

@@ -33,7 +33,7 @@ const SUB: Readonly<Record<N8nBlockKind, string>> = {
   agent: 'Agent',
   propose: 'Proposes',
   ask: 'Teams',
-  write: 'Writes after a yes',
+  write: 'Writes after approval',
   tell: 'In the app',
   report: 'Reports',
   branch: 'IF',

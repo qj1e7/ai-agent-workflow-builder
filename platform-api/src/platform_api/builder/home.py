@@ -69,7 +69,7 @@ class ApprovalItem(WireModel):
     )
     trigger: Trigger
     started_at: datetime
-    step: int = Field(description="The step waiting for a yes, from 0.")
+    step: int = Field(description="The step waiting for approval, from 0.")
     steps: int
     step_label: str
     changes: int = Field(description="How many changes the run would write.")
@@ -109,8 +109,8 @@ class WaitingItem(WireModel):
     step: int
     steps: int
     because: Because = Field(
-        description="Why this person cannot say yes: they started, retried or own the run, "
-        "or they said yes to an earlier step."
+        description="Why this person cannot approve: they started, retried or own the run, "
+        "or they approved an earlier step."
     )
 
 
@@ -226,7 +226,7 @@ class NeedsPage(WireModel):
     """One page of the parts of Needs you that can run long. Each total counts every row."""
 
     approvals: list[ApprovalItem] = Field(
-        description="Runs waiting for a yes this person may give, the newest first, 10 a page."
+        description="Runs waiting for approval this person may give, the newest first, 10 a page."
     )
     approvals_total: int
     stopped: list[StoppedItem] = Field(
@@ -242,7 +242,7 @@ class NeedsPage(WireModel):
     declined_total: int
     questions_for_me: list[QuestionItem] = Field(
         description="Questions Approvers asked this person on requests they started, or whose "
-        "schedule they own, while each request waits for a yes and the question has no answer. "
+        "schedule they own, while each request waits for approval and the question has no answer. "
         "The newest first, 10 a page."
     )
     questions_for_me_total: int
@@ -251,7 +251,8 @@ class NeedsPage(WireModel):
 
 class WaitingPage(WireModel):
     waiting_on_others: list[WaitingItem] = Field(
-        description="Runs waiting for someone else's yes that this person is part of, the newest "
+        description="Runs waiting for someone else's approval that this person is part of, the "
+        "newest "
         "first, 50 a page."
     )
     waiting_on_others_total: int
@@ -263,7 +264,8 @@ class HomeOut(WireModel):
     the rest, so every row a total counts can be reached."""
 
     approvals: list[ApprovalItem] = Field(
-        description="Runs waiting for a yes this person may give, the newest first. The first 10."
+        description="Runs waiting for approval this person may give, the newest first. The first "
+        "10."
     )
     approvals_total: int
     confirmations: list[ConfirmationItem] = Field(
@@ -275,7 +277,8 @@ class HomeOut(WireModel):
     )
     stopped_total: int
     waiting_on_others: list[WaitingItem] = Field(
-        description="Runs waiting for someone else's yes that this person is part of. The first 50."
+        description="Runs waiting for someone else's approval that this person is part of. The "
+        "first 50."
     )
     waiting_on_others_total: int
     waiting_on_others_next: str | None = Field(
@@ -290,7 +293,7 @@ class HomeOut(WireModel):
     declined_total: int
     questions_for_me: list[QuestionItem] = Field(
         description="Questions Approvers asked this person on requests they started, or whose "
-        "schedule they own, while each request waits for a yes and the question has no answer. "
+        "schedule they own, while each request waits for approval and the question has no answer. "
         "The newest first. They are part of Needs you. The first 10."
     )
     questions_for_me_total: int

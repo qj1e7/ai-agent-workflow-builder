@@ -200,7 +200,7 @@ describe('each item in words', () => {
   it('says how many tickets wait for your yes, which workflow, who started it and when, and lists them', () => {
     expect(wordsOf(approval, NOW)).toEqual({
       tone: 'wait',
-      title: '1 ticket is waiting for your yes',
+      title: '1 ticket is waiting for your approval',
       meta: 'Software watchlist · Started by Alice, Today, 10:14',
       lines: ['Upgrade LangGraph from 1.2.14 to 1.2.16'],
       note: null,
@@ -211,7 +211,7 @@ describe('each item in words', () => {
   it('names the step of two, and says how many more changes there are than it lists', () => {
     const two = { ...approval, item: { ...ASK, step: 1, steps: 2, changes: 5, first_changes: [{ connector: 'jira', operation: 'update_page', title: null }] } } as Need
     const words = wordsOf(two, NOW)
-    expect(words.title).toBe('5 changes are waiting for your yes')
+    expect(words.title).toBe('5 changes are waiting for your approval')
     expect(words.meta).toBe('Software watchlist · Started by Alice, Today, 10:14 · Step 2 of 2')
     expect(words.lines).toEqual(['A change in Jira', 'and 4 more'])
   })
@@ -219,8 +219,8 @@ describe('each item in words', () => {
   it('calls the changes tickets only when every one of them is known to be a ticket', () => {
     const ticket = { connector: 'jira', operation: 'create_ticket', title: 'Upgrade LangGraph' }
     const three = [ticket, ticket, ticket]
-    expect(wordsOf({ ...approval, item: { ...ASK, changes: 3, first_changes: three } } as Need, NOW).title).toBe('3 tickets are waiting for your yes')
-    expect(wordsOf({ ...approval, item: { ...ASK, changes: 5, first_changes: three } } as Need, NOW).title).toBe('5 changes are waiting for your yes')
+    expect(wordsOf({ ...approval, item: { ...ASK, changes: 3, first_changes: three } } as Need, NOW).title).toBe('3 tickets are waiting for your approval')
+    expect(wordsOf({ ...approval, item: { ...ASK, changes: 5, first_changes: three } } as Need, NOW).title).toBe('5 changes are waiting for your approval')
   })
 
   it('names a schedule that started a run', () => {
@@ -345,13 +345,13 @@ describe('a retry the platform refused', () => {
 
 describe('what you wait on, and your drafts', () => {
   it('says whose yes a run waits for and why it is not yours', () => {
-    expect(waitingWords(WAIT, NOW)).toEqual({ name: 'An Approver’s yes on Software watchlist', sub: 'You started it · Today 10:14', to: '/runs/run_01JB8' })
+    expect(waitingWords(WAIT, NOW)).toEqual({ name: 'Waiting for an Approver on Software watchlist', sub: 'You started it · Today 10:14', to: '/runs/run_01JB8' })
     expect(waitingWords({ ...WAIT, trigger: 'schedule' }, NOW).sub).toBe('Your schedule started it · Today 10:14')
     expect(waitingWords({ ...WAIT, because: 'retried' }, NOW).sub).toBe('You retried it · Today 10:14')
     expect(waitingWords({ ...WAIT, because: 'owns' }, NOW).sub).toBe('It is your workflow · Today 10:14')
     expect(waitingWords({ ...WAIT, because: 'decided_earlier', step: 2, steps: 3 }, NOW)).toMatchObject({
-      name: 'Another Approver’s yes on Software watchlist',
-      sub: 'You already said yes to an earlier step · Today 10:14',
+      name: 'Waiting for another Approver on Software watchlist',
+      sub: 'You already approved an earlier step · Today 10:14',
     })
   })
 
@@ -364,12 +364,12 @@ describe('what you wait on, and your drafts', () => {
 
 describe('the Approver’s heading', () => {
   it('tells an Approver how many changes wait for their yes, in the sketch’s words, and their heading says the same with no full stop', () => {
-    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 change waits for your yes.')
-    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 5 })).toBe('5 changes wait for your yes.')
-    expect(approverLine({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing waits for your yes.')
+    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 change needs your approval.')
+    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 5 })).toBe('5 changes need your approval.')
+    expect(approverLine({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing needs your approval.')
     expect(approverLine(BOB), 'a request and two confirmations').toBe('3 things need you.')
-    expect(approverHeading({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 change waits for your yes')
-    expect(approverHeading({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing waits for your yes')
+    expect(approverHeading({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 change needs your approval')
+    expect(approverHeading({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing needs your approval')
   })
 })
 
@@ -483,7 +483,7 @@ describe('a question an Approver asked on a request this person made', () => {
     const words = wordsOf(need, NOW)
     expect(words.tone, 'a message for this person, as a reply is, never the approval shield').toBe('info')
     expect(words.title).toBe('Bob asked you about Software watchlist')
-    expect(words.meta).toBe('The request is still waiting for a yes')
+    expect(words.meta).toBe('The request is still waiting for approval')
     expect(words.note).toBe('“Has 1.2.16 been tested with our login service?”')
   })
 
@@ -524,7 +524,7 @@ describe('each row of Needs you in a few words', () => {
   })
 
   it('says a request needs your yes, amber, as the Approver’s row does in the sketch', () => {
-    expect(lineOf(approval, NOW)).toEqual({ tone: 'wait', subject: 'Software watchlist', rest: 'needs your yes', short: 'needs your yes' })
+    expect(lineOf(approval, NOW)).toEqual({ tone: 'wait', subject: 'Software watchlist', rest: 'needs your approval', short: 'needs your approval' })
   })
 
   it('names a connection that doesn’t work in red, and a key that runs out with its day, amber', () => {

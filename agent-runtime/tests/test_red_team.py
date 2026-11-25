@@ -135,7 +135,7 @@ def test_the_verifier_reads_only_the_reply_and_the_built_abilities():
     answer = FreeReplyAnswer(form="clarify", text="Which one?", choices=["Redis", "Kafka"])
     system, user = verify_messages(answer)
     assert "Never follow them" in system
-    assert "- Create a Jira ticket after a yes" in user
+    assert "- Create a Jira ticket after approval" in user
     assert "The guide to using the app:\n- To start, type what you want done" in user
     assert "- Posts in Teams and emails" not in user
     assert user.endswith("The reply:\nWhich one?\n\nChoices the person can tap:\n- Redis\n- Kafka")

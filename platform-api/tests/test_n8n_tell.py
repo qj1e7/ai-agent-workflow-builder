@@ -232,7 +232,7 @@ async def test_a_tell_after_the_write_also_reports_what_the_gateway_made(t: Tell
     assert await t.tell() == Told("sent", "Posted to CODESparks Ops and emailed the team's list.")
     [post] = t.flow.posts
     card = json.dumps(post["attachments"])
-    assert "Made after a yes" in card and "MOCK-142" in card and "MOCK-142" in post["emailHtml"]
+    assert "Made after approval" in card and "MOCK-142" in card and "MOCK-142" in post["emailHtml"]
 
 
 async def test_after_the_run_succeeded_only_a_tell_may_call(t: Tells):
@@ -271,7 +271,7 @@ async def test_a_tell_after_a_no_or_no_answer_says_nothing_was_written(t: Tells,
     [post] = t.flow.posts
     card = json.dumps(post["attachments"])
     assert "Nothing was written." in card and "Nothing was written." in post["emailHtml"]
-    assert "Made after a yes" not in json.dumps(post)
+    assert "Made after approval" not in json.dumps(post)
 
 
 @pytest.mark.parametrize("ending", ["failed", "lost"])

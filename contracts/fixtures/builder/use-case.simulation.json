@@ -11,8 +11,8 @@
       {
         "kind": "happy_path",
         "verdict": "passed",
-        "expected": "It reaches the yes with the expected change.",
-        "happened": "It reached the yes and would have made 1 change, which the simulation refused.",
+        "expected": "It reaches the approval step with the expected change.",
+        "happened": "It reached the approval step and would have made 1 change, which the simulation refused.",
         "note": null
       },
       {
@@ -47,7 +47,7 @@
         "kind": "odd_data",
         "verdict": "passed",
         "expected": "It ends in one of the cases above, never in a failure with no reason.",
-        "happened": "It reached the yes and would have made 1 change, which the simulation refused.",
+        "happened": "It reached the approval step and would have made 1 change, which the simulation refused.",
         "note": null
       }
     ],

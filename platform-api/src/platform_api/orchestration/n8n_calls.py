@@ -428,7 +428,8 @@ VERSION_FAILED = Refused(403, "This version failed the check.")
 UNKNOWN_PUBLISHER = Refused(403, "Published by someone we don't know.")
 WRITES_REFUSED = Refused(
     403,
-    "Writes refused: this version can make a change without a yes. Add the yes back, or undo "
+    "Writes refused: this version can make a change without approval. Add the approval step back, "
+    "or undo "
     "the change, in the Portal.",
 )
 """A version the safety checker graded anything but safe never asks for a yes and never writes
@@ -448,13 +449,13 @@ CHANGED_CALL = Refused(409, "This block already called with other content in thi
 BUSY = TryLater("Our platform is still answering this block.")
 TEST_RUN_STOPS = Refused(409, TEST_PASSED)
 """A test run ends at Ask for a yes, with no exit taken (ENGINE-PLAN 2.3.3)."""
-NO_YES = Refused(403, "No yes for this run.")
+NO_YES = Refused(403, "No approval for this run.")
 TEST_RUN_WRITES_NOTHING = Refused(403, "A test run never writes.")
 DENIED: Mapping[DenyReason, str] = {
     DenyReason.RUN_MISMATCH: "This run's records do not match its request.",
     DenyReason.NOT_APPROVED: NO_YES.detail,
     DenyReason.INVALID_DECISIONS: "The decisions on this run's request break the approval rules.",
-    DenyReason.DIGEST_MISMATCH: "These are not the changes the Approvers said yes to.",
+    DenyReason.DIGEST_MISMATCH: "These are not the changes the Approvers approved.",
     DenyReason.UNREGISTERED_ACTION: "A change is not one our platform can make.",
     DenyReason.TARGET_CHANGED: JIRA_SITE_CHANGED,
     DenyReason.EXPIRED: "The request expired before its yes.",
@@ -928,7 +929,7 @@ def admit_write(
         case Expired():
             return Refused(403, NO_ANSWER)
         case Lost():
-            return run_stopped("n8n lost it after the yes, and nothing was written.")
+            return run_stopped("n8n lost it after the approval, and nothing was written.")
         case AwaitingApproval() | Pending() | Proposed() | Skipped():
             return NO_YES
 

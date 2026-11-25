@@ -154,10 +154,10 @@
       "grade": "writes_refused",
       "changes": [
         "Now runs every day at 7:30.",
-        "Deleted \u201cAsk for a yes\u201d."
+        "Deleted \u201cAsk for approval\u201d."
       ],
       "findings": [
-        "\"Create ticket\" can run without a yes."
+        "\"Create ticket\" can run without approval."
       ],
       "in_use": 4
     }

@@ -79,7 +79,7 @@ SAID: Final[dict[ScenarioRole, str]] = {
     "read": "reads a source",
     "agent": "an Agent block",
     "propose": "proposes a change",
-    "ask": "asks an Approver for a yes",
+    "ask": "asks an Approver for approval",
     "write": "makes the approved changes",
     "tell": "tells people the result",
     "notice": "sends a notice",
@@ -100,7 +100,7 @@ SYSTEM: Final = (
     "sentence. Code checks every pick, and runs its own scenarios instead if any pick breaks a "
     "rule below.\n\n"
     "Write exactly one scenario for each kind on the list of kinds, and no other. The kinds:\n"
-    "- happy_path: every read served as recorded. The Approver says yes.\n"
+    "- happy_path: every read served as recorded. The Approver approves.\n"
     "- nothing_new: every read served empty.\n"
     "- source_not_found: at least one read served not_found, every other as recorded.\n"
     "- timeout: at least one read served too_slow, every other as recorded.\n"

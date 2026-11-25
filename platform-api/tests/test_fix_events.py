@@ -164,7 +164,7 @@ async def test_a_whole_fix_goes_on_the_stopped_run_with_the_agent_as_its_actor(
         "checked the change stays inside the failed part.",
         "I ran 3 scenarios in the simulation, and 3 passed.",
         "Round 1: 3 of 3 scenarios passed.",
-        "A fix is ready as version 4. Nothing changes until an Approver says yes.",
+        "A fix is ready as version 4. Nothing changes until an Approver approves it.",
     ]
     assert fixes[-1].data.model_dump() == {"fix_id": FIX, "version": 4, "digest": DIGEST}
 
@@ -303,7 +303,7 @@ async def test_a_fix_never_changes_the_run_it_is_on(postgres: PostgresUrls):
         (
             handoff(found="widened", widened_by="removes_a_yes"),
             "I asked the Fix drafter to change only the “Read releases” block, but its change "
-            "removes an Ask for a yes, so the platform refused it.",
+            "removes an approval step, so the platform refused it.",
         ),
         (
             handoff(found="widened", widened_by="cant_check"),

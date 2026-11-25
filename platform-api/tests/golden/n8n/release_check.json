@@ -11,7 +11,7 @@
         -400
       ],
       "parameters": {
-        "content": "## LangGraph release check\nChecks langchain-ai/langgraph for a new release and raises a ticket in MOCK.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for a yes in Teams before it is made.",
+        "content": "## LangGraph release check\nChecks langchain-ai/langgraph for a new release and raises a ticket in MOCK.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for approval in Teams before it is made.",
         "height": 260,
         "width": 460
       }
@@ -128,8 +128,8 @@
       }
     },
     {
-      "id": "a571d6b2-bcdc-5ae7-aa10-42fb64df2495",
-      "name": "Ask for a yes",
+      "id": "39384448-fe60-56c9-a5de-4bbe6c1978d3",
+      "name": "Ask for approval",
       "type": "CUSTOM.wabAskForYes",
       "typeVersion": 1,
       "position": [
@@ -213,7 +213,7 @@
       "main": [
         [
           {
-            "node": "Ask for a yes",
+            "node": "Ask for approval",
             "type": "main",
             "index": 0
           }
@@ -227,7 +227,7 @@
         ]
       ]
     },
-    "Ask for a yes": {
+    "Ask for approval": {
       "main": [
         [],
         [

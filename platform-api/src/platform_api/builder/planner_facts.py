@@ -39,7 +39,7 @@ WATCHED_CAP: Final = 100
 STATUS_WORDS: Final[dict[Status, str]] = {
     "cant_check": "Can’t check",
     "behind": "New version",
-    "awaiting_approval": "Ticket waiting for a yes",
+    "awaiting_approval": "Ticket waiting for approval",
     "ticket_open": "Ticket open",
     "up_to_date": "Up to date",
     "not_checked": "Not checked yet",
@@ -51,7 +51,7 @@ RUN_WORDS: Final[dict[RunState, str]] = {
     "working": "Running",
     "proposed": "Running",
     "acting": "Running",
-    "awaiting_approval": "Waiting for a yes",
+    "awaiting_approval": "Waiting for approval",
     "succeeded": "Done",
     "rejected": "Declined",
     "failed": "Stopped",

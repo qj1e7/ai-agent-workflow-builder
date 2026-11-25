@@ -188,7 +188,7 @@ def settings_of(plan: WorkflowPlan, sources: Sources) -> tuple[SettingNow, ...]:
             SettingNow(
                 APPROVERS,
                 "approvers",
-                "Who says yes on each run",
+                "Who approves on each run",
                 ANY_APPROVER if filled else None,
                 "filled" if filled else "needed",
                 given if filled else None,
@@ -284,8 +284,8 @@ def asking(setting: SettingNow, facts: DrafterFacts, listed_at: str | None = Non
             return Asking("Words", f"What should “{setting.label}” be?", (), TYPE_ONE, None)
         case "approvers":
             about = "its writes" if setting.block is None else f"“{setting.block}”"
-            words = f"Who says yes to {about} on each run?"
-            return Asking("Yes from", words, (Choice(ANY_APPROVER, ANY_APPROVER),), None, None)
+            words = f"Who approves {about} on each run?"
+            return Asking("Approval from", words, (Choice(ANY_APPROVER, ANY_APPROVER),), None, None)
         case "key":
             return Asking(
                 "Key", f"Which write key should “{setting.block}” use?", (), None, KEYS_LATER

@@ -1901,7 +1901,7 @@
             "title": "Started By Name"
           },
           "step": {
-            "description": "The step waiting for a yes, from 0.",
+            "description": "The step waiting for approval, from 0.",
             "title": "Step",
             "type": "integer"
           },
@@ -4504,7 +4504,7 @@
           },
           "on": {
             "default": true,
-            "description": "False sets it up as a draft (ADR 0044): it never runs on its schedule, a test run of it stops before the yes and writes nothing, and turning it on publishes version 1.",
+            "description": "False sets it up as a draft (ADR 0044): it never runs on its schedule, a test run of it stops before the approval step and writes nothing, and turning it on publishes version 1.",
             "title": "On",
             "type": "boolean"
           },
@@ -5914,7 +5914,7 @@
           },
           "state": {
             "$ref": "#/components/schemas/DraftedState",
-            "description": "drafting while the drafter works; not_drafted with said; draft until it is sent; waiting for a yes; approved; declined. An approval that expired or was replaced leaves it a draft."
+            "description": "drafting while the drafter works; not_drafted with said; draft until it is sent; waiting for approval; approved; declined. An approval that expired or was replaced leaves it a draft."
           },
           "why_not_send": {
             "anyOf": [
@@ -6415,7 +6415,7 @@
         "additionalProperties": false,
         "properties": {
           "execution_id": {
-            "description": "The waiting n8n execution that took the yes.",
+            "description": "The waiting n8n execution that took the approval.",
             "title": "Execution Id",
             "type": "string"
           }
@@ -6878,7 +6878,7 @@
                 "type": "null"
               }
             ],
-            "description": "How many Approvers say yes on each run, one after the other. Null unless each_run.",
+            "description": "How many Approvers approve on each run, one after the other. Null unless each_run.",
             "title": "Approvers"
           },
           "block": {
@@ -8002,7 +8002,7 @@
             "$ref": "#/components/schemas/FixId"
           },
           "version": {
-            "description": "The fixed version, which waits for a yes.",
+            "description": "The fixed version, which waits for approval.",
             "minimum": 1.0,
             "title": "Version",
             "type": "integer"
@@ -8680,7 +8680,7 @@
                 "type": "null"
               }
             ],
-            "description": "Its set-up approval, once it waits for a yes.",
+            "description": "Its set-up approval, once it waits for approval.",
             "title": "Approval Id"
           },
           "asked_by": {
@@ -8692,7 +8692,7 @@
             "type": "string"
           },
           "can_turn_back_on": {
-            "description": "An Approver said yes, and it isn't tried yet.",
+            "description": "An Approver approved it, and it isn't tried yet.",
             "title": "Can Turn Back On",
             "type": "boolean"
           },
@@ -9148,7 +9148,7 @@
             "type": "array"
           },
           "approvals": {
-            "description": "Runs waiting for a yes this person may give, the newest first. The first 10.",
+            "description": "Runs waiting for approval this person may give, the newest first. The first 10.",
             "items": {
               "$ref": "#/components/schemas/ApprovalItem"
             },
@@ -9259,7 +9259,7 @@
             "title": "Needs Next"
           },
           "questions_for_me": {
-            "description": "Questions Approvers asked this person on requests they started, or whose schedule they own, while each request waits for a yes and the question has no answer. The newest first. They are part of Needs you. The first 10.",
+            "description": "Questions Approvers asked this person on requests they started, or whose schedule they own, while each request waits for approval and the question has no answer. The newest first. They are part of Needs you. The first 10.",
             "items": {
               "$ref": "#/components/schemas/QuestionItem"
             },
@@ -9299,7 +9299,7 @@
             "type": "integer"
           },
           "waiting_on_others": {
-            "description": "Runs waiting for someone else's yes that this person is part of. The first 50.",
+            "description": "Runs waiting for someone else's approval that this person is part of. The first 50.",
             "items": {
               "$ref": "#/components/schemas/WaitingItem"
             },
@@ -9476,7 +9476,7 @@
         "additionalProperties": false,
         "properties": {
           "approved_by": {
-            "description": "Who said yes to its request, in step order. On a declined run, those who said yes before it was declined. Empty when nobody did.",
+            "description": "Who approved its request, in step order. On a declined run, those who approved before it was declined. Empty when nobody did.",
             "items": {
               "type": "string"
             },
@@ -9522,10 +9522,10 @@
                 "type": "null"
               }
             ],
-            "description": "How a finished run ended: written, nothing_to_write, or test_passed for a test run that stopped before the yes and wrote nothing. Null until it succeeded."
+            "description": "How a finished run ended: written, nothing_to_write, or test_passed for a test run that stopped before the approval step and wrote nothing. Null until it succeeded."
           },
           "proposed": {
-            "description": "How many writes the run asked a yes for. Counted only while the run waits for a yes or after it was declined. 0 for a run that finished or stopped.",
+            "description": "How many writes the run asked approval for. Counted only while the run waits for approval or after it was declined. 0 for a run that finished or stopped.",
             "title": "Proposed",
             "type": "integer"
           },
@@ -9579,7 +9579,7 @@
             "type": "integer"
           },
           "you_can_decide": {
-            "description": "True when the person asking may decide the yes this run waits for. False for any other run, and in an answer that is not for a person.",
+            "description": "True when the person asking may decide the approval this run waits for. False for any other run, and in an answer that is not for a person.",
             "title": "You Can Decide",
             "type": "boolean"
           },
@@ -9820,7 +9820,7 @@
           },
           "grade": {
             "$ref": "#/components/schemas/Grade",
-            "description": "The safety checker's grade of the version n8n runs, or of its draft when nothing is published. Only a safe version asks for a yes and writes."
+            "description": "The safety checker's grade of the version n8n runs, or of its draft when nothing is published. Only a safe version asks for approval and writes."
           },
           "made_by": {
             "description": "Who made it in n8n: the person whose own n8n space holds it, or held it when their account ended, matched by the n8n account the platform made for them.",
@@ -10381,7 +10381,7 @@
           },
           "kind": {
             "$ref": "#/components/schemas/N8nBlockKind",
-            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is one of n8n's own blocks that shapes the data, reads a system or posts a notice, as its tag says; off is a block the class file turns off, or does not know, for what it is or what it was asked to do."
+            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for approval), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is one of n8n's own blocks that shapes the data, reads a system or posts a notice, as its tag says; off is a block the class file turns off, or does not know, for what it is or what it was asked to do."
           },
           "name": {
             "description": "The block's name, as n8n, the canvas and the run line show it.",
@@ -10454,7 +10454,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which way out: true or false for an IF, the name of an Ask for a yes exit (No answer, Yes, No, Nothing to change), or null for a block with one way out.",
+            "description": "Which way out: true or false for an IF, the name of an Ask for approval exit (No answer, Yes, No, Nothing to change), or null for a block with one way out.",
             "title": "Exit"
           },
           "to": {
@@ -10655,7 +10655,7 @@
         "description": "One page of the parts of Needs you that can run long. Each total counts every row.",
         "properties": {
           "approvals": {
-            "description": "Runs waiting for a yes this person may give, the newest first, 10 a page.",
+            "description": "Runs waiting for approval this person may give, the newest first, 10 a page.",
             "items": {
               "$ref": "#/components/schemas/ApprovalItem"
             },
@@ -10691,7 +10691,7 @@
             "title": "Next"
           },
           "questions_for_me": {
-            "description": "Questions Approvers asked this person on requests they started, or whose schedule they own, while each request waits for a yes and the question has no answer. The newest first, 10 a page.",
+            "description": "Questions Approvers asked this person on requests they started, or whose schedule they own, while each request waits for approval and the question has no answer. The newest first, 10 a page.",
             "items": {
               "$ref": "#/components/schemas/QuestionItem"
             },
@@ -11313,7 +11313,7 @@
         "additionalProperties": false,
         "properties": {
           "approved_before": {
-            "description": "On a declined run, who said yes before the decline, in step order. Empty for any other run.",
+            "description": "On a declined run, who approved before the decline, in step order. Empty for any other run.",
             "items": {
               "type": "string"
             },
@@ -13541,7 +13541,7 @@
             "type": "string"
           },
           "request": {
-            "description": "The registry's example request. The Portal's button sends it as the person's next message, so the Planner reads it again and any write still waits for a yes.",
+            "description": "The registry's example request. The Portal's button sends it as the person's next message, so the Planner reads it again and any write still waits for approval.",
             "title": "Request",
             "type": "string"
           }
@@ -14175,7 +14175,7 @@
             "type": "string"
           },
           "why": {
-            "description": "Why n8n could not take the yes, in plain words.",
+            "description": "Why n8n could not take the approval, in plain words.",
             "title": "Why",
             "type": "string"
           }
@@ -14480,7 +14480,7 @@
         "additionalProperties": false,
         "properties": {
           "waiting_run_id": {
-            "description": "The earlier run of the same workflow that is still waiting for a yes.",
+            "description": "The earlier run of the same workflow that is still waiting for approval.",
             "title": "Waiting Run Id",
             "type": "string"
           }
@@ -15185,7 +15185,7 @@
       },
       "SetUpDeclineReason": {
         "enum": [
-          "Too risky without a yes",
+          "Too risky without approval",
           "Wrong project or channel",
           "Not needed"
         ],
@@ -15689,7 +15689,7 @@
             "type": "integer"
           },
           "waiting_run_id": {
-            "description": "The earlier run of the same workflow that was still waiting for a yes.",
+            "description": "The earlier run of the same workflow that was still waiting for approval.",
             "title": "Waiting Run Id",
             "type": "string"
           }
@@ -17625,7 +17625,7 @@
                 "type": "null"
               }
             ],
-            "description": "The safety checker's grade of the version in use, for a workflow n8n carries. writes_refused: a write can run without a yes, so the platform refuses this version's writes and asks nobody, until the yes is put back or the change undone. needs_a_fix: it uses a block that is off, or cannot run as the platform expects, so each run stops at its first block. Null for a workflow on the shared n8n workflow."
+            "description": "The safety checker's grade of the version in use, for a workflow n8n carries. writes_refused: a write can run without approval, so the platform refuses this version's writes and asks nobody, until the approval step is put back or the change undone. needs_a_fix: it uses a block that is off, or cannot run as the platform expects, so each run stops at its first block. Null for a workflow on the shared n8n workflow."
           },
           "held_in_n8n": {
             "anyOf": [
@@ -17636,7 +17636,7 @@
                 "type": "null"
               }
             ],
-            "description": "Who has it open in n8n now, for everyone to see. While someone does, the platform refuses every change that would publish over their work: a schedule change, Undo, roll back, Add the yes back and Resume. Pause and Delete still work."
+            "description": "Who has it open in n8n now, for everyone to see. While someone does, the platform refuses every change that would publish over their work: a schedule change, Undo, roll back, Add the approval step back and Resume. Pause and Delete still work."
           },
           "instruction": {
             "title": "Instruction",
@@ -17711,7 +17711,7 @@
                 "type": "null"
               }
             ],
-            "description": "Why this workflow is in the Needs you of the person asking, or null when it is not: a yes they may give, a run of theirs that stopped, a test run an Approver declined, a question to answer, or a workflow that can't run and needs a fix. It holds exactly when their Home has a row for the workflow.",
+            "description": "Why this workflow is in the Needs you of the person asking, or null when it is not: an approval they may give, a run of theirs that stopped, a test run an Approver declined, a question to answer, or a workflow that can't run and needs a fix. It holds exactly when their Home has a row for the workflow.",
             "title": "Needs You"
           },
           "next_run_at": {
@@ -17771,7 +17771,7 @@
           },
           "state": {
             "$ref": "#/components/schemas/UseCaseState",
-            "description": "on, paused until an Operator resumes it, or draft until an Operator turns it on (ADR 0044). A paused workflow starts no run, on its schedule or by hand. A draft never runs on its schedule, and by hand only a test run, which stops before the yes and writes nothing. A deleted workflow is not shown."
+            "description": "on, paused until an Operator resumes it, or draft until an Operator turns it on (ADR 0044). A paused workflow starts no run, on its schedule or by hand. A draft never runs on its schedule, and by hand only a test run, which stops before the approval step and writes nothing. A deleted workflow is not shown."
           },
           "template": {
             "title": "Template",
@@ -18027,7 +18027,7 @@
                 "type": "null"
               }
             ],
-            "description": "Who changed it: the person who saved the schedule, rolled back or put the yes back in the Portal, or who published it in n8n. Null for version 1, for a version the Software watchlist published, and for a version published in n8n by someone the People list can't match.",
+            "description": "Who changed it: the person who saved the schedule, rolled back or put the approval step back in the Portal, or who published it in n8n. Null for version 1, for a version the Software watchlist published, and for a version published in n8n by someone the People list can't match.",
             "title": "By"
           },
           "change": {
@@ -18069,7 +18069,7 @@
                 "type": "null"
               }
             ],
-            "description": "How a version that is not a change of when it runs came about: published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version in n8n with its settings saved there and nothing published, which n8n runs with the new settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for a yes back before each write; moved_to_n8n, the version that moved it from the shared n8n workflow to its own; or fixed, a fix an Approver said yes to that passed its test run (ADR 0055). Null otherwise."
+            "description": "How a version that is not a change of when it runs came about: published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version in n8n with its settings saved there and nothing published, which n8n runs with the new settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for approval back before each write; moved_to_n8n, the version that moved it from the shared n8n workflow to its own; or fixed, a fix an Approver approved that passed its test run (ADR 0055). Null otherwise."
           },
           "publisher_unknown": {
             "default": false,
@@ -18146,7 +18146,7 @@
         "properties": {
           "because": {
             "$ref": "#/components/schemas/Because",
-            "description": "Why this person cannot say yes: they started, retried or own the run, or they said yes to an earlier step."
+            "description": "Why this person cannot approve: they started, retried or own the run, or they approved an earlier step."
           },
           "run_id": {
             "title": "Run Id",
@@ -18206,7 +18206,7 @@
             "title": "Next"
           },
           "waiting_on_others": {
-            "description": "Runs waiting for someone else's yes that this person is part of, the newest first, 50 a page.",
+            "description": "Runs waiting for someone else's approval that this person is part of, the newest first, 50 a page.",
             "items": {
               "$ref": "#/components/schemas/WaitingItem"
             },
@@ -18469,7 +18469,7 @@
             "type": "string"
           },
           "covers": {
-            "description": "The parts of the request past the software that the Software watchlist does itself, each a ticked row on the software card: schedule when the request names the day or time it already runs on, ticket when it asks for the upgrade ticket the watchlist raises after a yes. Empty beside also, whose card holds the rest of the request.",
+            "description": "The parts of the request past the software that the Software watchlist does itself, each a ticked row on the software card: schedule when the request names the day or time it already runs on, ticket when it asks for the upgrade ticket the watchlist raises after approval. Empty beside also, whose card holds the rest of the request.",
             "items": {
               "$ref": "#/components/schemas/WatchPart"
             },
@@ -20113,7 +20113,7 @@
     },
     "/api/v1/approvals/{approval_id}/questions": {
       "post": {
-        "description": "Asks the requester a question on a request that waits for a yes. Only someone who may decide the open step may ask. A question decides nothing: the request keeps waiting, and its steps and decisions stay as they were. The same Idempotency-Key from the same person, with the same words, answers the question it asked before.",
+        "description": "Asks the requester a question on a request that waits for approval. Only someone who may decide the open step may ask. A question decides nothing: the request keeps waiting, and its steps and decisions stay as they were. The same Idempotency-Key from the same person, with the same words, answers the question it asked before.",
         "operationId": "ask_question_api_v1_approvals__approval_id__questions_post",
         "parameters": [
           {
@@ -20253,7 +20253,7 @@
     },
     "/api/v1/approvals/{approval_id}/questions/{question_id}/answer": {
       "post": {
-        "description": "Answers a question on a request. Only the requester may answer: whoever started the run, or the workflow's owner when its schedule started it. Each question takes one answer, while the request waits. An answer decides nothing: the request keeps waiting for someone else's yes. The same answer sent again answers the question as it is.",
+        "description": "Answers a question on a request. Only the requester may answer: whoever started the run, or the workflow's owner when its schedule started it. Each question takes one answer, while the request waits. An answer decides nothing: the request keeps waiting for someone else's approval. The same answer sent again answers the question as it is.",
         "operationId": "answer_question_api_v1_approvals__approval_id__questions__question_id__answer_post",
         "parameters": [
           {
@@ -22152,7 +22152,7 @@
     },
     "/api/v1/fixes/{fix_id}/answers": {
       "post": {
-        "description": "The answer to the question a handed-back fix asks: the one setting a fix never changes itself. Code puts it in the stopped version, with no model, and the version it makes waits for an Approver's yes, as any fix does. The person who answers is a party to it.",
+        "description": "The answer to the question a handed-back fix asks: the one setting a fix never changes itself. Code puts it in the stopped version, with no model, and the version it makes waits for approval, as any fix does. The person who answers is a party to it.",
         "operationId": "answer_a_fix_api_v1_fixes__fix_id__answers_post",
         "parameters": [
           {
@@ -22263,7 +22263,7 @@
     },
     "/api/v1/fixes/{fix_id}/turn-back-on": {
       "post": {
-        "description": "Only after an Approver's yes to the fix's version: tries it with the one real test run, which stops at the yes and writes nothing, and turns the workflow back on with it only once that passed. Asking again answers the fix as it stands. A fix an Approver said no to stays off.",
+        "description": "Only after an Approver approved the fix's version: tries it with the one real test run, which stops at the approval step and writes nothing, and turns the workflow back on with it only once that passed. Asking again answers the fix as it stands. A fix an Approver said no to stays off.",
         "operationId": "turn_a_fix_back_on_api_v1_fixes__fix_id__turn_back_on_post",
         "parameters": [
           {
@@ -22325,7 +22325,7 @@
                 }
               }
             },
-            "description": "It needs an Approver's yes first."
+            "description": "An Approver must approve it first."
           },
           "422": {
             "content": {
@@ -22514,7 +22514,7 @@
     },
     "/api/v1/home/needs": {
       "get": {
-        "description": "A page of the parts of Needs you that can run long: runs waiting for this person's yes, stopped runs, declined test runs and questions, each the newest first. Home answers the first page. Each total counts every row, so the pages reach every one.",
+        "description": "A page of the parts of Needs you that can run long: runs waiting for this person's approval, stopped runs, declined test runs and questions, each the newest first. Home answers the first page. Each total counts every row, so the pages reach every one.",
         "operationId": "home_needs_api_v1_home_needs_get",
         "parameters": [
           {
@@ -22604,7 +22604,7 @@
     },
     "/api/v1/home/waiting-on-others": {
       "get": {
-        "description": "A page of the runs waiting for someone else's yes that this person is part of, the newest first.",
+        "description": "A page of the runs waiting for someone else's approval that this person is part of, the newest first.",
         "operationId": "home_waiting_on_others_api_v1_home_waiting_on_others_get",
         "parameters": [
           {
@@ -25346,7 +25346,7 @@
     },
     "/api/v1/setup-approvals/{approval_id}/decisions": {
       "post": {
-        "description": "An Approver's yes or no to set up the revision with this digest. One Approver who is not a party decides. A decline needs a reason from the short list. Once approved, the platform sets it up as a Draft in n8n, read back and compared by digest. A yes is refused while today's rules find a flag in the revision, a setting still needed, or a change to someone's access. 200 when the same decision was recorded before.",
+        "description": "An Approver's approve or decline to set up the revision with this digest. One Approver who is not a party decides. A decline needs a reason from the short list. Once approved, the platform sets it up as a Draft in n8n, read back and compared by digest. Approval is refused while today's rules find a flag in the revision, a setting still needed, or a change to someone's access. 200 when the same decision was recorded before.",
         "operationId": "decide_set_up_api_v1_setup_approvals__approval_id__decisions_post",
         "parameters": [
           {
@@ -26224,7 +26224,7 @@
     },
     "/api/v1/use-cases/from-n8n": {
       "post": {
-        "description": "Sets up a workflow made in n8n as one the platform runs (ENGINE-PLAN E15, ADR 0027). It moves to the platform's project first, and what n8n holds there is graded and registered, as version 1. One published in n8n is on at once, with its maker as its publisher. One that is not is set up as a draft, and only when it passes the check. Only a safe version asks for a yes and writes, and any Approver decides, never its maker or the person who set it up. Only an Operator who can open n8n now.",
+        "description": "Sets up a workflow made in n8n as one the platform runs (ENGINE-PLAN E15, ADR 0027). It moves to the platform's project first, and what n8n holds there is graded and registered, as version 1. One published in n8n is on at once, with its maker as its publisher. One that is not is set up as a draft, and only when it passes the check. Only a safe version asks for approval and writes, and any Approver decides, never its maker or the person who set it up. Only an Operator who can open n8n now.",
         "operationId": "set_up_from_n8n_api_v1_use_cases_from_n8n_post",
         "requestBody": {
           "content": {
@@ -26403,7 +26403,7 @@
     },
     "/api/v1/use-cases/{use_case_id}": {
       "delete": {
-        "description": "Takes the workflow out of the list and stops it running. Nothing is erased: its past runs stay readable, a run waiting for a yes can still be decided, and it can be restored for a day. Deleting it again answers the same. One someone holds in n8n is taken back first, and stays theirs when n8n does not move it.",
+        "description": "Takes the workflow out of the list and stops it running. Nothing is erased: its past runs stay readable, a run waiting for approval can still be decided, and it can be restored for a day. Deleting it again answers the same. One someone holds in n8n is taken back first, and stays theirs when n8n does not move it.",
         "operationId": "delete_use_case_api_v1_use_cases__use_case_id__delete",
         "parameters": [
           {
@@ -26592,7 +26592,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/add-the-yes-back": {
       "post": {
-        "description": "Puts Ask for a yes back before each write that can run without one, in the version in use, and publishes that as a new version under the version compare, as a roll back does. When every write already waits for a yes, nothing changes. When the version still would not pass the safety check, nothing changes and the answer says why: undo it instead. The caller is its publisher, and whoever published the version it changes joins every run of it.",
+        "description": "Puts Ask for approval back before each write that can run without one, in the version in use, and publishes that as a new version under the version compare, as a roll back does. When every write already waits for approval, nothing changes. When the version still would not pass the safety check, nothing changes and the answer says why: undo it instead. The caller is its publisher, and whoever published the version it changes joins every run of it.",
         "operationId": "add_the_yes_back_api_v1_use_cases__use_case_id__add_the_yes_back_post",
         "parameters": [
           {
@@ -27332,7 +27332,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/runs": {
       "post": {
-        "description": "Starts a run. On a draft only a test run starts, and it stops at the approval gate: it asks nobody for a yes and writes nothing (ADR 0044).",
+        "description": "Starts a run. On a draft only a test run starts, and it stops at the approval gate: it asks nobody for approval and writes nothing (ADR 0044).",
         "operationId": "start_run_api_v1_use_cases__use_case_id__runs_post",
         "parameters": [
           {
@@ -29838,7 +29838,7 @@
     },
     "/internal/v1/n8n/calls/ask": {
       "post": {
-        "description": "Asks the workflow's Approvers for a yes on the run's proposal. n8n holds the wait, and our API wakes the execution with the decision. A test run stops here.",
+        "description": "Asks the workflow's Approvers for approval of the run's proposal. n8n holds the wait, and our API wakes the execution with the decision. A test run stops here.",
         "operationId": "ask_internal_v1_n8n_calls_ask_post",
         "parameters": [
           {
@@ -29938,7 +29938,7 @@
     },
     "/internal/v1/n8n/calls/propose": {
       "post": {
-        "description": "Adds one change at an allowed place to the run's proposal. Nothing is written until an Approver says yes.",
+        "description": "Adds one change at an allowed place to the run's proposal. Nothing is written until an Approver approves it.",
         "operationId": "propose_internal_v1_n8n_calls_propose_post",
         "parameters": [
           {
@@ -30138,7 +30138,7 @@
     },
     "/internal/v1/n8n/calls/tell": {
       "post": {
-        "description": "Tells the team what the run read, in its fixed Teams channel, by its fixed email list or both, with no yes (the Tell rule). Sent at most once, and never in a test run.",
+        "description": "Tells the team what the run read, in its fixed Teams channel, by its fixed email list or both, without approval (the Tell rule). Sent at most once, and never in a test run.",
         "operationId": "tell_internal_v1_n8n_calls_tell_post",
         "parameters": [
           {
@@ -30238,7 +30238,7 @@
     },
     "/internal/v1/n8n/calls/write": {
       "post": {
-        "description": "Makes the run's own approved changes. The write gateway checks the yes in our records as it writes each one, and makes each subject once across runs. A retry makes only the changes still to make.",
+        "description": "Makes the run's own approved changes. The write gateway checks the approval in our records as it writes each one, and makes each subject once across runs. A retry makes only the changes still to make.",
         "operationId": "write_internal_v1_n8n_calls_write_post",
         "parameters": [
           {

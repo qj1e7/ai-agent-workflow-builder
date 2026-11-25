@@ -1089,7 +1089,7 @@
       "additionalProperties": false,
       "properties": {
         "execution_id": {
-          "description": "The waiting n8n execution that took the yes.",
+          "description": "The waiting n8n execution that took the approval.",
           "title": "Execution Id",
           "type": "string"
         }
@@ -1502,7 +1502,7 @@
           "$ref": "#/$defs/FixId"
         },
         "version": {
-          "description": "The fixed version, which waits for a yes.",
+          "description": "The fixed version, which waits for approval.",
           "minimum": 1,
           "title": "Version",
           "type": "integer"
@@ -2144,7 +2144,7 @@
           "type": "string"
         },
         "why": {
-          "description": "Why n8n could not take the yes, in plain words.",
+          "description": "Why n8n could not take the approval, in plain words.",
           "title": "Why",
           "type": "string"
         }
@@ -2353,7 +2353,7 @@
       "additionalProperties": false,
       "properties": {
         "waiting_run_id": {
-          "description": "The earlier run of the same workflow that is still waiting for a yes.",
+          "description": "The earlier run of the same workflow that is still waiting for approval.",
           "title": "Waiting Run Id",
           "type": "string"
         }

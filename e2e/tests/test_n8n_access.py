@@ -94,7 +94,7 @@ def test_n8n_access(api: Api, mock_model: None):
     assert settings_in_n8n(workflow_id, "once Dana holds it") == laid_out
     view = api.get(dana, f"/api/v1/use-cases/{use_case_id}/n8n")
     assert (view["holder"]["id"], view["can_open"]) == (dana, True)
-    assert "Ask for a yes" in [node["name"] for node in view["nodes"]]
+    assert "Ask for approval" in [node["name"] for node in view["nodes"]]
     schedule = {"day": "monday", "at": "07:30", "via": "page", "expected_version": 1}
     held = api.request(
         "alice",

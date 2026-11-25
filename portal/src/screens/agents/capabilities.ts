@@ -16,7 +16,7 @@ export function groupOf(state: CapabilityState): Group {
 
 export const CAPABILITIES_UNAVAILABLE_WORDS = 'What the platform can do is not available right now.'
 export const PLATFORM_DOES_WORDS = 'The platform does this for every workflow.'
-export const CAPABILITIES_FOOT = 'Anything that changes data waits for an Approver’s yes.'
+export const CAPABILITIES_FOOT = 'Anything that changes data waits for approval from an Approver.'
 
 const when = (iso: string, now: Date) => runWhen(iso, now).replace(/^Today/, 'today')
 const dot = (words: string) => (/[.!?]$/.test(words) ? words : `${words}.`)

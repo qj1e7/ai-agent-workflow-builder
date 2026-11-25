@@ -63,7 +63,7 @@ EXPLAIN_SECONDS: Final = 15.0
 NOTE_SAID: Final[Mapping[NoteKind, str]] = {
     "stopped": '"{block}" stopped the run with no reason people can act on',
     "went_on": '"{block}" let the run go on',
-    "ended_early": '"{block}" ended the run before the yes',
+    "ended_early": '"{block}" ended the run before the approval step',
     "changes": '"{block}" asked for other changes than expected',
     "no_end": '"{block}" kept the run from ending',
     "unknown": 'Something went wrong at "{block}"',

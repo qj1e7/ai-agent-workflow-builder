@@ -148,10 +148,10 @@ NEWER: Final = (
 )
 IN_N8N: Final = "It's open in n8n, so it can't be fixed now."
 BUSY: Final = "A fix for this workflow is already under way."
-DRAFTING: Final = "Drafting a fix. Nothing changes until an Approver says yes."
-WAITING: Final = "Waiting for a yes. Nothing changes until an Approver says yes."
+DRAFTING: Final = "Drafting a fix. Nothing changes until an Approver approves it."
+WAITING: Final = "Waiting for approval. Nothing changes until an Approver approves it."
 APPROVED: Final = (
-    "An Approver said yes. Turn it back on to try the fix with a test run, which writes nothing."
+    "An Approver approved it. Turn it back on to try the fix with a test run, which writes nothing."
 )
 TESTING: Final = "Trying the fix with a test run, which writes nothing."
 ON: Final = "The fix passed its test run, so the workflow is back on with it."
@@ -174,10 +174,10 @@ TEST_FAILED: Final = (
 HANDED_BACK: Final = "I couldn't fix this. Here's the cause and what I tried."
 """The team lead's own words (ADR 0055, section 5)."""
 DECLINED: Final = "An Approver said no, so the fix stays off. The workflow stays as it was."
-EXPIRED: Final = "Nobody said yes in time, so the fix stays off. The workflow stays as it was."
+EXPIRED: Final = "Nobody approved it in time, so the fix stays off. The workflow stays as it was."
 STALE: Final = "The workflow changed since, so this fix was dropped. Ask for a fix again."
 NEVER_PROPOSED: Final = "This fix ended before it was handed in, so it was dropped."
-YES_FIRST: Final = "It needs an Approver's yes first."
+YES_FIRST: Final = "An Approver must approve it first."
 FLAGGED: Final = (
     "It has a flag under today's rules, so it can't be approved now. Ask for a fix again."
 )
@@ -192,7 +192,7 @@ UNSAFE: Final = "It doesn't pass the safety check, so it wasn't stored."
 NOT_READY: Final = "n8n isn't ready, so nothing was stored. Try again."
 NOT_THE_STORED: Final = "The proposal isn't the version stored for this fix."
 NO_QUESTION: Final = "There's no question to answer for this fix."
-IN_SHORT: Final = "A fix for a run that stopped. Nothing changes until an Approver says yes."
+IN_SHORT: Final = "A fix for a run that stopped. Nothing changes until an Approver approves it."
 FIX_NAME: Final = "a fix for {name}"
 """How the Teams card names it: "Alice asks to set up a fix for Release check."."""
 CHECK_WORDS: Final[Mapping[str, str]] = {
@@ -262,11 +262,11 @@ class FixView(WireModel):
     asked_by: str
     asked_by_name: str
     ends_by: datetime = Field(description="When the coordinator stops, at most 20 minutes in.")
-    approval_id: str | None = Field(description="Its set-up approval, once it waits for a yes.")
+    approval_id: str | None = Field(description="Its set-up approval, once it waits for approval.")
     question: FixQuestionView | None = Field(
         description="The setting a handed-back fix asks for, which a fix never changes itself."
     )
-    can_turn_back_on: bool = Field(description="An Approver said yes, and it isn't tried yet.")
+    can_turn_back_on: bool = Field(description="An Approver approved it, and it isn't tried yet.")
 
 
 class FixAnswerIn(WireIn):

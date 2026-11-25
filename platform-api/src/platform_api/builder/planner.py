@@ -341,7 +341,7 @@ class WatchlistReply(Reply):
         description="The parts of the request past the software that the Software watchlist does "
         "itself, each a ticked row on the software card: schedule when the request names the day "
         "or time it already runs on, ticket when it asks for the upgrade ticket the watchlist "
-        "raises after a yes. Empty beside also, whose card holds the rest of the request.",
+        "raises after approval. Empty beside also, whose card holds the rest of the request.",
     )
 
 
@@ -414,8 +414,8 @@ class ReplyOfferView(WireModel):
     capability: str = Field(description="The Ready capability it stands for.")
     request: str = Field(
         description="The registry's example request. The Portal's button sends it as the "
-        "person's next message, so the Planner reads it again and any write still waits for a "
-        "yes."
+        "person's next message, so the Planner reads it again and any write still waits for "
+        "approval."
     )
 
 

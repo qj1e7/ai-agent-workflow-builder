@@ -13,7 +13,7 @@ matched by the n8n user id the platform stored for them, never by a name or an e
 Setting one up moves it to the platform's project first, read back as every move is, puts right
 there what is the platform's to set and never its maker's (ADR 0051, Fixed for you), and then
 registers what n8n holds there, which nobody else can change any more. The safety checker grades
-it, and only a safe version asks for a yes and writes (ENGINE-PLAN 2.3.11). One published in n8n
+it, and only a safe version asks for approval and writes (ENGINE-PLAN 2.3.11). One published in n8n
 is on at once. One that is not is set up as a draft, and only when it is safe, because only a
 safe draft can be turned on. Its maker, and the person who set it up, are parties to every run
 of it, so neither can approve one. Any Approver decides its requests."""
@@ -97,7 +97,7 @@ class MadeInN8nView(WireModel):
     published: bool = Field(description="Whether it is published in n8n, so it runs there.")
     grade: Grade = Field(
         description="The safety checker's grade of the version n8n runs, or of its draft when "
-        "nothing is published. Only a safe version asks for a yes and writes."
+        "nothing is published. Only a safe version asks for approval and writes."
     )
     findings: list[str] = Field(
         description="Why it is not safe, in the safety checker's words, one per problem."

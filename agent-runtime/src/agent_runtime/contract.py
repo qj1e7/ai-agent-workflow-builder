@@ -648,7 +648,8 @@ class CapabilitySpec(WireModel):
         description="True for what the platform does by itself, which Home leaves out of its lists."
     )
     focus: bool = Field(
-        description="True for what software versioning uses: checking releases, asking for a yes, "
+        description="True for what software versioning uses: checking releases, asking for "
+        "approval, "
         "creating the upgrade ticket. Home's lists show only these."
     )
     tools: list[ToolId] = Field(description="The tools that do it. Empty unless it is ready.")
@@ -964,7 +965,7 @@ class WatchedFact(WireModel):
         default=None, max_length=40, description="The upgrade ticket that is open, if any."
     )
     awaiting_approval: bool = Field(
-        default=False, description="True when a ticket for it waits for an Approver's yes."
+        default=False, description="True when a ticket for it waits for approval."
     )
     problem: str | None = Field(
         default=None, max_length=200, description="Why the last check could not read it."
@@ -1004,7 +1005,7 @@ class NeedsYouFact(WireModel):
     replies: int = Field(ge=0)
     declined: int = Field(ge=0, description="The person's own test runs an Approver declined.")
     questions: int = Field(
-        ge=0, description="Questions Approvers asked the person on requests waiting for a yes."
+        ge=0, description="Questions Approvers asked the person on requests waiting for approval."
     )
     fixes: int = Field(
         default=0, ge=0, description="Workflows that are on and can't run, which they can fix."
@@ -1012,7 +1013,7 @@ class NeedsYouFact(WireModel):
     setups: int = Field(
         default=0,
         ge=0,
-        description="Drafted workflows' one-time checks waiting for this Approver's yes.",
+        description="Drafted workflows' one-time checks waiting for this Approver's approval.",
     )
     total: int = Field(
         ge=0, description="The count Home shows under Needs you, the sum of the counts above."
@@ -1271,7 +1272,7 @@ class WatchlistAnswer(WireModel):
         default_factory=list[WatchPart],
         description="The parts of the request past the software that the Software watchlist "
         "does itself: schedule when it names the day or time the watchlist already runs on, "
-        "ticket when it asks for the upgrade ticket the watchlist raises after a yes. Empty "
+        "ticket when it asks for the upgrade ticket the watchlist raises after approval. Empty "
         "beside `also`, whose card holds the rest of the request.",
     )
 
@@ -1290,12 +1291,12 @@ class RefusedAnswer(WireModel):
     reason: Literal["skip_approval"] = "skip_approval"
     said: str = Field(
         max_length=200,
-        description="The words that asked to skip a yes, as the request wrote them, so the "
+        description="The words that asked to skip approval, as the request wrote them, so the "
         "refusal names the part.",
     )
     rest: str = Field(
         max_length=2000,
-        description="The request without the words that asked to skip a yes, so it can be set "
+        description="The request without the words that asked to skip approval, so it can be set "
         "up with one. Empty when nothing is left, or when the rest is nothing the platform can "
         "set up: then the parts say why.",
     )
@@ -1681,8 +1682,8 @@ class RequestPart(WireModel):
         "ask_on_its_own (a question asked beside a request, or a request beside a question), "
         "one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a "
         "time on a watch "
-        "request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the "
-        "request is set up with a yes), needs_the_rest (it can't run without a part that "
+        "request), skip_approval (it asks to skip approval), with_a_yes (it waits until the "
+        "request is set up with approval), needs_the_rest (it can't run without a part that "
         "can't be done), how_many_days (a question: the words name a span of days but no "
         "number), only_schedule (a change to a workflow other than when it runs, which the "
         "chat can't make yet), how_often (a frequency the schedule can't hold, such as "

@@ -159,7 +159,7 @@ describe('a request that waits for someone else’s yes (approve, asked by the p
 
   it('names no one from a read of the run taken before the answer opened, and waits for a fresh one', () => {
     const said = text(draw(answered(decide as PlannerReply), { me: ALICE, runRead: 'cached' }))
-    expect(said).toContain('Checking what waits for your yes')
+    expect(said).toContain('Checking what needs your approval')
     expect(said).not.toMatch(/Bob|waits for an Approver/)
   })
 })

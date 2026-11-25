@@ -147,14 +147,14 @@ async def v(lab: Lab) -> AsyncIterator[Versions]:
 
 
 def without_yes(workflow: dict[str, Any]) -> None:
-    """Deletes Ask for a yes in n8n's editor and joins the block before it to the write."""
+    """Deletes Ask for approval in n8n's editor and joins the block before it to the write."""
     connections: dict[str, Any] = workflow["connections"]
-    write = connections.pop("Ask for a yes")["main"][1][0]["node"]
-    workflow["nodes"] = [n for n in workflow["nodes"] if n["name"] != "Ask for a yes"]
+    write = connections.pop("Ask for approval")["main"][1][0]["node"]
+    workflow["nodes"] = [n for n in workflow["nodes"] if n["name"] != "Ask for approval"]
     for outputs in connections.values():
         for targets in outputs["main"]:
             for target in targets:
-                if target["node"] == "Ask for a yes":
+                if target["node"] == "Ask for approval":
                     target["node"] = write
 
 
@@ -221,13 +221,13 @@ def test_the_changes_are_a_plain_comparison_of_blocks_the_schedule_and_settings(
         "type": "n8n-nodes-base.scheduleTrigger",
         "parameters": schedule_rule(Schedule("every_day", "08:00", TEAM_ZONE)),
     }
-    ask = {"name": "Ask for a yes", "type": "CUSTOM.wabAskForYes", "parameters": {}}
+    ask = {"name": "Ask for approval", "type": "CUSTOM.wabAskForYes", "parameters": {}}
     make = {"name": "Create ticket", "type": "CUSTOM.wabMakeApprovedChanges", "parameters": {}}
     before = {
         "nodes": [trigger, ask, make],
         "connections": {
-            "Daily 8:00": {"main": [[{"node": "Ask for a yes"}]]},
-            "Ask for a yes": {"main": [[], [{"node": "Create ticket"}]]},
+            "Daily 8:00": {"main": [[{"node": "Ask for approval"}]]},
+            "Ask for approval": {"main": [[], [{"node": "Create ticket"}]]},
         },
         "settings": {"timezone": "Asia/Singapore"},
     }
@@ -239,7 +239,7 @@ def test_the_changes_are_a_plain_comparison_of_blocks_the_schedule_and_settings(
     }
     assert changes_between(before, after) == [
         "Now runs every Monday at 7:30.",
-        "Deleted “Ask for a yes”.",
+        "Deleted “Ask for approval”.",
         "Added “Tell you”.",
         "Changed its settings: keeping its test runs.",
     ]
@@ -250,7 +250,7 @@ def test_the_changes_are_a_plain_comparison_of_blocks_the_schedule_and_settings(
 
 def test_the_changes_name_a_block_turned_off_or_on_its_key_and_its_version():
     """Each of these changes what n8n runs, though the block's type and parameters stay."""
-    ask = {"name": "Ask for a yes", "type": "CUSTOM.wabAskForYes", "parameters": {}}
+    ask = {"name": "Ask for approval", "type": "CUSTOM.wabAskForYes", "parameters": {}}
     read = {
         "name": "Read tickets",
         "type": "n8n-nodes-base.jira",
@@ -260,8 +260,8 @@ def test_the_changes_name_a_block_turned_off_or_on_its_key_and_its_version():
     }
     before = {"nodes": [ask, read], "connections": {}, "settings": {}}
     off = {**before, "nodes": [{**ask, "disabled": True}, read]}
-    assert changes_between(before, off) == ["Turned off “Ask for a yes”."]
-    assert changes_between(off, before) == ["Turned on “Ask for a yes”."]
+    assert changes_between(before, off) == ["Turned off “Ask for approval”."]
+    assert changes_between(off, before) == ["Turned on “Ask for approval”."]
     assert changes_between(before, {**before, "nodes": [{**ask, "disabled": False}, read]}) == [
         "Published again, with no change to its blocks."
     ], "n8n runs a block with disabled false as one with none"
@@ -291,7 +291,7 @@ async def test_safety_a_version_published_in_n8n_without_its_yes_is_kept_as_writ
     assert second["n8n_version_id"] == v.n8n.workflows[workflow_id]["activeVersionId"]
     view = await v.view(use_case_id)
     assert (view["version"], view["grade"]) == (2, "writes_refused")
-    assert view["findings"] == ['"Create ticket" can run without a yes.']
+    assert view["findings"] == ['"Create ticket" can run without approval.']
     ran = await v.builder.facts.version(workflow_id, second["n8n_version_id"])
     assert ran == RanVersion("writes_refused", Publisher(DAVE))
     [card] = await v.builder.changed_in_n8n(10)
@@ -302,15 +302,15 @@ async def test_safety_a_version_published_in_n8n_without_its_yes_is_kept_as_writ
         "writes_refused",
         2,
     )
-    assert card.changes == ["Deleted “Ask for a yes”."]
+    assert card.changes == ["Deleted “Ask for approval”."]
     assert card.findings == view["findings"]
     assert await v.sweep() == 0, "a version is kept once"
 
 
 def yes_turned_off(workflow: dict[str, Any]) -> None:
-    """Ticks Deactivate on Ask for a yes in n8n's editor, which leaves it on the canvas."""
+    """Ticks Deactivate on Ask for approval in n8n's editor, which leaves it on the canvas."""
     for node in workflow["nodes"]:
-        if node["name"] == "Ask for a yes":
+        if node["name"] == "Ask for approval":
             node["disabled"] = True
 
 
@@ -320,14 +320,14 @@ async def test_safety_a_version_published_in_n8n_with_its_yes_turned_off_is_writ
     use_case_id, workflow_id = await on_and_changed(v, yes_turned_off)
     view = await v.view(use_case_id)
     assert (view["version"], view["grade"]) == (2, "writes_refused")
-    assert view["findings"] == ['"Create ticket" can run without a yes.']
+    assert view["findings"] == ['"Create ticket" can run without approval.']
     second = await version_row(v.own, use_case_id, 2)
     ran = await v.builder.facts.version(workflow_id, second["n8n_version_id"])
     assert ran == RanVersion("writes_refused", Publisher(DAVE))
     [card] = await v.builder.changed_in_n8n(10)
-    assert (card.grade, card.changes) == ("writes_refused", ["Turned off “Ask for a yes”."])
+    assert (card.grade, card.changes) == ("writes_refused", ["Turned off “Ask for approval”."])
     versions = (await v.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}/versions")).json()
-    assert versions["versions"][0]["changes"] == ["Turned off “Ask for a yes”."]
+    assert versions["versions"][0]["changes"] == ["Turned off “Ask for approval”."]
 
 
 async def test_safety_a_publisher_the_people_list_cant_match_is_never_guessed(v: Versions):
@@ -430,7 +430,7 @@ async def test_safety_add_the_yes_back_puts_a_yes_before_the_write_and_publishes
     held = v.n8n.workflows[workflow_id]
     third = await version_row(v.own, use_case_id, 3)
     assert held["activeVersionId"] == third["n8n_version_id"]
-    asks = held["connections"]["Ask for a yes"]["main"]
+    asks = held["connections"]["Ask for approval"]["main"]
     assert asks[1] == [{"node": "Create ticket", "type": "main", "index": 0}]
     again = await v.add_yes("carol", use_case_id, in_use=2)
     assert (again.status_code, again.json()["version"]) == (200, 3)

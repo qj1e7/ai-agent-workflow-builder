@@ -169,7 +169,7 @@ class Scenario(WireIn):
         description="By block name, what each Read and Agent block gets.",
     )
     approver: WakeDecision = Field(
-        default="yes", description="What Ask for a yes gets: yes, no or no answer."
+        default="yes", description="What Ask for approval gets: yes, no or no answer."
     )
 
 
@@ -203,7 +203,7 @@ class CallRecord(WireModel):
 
 class SimulatedRun(WireModel):
     """What the grader reads for one scenario (ADR 0054, PR 5): the calls in order, what was
-    proposed, what Ask for a yes got, and how much Make the approved changes would have made."""
+    proposed, what Ask for approval got, and how much Make the approved changes would have made."""
 
     nonce: str
     workflow_id: str
@@ -214,7 +214,7 @@ class SimulatedRun(WireModel):
     calls: list[CallRecord] = Field(default_factory=list[CallRecord])
     proposed: list[ProposedChange] = Field(default_factory=list[ProposedChange])
     approver: WakeDecision | None = Field(
-        default=None, description="What Ask for a yes got, once it asked with a change proposed."
+        default=None, description="What Ask for approval got, once it asked with a change proposed."
     )
     woke: Woke | None = Field(default=None, description="Whether the wake reached n8n.")
     would_have_written: int | None = Field(

@@ -97,7 +97,8 @@ def test_words_that_tell_the_planner_what_to_say_get_why_and_a_question_back(tas
 def test_the_reply_is_the_team_leads_words():
     assert TOLD == (
         "For security, I don't take instructions to change my rules or to say something "
-        "happened when it didn't. Every change still waits for an Approver's yes. What would you "
+        "happened when it didn't. Every change still waits for approval from an Approver. What "
+        "would you "
         "like to do?"
     )
 
@@ -158,7 +159,7 @@ def test_the_planner_says_what_it_is_first_then_what_it_can_do_then_how_to_start
 def test_an_approver_hears_what_the_planner_does_for_them():
     result, _ = answered("What is the Planner?", reading(), changes_workflows=False)
     assert result.answer == FreeReplyAnswer(form="answer", text=what_the_planner_is(False))
-    assert "what waits for your yes" in what_the_planner_is(False)
+    assert "what needs your approval" in what_the_planner_is(False)
 
 
 def test_the_how_to_notes_say_what_the_planner_is_before_how_its_card_works():
@@ -216,7 +217,7 @@ def test_a_cant_with_nothing_close_adds_what_the_app_is_for_and_what_it_can_do()
     assert nothing_close() == (
         "This app runs repetitive work for you. I can only check software for new releases on "
         "GitHub, check Maven Central and npm packages for new versions, create a Jira ticket "
-        "after a yes, and ask Approvers for a yes in Teams."
+        "after approval, and ask Approvers for approval in Teams."
     )
 
 

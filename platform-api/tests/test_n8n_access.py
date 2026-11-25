@@ -719,7 +719,7 @@ async def test_the_in_n8n_views_are_for_people_with_n8n_access(s: Staffed):
         for target in targets or []
     }
     kinds = {n["name"]: n["kind"] for n in view["nodes"]}
-    assert kinds["Ask for a yes"] == "ask"
+    assert kinds["Ask for approval"] == "ask"
     assert (view["workflow_id"], view["version"], view["holder"], view["can_open"]) == (
         workflow_id,
         1,
@@ -752,7 +752,7 @@ async def test_a_run_in_n8n_has_each_block_s_state_from_its_calls_then_n8n_s_rec
             " version_id, linked_at) VALUES ('901', 'run_n8n', %s, 'webhook', %s, %s)",
             (workflow_id, version_id, NOW),
         )
-        for node, kind in (("Version checker", "agent"), ("Ask for a yes", "ask")):
+        for node, kind in (("Version checker", "agent"), ("Ask for approval", "ask")):
             await uow.conn.execute(
                 "INSERT INTO orchestration.node_calls (execution_id, node_name, run_id, kind,"
                 " content_hash, attempts, outcome, call_id, claimed_at, answer, answered_at)"
@@ -763,14 +763,14 @@ async def test_a_run_in_n8n_has_each_block_s_state_from_its_calls_then_n8n_s_rec
     assert waiting["states"] == {
         "Version checker": "done",
         "Newer?": "done",
-        "Ask for a yes": "waiting",
+        "Ask for approval": "waiting",
     }, "the IF never calls the platform, so the yes waiting after it says it ran"
     assert (waiting["from_n8n"], waiting["n8n_version_id"]) == (False, version_id)
     assert "Nothing to change" in [n["name"] for n in waiting["nodes"]]
     blocks = {block["name"]: block for block in waiting["blocks"]}
     assert set(blocks) == {n["name"] for n in waiting["nodes"]} - {"About this workflow"}
     assert {(exit["exit"], exit["to"]) for exit in blocks["Newer?"]["next"]} == {
-        ("true", "Ask for a yes"),
+        ("true", "Ask for approval"),
         ("false", "Nothing to change"),
     }
 
@@ -782,14 +782,14 @@ async def test_a_run_in_n8n_has_each_block_s_state_from_its_calls_then_n8n_s_rec
     s.n8n.executions["901"]["data"]["resultData"]["runData"] = {
         "Start from the Portal": [{"executionStatus": "success"}],
         "Version checker": [{"executionStatus": "success"}],
-        "Ask for a yes": [{"executionStatus": "error"}],
+        "Ask for approval": [{"executionStatus": "error"}],
     }
     ended = (await s.call("carol", "GET", "/api/v1/runs/run_n8n/n8n")).json()
     assert ended["from_n8n"] is True
     assert ended["states"] == {
         "Start from the Portal": "done",
         "Version checker": "done",
-        "Ask for a yes": "failed",
+        "Ask for approval": "failed",
     }, "n8n's own record says what ran, so nothing is guessed on top of it"
     assert (await s.call("bob", "GET", "/api/v1/runs/run_n8n/n8n")).status_code == 403
 

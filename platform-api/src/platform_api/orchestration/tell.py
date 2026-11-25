@@ -60,7 +60,7 @@ SIGN_OFF = "A notice from AI Workflow Builder. It asks for nothing."
 SUBJECT_LIMIT = 200
 LABEL_LIMIT = 200
 THE_LIST = "the team's list"
-MADE = "Made after a yes"
+MADE = "Made after approval"
 DECLINED = "Declined. Nothing was written."
 OPEN_THE_RUN = "Open the run in AI Workflow Builder"
 

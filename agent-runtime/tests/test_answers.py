@@ -1667,7 +1667,7 @@ def test_check_part_never_lets_a_part_skip_the_yes(text: str):
     client = make_app(None)
     cant = client.post("/v1/planner/check-part", json=check_body("do", text)).json()
     assert cant["state"] == "cant_do"
-    assert cant["note"] == "I can't skip the yes. Nothing is written without a yes."
+    assert cant["note"] == "I can't skip approval. Nothing is written without approval."
 
 
 def test_check_part_still_fits_a_safe_does_text():

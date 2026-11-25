@@ -77,7 +77,7 @@ export const SAY = {
   cant: 'I can’t do that yet.',
   cantWithAlternative: 'I can’t do all of that, but I can set up something close.',
   which_software: 'Which software should I watch?',
-  refused: 'I can’t set that up. Anything that changes data waits for a yes, every time.',
+  refused: 'I can’t set that up. Anything that changes data waits for approval, every time.',
   nothingNeeds: 'Nothing needs you right now.',
 } as const
 
@@ -373,7 +373,7 @@ export function workflowsSay(rows: readonly Row[], asker: Asker = 'operator'): s
   const running = rows.filter((row) => isRunning(row.useCase.last_run)).length
   const parts = [
     stopped > 0 ? `${stopped} stopped` : null,
-    waiting > 0 ? `${waiting} ${waiting === 1 ? 'is' : 'are'} waiting for a yes` : null,
+    waiting > 0 ? `${waiting} ${waiting === 1 ? 'is' : 'are'} waiting for approval` : null,
     paused > 0 ? `${paused} ${paused === 1 ? 'is' : 'are'} paused` : null,
     running > 0 ? `${running} ${running === 1 ? 'is' : 'are'} running` : null,
   ].filter((part) => part !== null)
@@ -453,7 +453,7 @@ export function startingPoints(view: CapabilitiesView): readonly string[] {
 }
 
 /** What How to start says first, so a question about what the app is for gets that answer before the steps. */
-export const START_LEAD = 'This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written without an Approver’s yes.'
+export const START_LEAD = 'This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written until an Approver approves it.'
 
 /** How to start, step by step: the registry’s first example in their words, and Teams named only while the platform can ask for a yes there. */
 export function startSteps(view: CapabilitiesView): readonly string[] {
@@ -463,6 +463,6 @@ export function startSteps(view: CapabilitiesView): readonly string[] {
     example === undefined ? 'Tell me what should run by itself, in your own words.' : `Tell me what should run by itself, in your own words, like “${example}”.`,
     'Check the card I make, and change anything I guessed.',
     'Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.',
-    teams ? 'Nothing is written until an Approver says yes in Teams.' : 'Nothing is written until an Approver says yes.',
+    teams ? 'Nothing is written until an Approver approves it in Teams.' : 'Nothing is written until an Approver approves it.',
   ]
 }

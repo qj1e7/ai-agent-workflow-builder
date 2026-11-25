@@ -511,7 +511,7 @@ describe('the upgrade ticket fact on the software page', () => {
   })
 
   it('says a ticket waits for a yes, is open, or that the yes was a no', () => {
-    expect(ticketFact(row({ status: 'awaiting_approval' }), null)).toBe('Waiting for a yes')
+    expect(ticketFact(row({ status: 'awaiting_approval' }), null)).toBe('Waiting for approval')
     expect(ticketFact(row({ status: 'ticket_open', open_ticket: 'MOCK-9' }), null)).toBe('MOCK-9, open in Jira')
     expect(ticketFact(row({}), 'Declined by Bob. Nothing was written.')).toBe('Declined by Bob. Nothing was written.')
   })

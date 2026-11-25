@@ -14,9 +14,9 @@ describe('read and write labels', () => {
   })
 
   it('says a write waits for a yes, and from how many Approvers', () => {
-    expect(approvalWords(1)).toBe('Waits for a yes from 1 Approver')
-    expect(approvalWords(2)).toBe('Waits for a yes from 2 Approvers, one after the other')
-    expect(approvalWords(null)).toBe('Waits for a yes')
+    expect(approvalWords(1)).toBe('Waits for approval from 1 Approver')
+    expect(approvalWords(2)).toBe('Waits for approval from 2 Approvers, one after the other')
+    expect(approvalWords(null)).toBe('Waits for approval')
   })
 
   it('labels a card by the strongest thing its tools can do', () => {
@@ -24,7 +24,7 @@ describe('read and write labels', () => {
     expect(cardAccess({ tools: [], approvals: [] }, kinds)).toBe('none')
     expect(cardAccess({ tools: ['jira.search'], approvals: [] }, kinds)).toBe('reads')
     expect(cardAccess({ tools: ['jira.search', 'jira.create_ticket'], approvals: [] }, kinds)).toBe('writes')
-    expect(accessLabel('writes')).toBe('Changes data after a yes')
+    expect(accessLabel('writes')).toBe('Changes data after approval')
     expect(accessLabel('none')).toBe('No access to other systems')
   })
 

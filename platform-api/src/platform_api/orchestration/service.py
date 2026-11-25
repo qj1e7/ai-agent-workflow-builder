@@ -1878,7 +1878,7 @@ class Orchestrator:
                         )
                         ended += 1
                     case Approved():
-                        why = "its workflow was deleted before n8n took the yes."
+                        why = "its workflow was deleted before n8n took the approval."
                         await self._commit(uow, record, record.state.lose(why))
                     case _:
                         pass

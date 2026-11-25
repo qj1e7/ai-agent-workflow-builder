@@ -123,7 +123,7 @@ class ExplainWrite(WireModel):
         "platform yet."
     )
     approvers: int | None = Field(
-        description="How many Approvers say yes on each run, one after the other. Null unless "
+        description="How many Approvers approve on each run, one after the other. Null unless "
         "each_run."
     )
     words: str

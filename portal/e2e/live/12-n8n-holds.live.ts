@@ -111,7 +111,7 @@ test.describe('who has a workflow open in n8n, and the watchlist in n8n', () => 
     const when = main(page).getByRole('region', { name: 'When' })
     await expect(when).toContainText('Can’t change it while Dana has it open in n8n.')
     await expect(when.getByRole('button'), 'Change when it runs would be refused after Save').toHaveCount(0)
-    for (const refused of ['Undo', 'Add the yes back', 'Resume']) await expect(main(page).getByRole('button', { name: refused, exact: true })).toHaveCount(0)
+    for (const refused of ['Undo', 'Add the approval step back', 'Resume']) await expect(main(page).getByRole('button', { name: refused, exact: true })).toHaveCount(0)
     await expect(main(page).getByRole('button', { name: 'Pause' }), 'Pause still works while it is held').toBeVisible()
     await expect(main(page).locator(':is(button, input, select, textarea):disabled, [aria-disabled="true"]')).toHaveCount(0)
     await expectAccessible(page, path.join(OUT, 'axe'), 'holds-summary-alice')

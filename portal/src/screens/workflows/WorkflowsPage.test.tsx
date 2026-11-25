@@ -103,7 +103,7 @@ describe('the Workflows list', () => {
     expect(bugs).not.toMatch(/Stopped<\/span>/)
     expect(text(bugs)).toContain('Morning bug report check')
     const watchlist = rowOf(html, 'uc_01JB7')
-    expect(text(watchlist), 'Alice may not decide, so the row stays On').toContain('On · waiting for an Approver’s yes')
+    expect(text(watchlist), 'Alice may not decide, so the row stays On').toContain('On · waiting for approval')
     expect(watchlist).not.toMatch(/Waiting for a yes<\/span>/)
     const paused = rowOf(html, 'uc_lang')
     expect(paused).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
@@ -111,7 +111,7 @@ describe('the Workflows list', () => {
 
   it('reads Needs you for the Approver who can decide a waiting run, and On for an Operator who is not allowed to', () => {
     expect(rowOf(render({ me: BOB }), 'uc_01JB7')).toMatch(/data-tone="wait"[^>]*>.*Needs you<\/span>/)
-    expect(text(rowOf(render({ me: CAROL }), 'uc_01JB7'))).toContain('On · waiting for an Approver’s yes')
+    expect(text(rowOf(render({ me: CAROL }), 'uc_01JB7'))).toContain('On · waiting for approval')
   })
 
   it('shows Carol, an Operator whose work the stopped run is not, On, and Alice, whose it is, Needs you', () => {
@@ -564,7 +564,7 @@ describe('workflows made in n8n, for someone with n8n access', () => {
     const html = render({ me: MAINTAINER, made: [SAFE] })
     const row = madeRow(html, 'wf7')
     expect(text(row)).toContain('Morning check is in n8n but not registered')
-    expect(text(row)).toContain('Made in n8n by Carol. Safe: every change waits for a yes. Published in n8n, so it runs once set up.')
+    expect(text(row)).toContain('Made in n8n by Carol. Safe: every change waits for approval. Published in n8n, so it runs once set up.')
     expect(row).toMatch(/data-tone="ok"[^>]*>Safe<\/span>/)
     expect(labelsOf(row, 'Set up')).toHaveLength(1)
     expect(mainOf(html)).toMatch(/<h2[^>]*>Made in n8n<\/h2>/)
@@ -581,7 +581,7 @@ describe('workflows made in n8n, for someone with n8n access', () => {
     const fixed = ['sends its failures to the platform’s error workflow', 'runs it on Singapore time', 'adds Start from the Portal for Run now']
     const row = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, fixed_for_you: fixed }] }), 'wf7')
     expect(text(row)).toContain(
-      'Safe: every change waits for a yes. Set up also sends its failures to the platform’s error workflow, runs it on Singapore time and adds Start from the Portal for Run now. Published in n8n, so it runs once set up.',
+      'Safe: every change waits for approval. Set up also sends its failures to the platform’s error workflow, runs it on Singapore time and adds Start from the Portal for Run now. Published in n8n, so it runs once set up.',
     )
   })
 

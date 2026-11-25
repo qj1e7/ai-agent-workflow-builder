@@ -143,7 +143,7 @@ HOME_FACTS: Final = PlannerFacts.model_validate(
                 "repo": "fastapi/fastapi",
                 "our_version": "0.120.0",
                 "newest_version": "0.121.1",
-                "state": "Ticket waiting for a yes",
+                "state": "Ticket waiting for approval",
                 "checked_at": "2026-11-14T00:00:00Z",
                 "awaiting_approval": True,
             },
@@ -227,8 +227,8 @@ REASON_WORDS: Final[dict[str, str]] = {
         "The Software watchlist checks all your software together, on one schedule. I can't give "
         "one software its own time yet."
     ),
-    "skip_approval": "Anything that changes data waits for a yes, every time.",
-    "with_a_yes": "This waits until it's set up with a yes.",
+    "skip_approval": "Anything that changes data waits for approval, every time.",
+    "with_a_yes": "This waits until it's set up with approval.",
     "needs_the_rest": "It can't run without the part I can't do.",
     "how_many_days": "Your words don't say how many days.",
     "only_schedule": "From the chat I can only change when it runs.",
@@ -240,7 +240,7 @@ FOLLOWED_NOTHING: Final = (
     "I didn't follow that. I can watch software releases, fix stopped runs and change your "
     "workflows."
 )
-REFUSED: Final = "I can't set that up. Anything that changes data waits for a yes, every time."
+REFUSED: Final = "I can't set that up. Anything that changes data waits for approval, every time."
 NOT_BUILT: Final = ("planned", "unsupported")
 CAN: Final = [
     c.short
@@ -474,7 +474,7 @@ DRAFTING: Final = "Drafting it as an n8n workflow"
 """The drafted workflow's card while the drafter works (DRAFTING_TITLE in drafted.ts)."""
 START_LEAD: Final = (
     "This app runs repetitive work for you. Tell me the task and I'll draft it. Nothing is "
-    "written without an Approver's yes."
+    "written until an Approver approves it."
 )
 """How to start's first sentence (answers.ts)."""
 
@@ -611,7 +611,7 @@ PILL_OF_STATE: Final[dict[str, str]] = {
     "Can’t check": "Can’t check",
     "Can't check": "Can’t check",
     "New version": "Newer out",
-    "Ticket waiting for a yes": "Newer out",
+    "Ticket waiting for approval": "Newer out",
     "Ticket open": "Newer out",
     "Not checked yet": "Watching",
     "Nothing newer yet": "Watching",
@@ -683,7 +683,7 @@ def _how_to_start() -> list[str]:
         "Check the card I make, and change anything I guessed.",
         "Press Set up. I do a test run, which writes nothing.",
         "If the test passes, press Turn it on.",
-        f"Nothing is written until an Approver says yes{' in Teams' if teams else ''}.",
+        f"Nothing is written until an Approver approves it{' in Teams' if teams else ''}.",
     ]
     numbered = [f"{n}. {step}" for n, step in enumerate(steps, 1)]
     return ["How to start:", START_LEAD, *numbered, " ".join(f"[{text}]" for text in examples)]
@@ -716,7 +716,7 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts, operator: bool = False) -> 
             return [f"Which software should I watch? (from “{shown.word}”)"]
         case RefusedAnswer():
             lines = [f"{REFUSED} (“{shown.said}”)"]
-            return lines + ([f"Set up the rest with a yes: “{shown.rest}”"] if shown.rest else [])
+            return lines + ([f"Set it up with approval: “{shown.rest}”"] if shown.rest else [])
         case CheckWorkflowsAnswer():
             return _workflows(facts, shown.workflow_words, operator)
         case WhyStoppedAnswer():
@@ -835,7 +835,7 @@ def _one_workflow(row: WorkflowFact) -> str:
 
 
 NEEDS_WORDS: Final = {
-    "approvals": "waiting for a yes",
+    "approvals": "waiting for approval",
     "confirmations": "test run to confirm",
     "stopped": "stopped run",
     "connections": "connection to set up",

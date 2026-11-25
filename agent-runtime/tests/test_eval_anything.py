@@ -254,10 +254,10 @@ def test_how_to_start_shows_the_portals_steps_and_chips() -> None:
     shown = words_of(Answered(answer=AbilitiesAnswer(how_to_start=True), parts=[]))
     assert shown.startswith(
         "How to start:\nThis app runs repetitive work for you. Tell me the task and I'll draft "
-        "it. Nothing is written without an Approver's yes.\n1. "
+        "it. Nothing is written until an Approver approves it.\n1. "
     )
     assert "1. Tell me what should run by itself, in your own words, like “Keep track of" in shown
-    assert "Nothing is written until an Approver says yes in Teams." in shown
+    assert "Nothing is written until an Approver approves it in Teams." in shown
     assert "[Keep track of the LangGraph version]" in shown
     assert "What can you do?" not in shown
 
@@ -310,7 +310,11 @@ def test_the_report_puts_the_models_side_by_side_with_each_failure_in_full() -> 
 
 def test_a_state_answer_shows_the_persons_own_state_as_the_portal_does() -> None:
     needs = words_of(Answered(answer=NeedsMeAnswer(), parts=[]))
-    assert needs.splitlines() == ["2 things need you:", "- 1 waiting for a yes", "- 1 stopped run"]
+    assert needs.splitlines() == [
+        "2 things need you:",
+        "- 1 waiting for approval",
+        "- 1 stopped run",
+    ]
     one = CheckWorkflowsAnswer(workflow_words="the morning new-ticket check")
     assert words_of(Answered(answer=one, parts=[])) == (
         "“Morning new-ticket check” is on. Last run Sat 14 Nov, done."
@@ -400,7 +404,7 @@ def test_a_can_t_our_blocks_don_t_cover_shows_the_drafter_s_card_to_an_operator(
 )
 def test_a_software_card_s_pill_is_the_portal_s_word_for_it(name: str, pill: str) -> None:
     """The pill says what the Portal's SoftwareCard says (stateOf in software.ts), never the
-    platform's own state words such as Ticket waiting for a yes or Not checked yet."""
+    platform's own state words such as Ticket waiting for approval or Not checked yet."""
     watch = Answered(answer=WatchlistAnswer(word="track", software=name), parts=[])
     assert f"{name} ({pill}): " in words_of(watch)
 

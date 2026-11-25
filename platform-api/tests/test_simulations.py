@@ -327,13 +327,13 @@ async def test_a_release_check_passes_each_of_the_six_scenarios(stack: Stack) ->
 async def test_the_release_check_the_planner_lays_out_passes_each_of_the_six_scenarios(
     stack: Stack,
 ) -> None:
-    """Its Version checker proposes the change itself, and Newer? goes on to Ask for a yes only
+    """Its Version checker proposes the change itself, and Newer? goes on to Ask for approval only
     when the checker's answer says newer."""
     simulation = await stack.simulate(json.loads(PLANNERS_RELEASE_CHECK.read_text()))
     assert verdicts(simulation) == dict.fromkeys(KINDS, "passed"), simulation
     assert isinstance(simulation, Simulation)
     happy = next(graded for graded in simulation.results if graded.kind == "happy_path")
-    assert "Ask for a yes" in happy.ran and "Nothing to change" not in happy.ran
+    assert "Ask for approval" in happy.ran and "Nothing to change" not in happy.ran
 
 
 @pytest.mark.anyio

@@ -335,6 +335,22 @@ def test_a_yes_stays_as_it_was_and_where_it_was():
     assert widened(weakened, (YES,)) == "moves_a_yes"
 
 
+@pytest.mark.parametrize("gate", ["Ask for approval", YES])
+def test_a_yes_is_known_by_its_type_under_today_s_name_and_the_one_before_25_nov(gate: str):
+    """New workflows name the block Ask for approval. One set up before 25 Nov 2026 keeps Ask
+    for a yes. Either way, removing or moving it widens the fix."""
+    before = WorkflowPlan.model_validate_json(
+        STOPPED.model_dump_json().replace(f'"{YES}"', f'"{gate}"')
+    )
+    removed = before.model_copy(update={"blocks": [b for b in before.blocks if b.name != gate]})
+    rewired = before.model_copy(
+        update={"wires": [*before.wires[:2], _wire(PROPOSE, "Make the ticket")]}
+    )
+    assert isinstance(scope_of(before, before, (READ,)), Inside)
+    assert scope_of(before, removed, (READ,)) == Widened("removes_a_yes")
+    assert scope_of(before, rewired, (READ,)) == Widened("moves_a_yes")
+
+
 def test_a_new_block_widens():
     more = STOPPED.model_copy(
         update={"blocks": [*STOPPED.blocks, _block("Tell the team", "CUSTOM.wabTell")]}

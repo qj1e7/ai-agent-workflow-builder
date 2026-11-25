@@ -53,12 +53,12 @@
       "next": [
         {
           "exit": null,
-          "to": "Ask for a yes"
+          "to": "Ask for approval"
         }
       ]
     },
     {
-      "name": "Ask for a yes",
+      "name": "Ask for approval",
       "kind": "ask",
       "badge": "ours",
       "tag": null,
@@ -164,7 +164,7 @@
         "tag": "Shapes the change"
       },
       {
-        "name": "Ask for a yes",
+        "name": "Ask for approval",
         "ours": true,
         "block_type": null,
         "tag": "Waits for approval"
@@ -342,7 +342,7 @@
       },
       {
         "rule": "second_yes",
-        "words": "No path asks for a yes twice."
+        "words": "No path asks for approval twice."
       }
     ],
     "approves": [
@@ -405,7 +405,7 @@
       {
         "label": [
           {
-            "text": "Who says yes on each run",
+            "text": "Who approves on each run",
             "quoted": false
           }
         ],
@@ -509,17 +509,17 @@
     {
       "id": "approvers",
       "kind": "approvers",
-      "key": "Yes from",
+      "key": "Approval from",
       "label": [
         {
-          "text": "Who says yes on each run",
+          "text": "Who approves on each run",
           "quoted": false
         }
       ],
       "value": "Any Approver on the team",
       "mark": "filled",
       "said": "You chose",
-      "question": "Who says yes to \u201cMake the ticket\u201d on each run?",
+      "question": "Who approves \u201cMake the ticket\u201d on each run?",
       "choices": [
         {
           "value": "Any Approver on the team",
@@ -549,8 +549,8 @@
       {
         "kind": "happy_path",
         "verdict": "passed",
-        "expected": "It reaches the yes with the expected change.",
-        "happened": "It reached the yes and would have made 1 change, which the simulation refused.",
+        "expected": "It reaches the approval step with the expected change.",
+        "happened": "It reached the approval step and would have made 1 change, which the simulation refused.",
         "note": null
       },
       {
@@ -585,7 +585,7 @@
         "kind": "odd_data",
         "verdict": "passed",
         "expected": "It ends in one of the cases above, never in a failure with no reason.",
-        "happened": "It reached the yes and would have made 1 change, which the simulation refused.",
+        "happened": "It reached the approval step and would have made 1 change, which the simulation refused.",
         "note": null
       }
     ],

@@ -197,7 +197,7 @@ class FailedView(_RunBase):
 class SkippedView(_RunBase):
     state: Literal["skipped"] = "skipped"
     waiting_run_id: RunId = Field(
-        description="The earlier run of the same workflow that was still waiting for a yes."
+        description="The earlier run of the same workflow that was still waiting for approval."
     )
 
 
@@ -742,7 +742,7 @@ async def decide(
     response_model=QuestionView,
     tags=["orchestration"],
     description=(
-        "Asks the requester a question on a request that waits for a yes. Only someone who may "
+        "Asks the requester a question on a request that waits for approval. Only someone who may "
         "decide the open step may ask. A question decides nothing: the request keeps waiting, "
         "and its steps and decisions stay as they were. The same Idempotency-Key from the same "
         "person, with the same words, answers the question it asked before."
@@ -791,7 +791,7 @@ async def ask_question(
         "Answers a question on a request. Only the requester may answer: whoever started the "
         "run, or the workflow's owner when its schedule started it. Each question takes one "
         "answer, while the request waits. An answer decides nothing: the request keeps waiting "
-        "for someone else's yes. The same answer sent again answers the question as it is."
+        "for someone else's approval. The same answer sent again answers the question as it is."
     ),
     responses={
         **SIGNED_IN,

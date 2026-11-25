@@ -102,7 +102,7 @@ ABILITIES: Final = (
         reaches=frozenset({"confluence"}),
     ),
     Ability(
-        "create a Jira ticket after a yes",
+        "create a Jira ticket after approval",
         words("create add file raise open make log propose draft write submit put generate"),
         makes=TICKETS,
     ),
@@ -115,7 +115,7 @@ ABILITY_OF: Final = {
     "github.releases": "check software for new releases",
     "packages.versions": "check Maven Central and npm packages",
     "confluence.read": "read a Confluence page the team allows",
-    "jira.create": "create a Jira ticket after a yes",
+    "jira.create": "create a Jira ticket after approval",
 }
 
 
@@ -250,18 +250,18 @@ CAPABILITIES: Final = (
     ),
     _ready(
         "jira.create",
-        "Create a Jira ticket after a yes",
+        "Create a Jira ticket after approval",
         "write",
         "Jira",
         "jira",
         ["jira.create_ticket"],
         needs_model=True,
         focus=True,
-        short="Create Jira tickets, after a yes",
+        short="Create Jira tickets, after approval",
     ),
     _ready(
         "teams.ask",
-        "Ask Approvers for a yes in Teams",
+        "Ask Approvers for approval in Teams",
         "notify",
         "Teams",
         "teams",
@@ -353,7 +353,7 @@ CAPABILITIES: Final = (
         "update Confluence",
         "Confluence isn't connected to the platform.",
         short="Confluence",
-        instead="I can create a Jira ticket, after a yes.",
+        instead="I can create a Jira ticket, after approval.",
     ),
     _not_yet(
         "github.issues",

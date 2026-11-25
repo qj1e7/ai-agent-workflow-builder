@@ -4,6 +4,7 @@ builder's set-up once approved, each job keyed by our own request id."""
 from dataclasses import dataclass, field
 from datetime import timedelta
 
+import psycopg
 import pytest
 
 from platform_api.db import Database
@@ -27,6 +28,7 @@ from platform_api.orchestration.setup_approvals import (
     TryAgain,
 )
 from platform_api.shared import TEAM_TIME_ZONE, Digest, Principal, SeedPerson
+from tests.conftest import PostgresUrls
 from tests.support import ALICE, BOB, CAROL
 
 pytestmark = pytest.mark.anyio
@@ -191,6 +193,22 @@ async def test_a_decline_keeps_its_reason_and_sets_nothing_up(lab: Lab):
     )
     state = await lab.approvals.latest("dw_1")
     assert state is not None and state.status == Declined(BOB.user_id, 0)
+
+
+async def test_a_reason_recorded_in_the_earlier_words_reads_in_today_s(
+    lab: Lab, postgres: PostgresUrls
+):
+    """The team lead's rule of 25 Nov: a decline recorded as "Too risky without a yes" reads as
+    "Too risky without approval", in Teams and on the page. Decisions are append-only, so only
+    the owner can put the earlier words in."""
+    request = await lab.approvals.send(ASK)
+    await lab.approvals.decide(request.id, BOB, Verdict.DECLINE, DIGEST, "Not needed")
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("UPDATE orchestration.setup_decisions SET reason = 'Too risky without a yes'")
+    await lab.approvals.work_once()
+
+    [outcome] = lab.channel.updated
+    assert outcome.reason == "Too risky without approval"
 
 
 async def test_a_new_revision_replaces_a_request_that_still_waits(lab: Lab):

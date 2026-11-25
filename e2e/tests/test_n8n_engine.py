@@ -174,14 +174,14 @@ def test_resume_url_alone_writes_nothing(api: Api, mock_model: None):
 
 
 def test_gate_removed(api: Api, mock_model: None):
-    """Someone deletes Ask for a yes in n8n and publishes. A run of that version writes nothing:
+    """Someone deletes Ask for approval in n8n and publishes. A run of that version writes nothing:
     our records never graded it, so it stops at its first call, and the gateway would refuse a
     write with no yes anyway (ENGINE-PLAN 2.3.11)."""
     created = set_up(api, "e2e engine gate removed", on=True)
     use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
     held = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
-    nodes = [node for node in held["nodes"] if node["name"] != "Ask for a yes"]
-    connections = {k: v for k, v in held["connections"].items() if k != "Ask for a yes"}
+    nodes = [node for node in held["nodes"] if node["name"] != "Ask for approval"]
+    connections = {k: v for k, v in held["connections"].items() if k != "Ask for approval"}
     connections["Newer?"]["main"][0] = [{"node": "Create ticket", "type": "main", "index": 0}]
     body = {"nodes": nodes, "connections": connections, "versionId": held["versionId"]}
     draft = N8N_OWNER.call("PATCH", f"/workflows/{workflow_id}", body)

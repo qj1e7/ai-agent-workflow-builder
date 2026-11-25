@@ -57,7 +57,7 @@ async def test_the_approval_is_held_until_nothing_is_needed(lab: Lab):
     assert view["why_not_send"] == "Answer 1 question first"
     assert (await lab.send(view["drafted_id"], view["revision"])).status_code == 409
     approvers = setting_of(view, APPROVERS)
-    assert approvers["question"] == "Who says yes to “Make the ticket” on each run?"
+    assert approvers["question"] == "Who approves “Make the ticket” on each run?"
     assert [c["value"] for c in approvers["choices"]] == [ANY_APPROVER]
 
     view = await lab.answer(view, APPROVERS, choice=ANY_APPROVER)
@@ -281,7 +281,7 @@ def in_an_expression(nodes: list[dict[str, Any]]) -> None:
 
 def in_a_name(nodes: list[dict[str, Any]]) -> None:
     for node in nodes:
-        if node["name"] == "Ask for a yes":
+        if node["type"] == "CUSTOM.wabAskForYes":
             node["name"] = f"Ask {TOKEN}"
 
 

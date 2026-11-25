@@ -3,6 +3,7 @@ apply, builds one from a template for each, checks any scenario against the plan
 for the simulation: what the gateway answers each of our blocks, what mock GitHub serves, and the
 output pinned for each block with no mock. No model is used here."""
 
+import json
 import secrets
 from collections.abc import Sequence
 from typing import Any
@@ -94,9 +95,9 @@ def release_check(
     write: bool = True,
 ) -> dict[str, Any]:
     """A release check of our blocks with a Propose a change block: the reads in a line, then
-    Compare, Propose a change, Ask for a yes, and on Yes Make the approved changes and Tell. Each
-    other exit of Ask for a yes ends at a block of its own. The Planner lays its release check out
-    otherwise (test_simulations.PLANNERS_RELEASE_CHECK)."""
+    Compare, Propose a change, Ask for approval, and on Yes Make the approved changes and Tell.
+    Each other exit of Ask for approval ends at a block of its own. The Planner lays its release
+    check out otherwise (test_simulations.PLANNERS_RELEASE_CHECK)."""
     line = [ours(START, "StartFromPortal"), *([our_read()] if reads is None else reads)]
     inputs = {"input": [{"name": "release", "value": "={{ $json.id }}"}]}
     line.append(ours("Compare", "Agent", agent="release_checker", inputs=inputs))
@@ -105,10 +106,10 @@ def release_check(
     nodes = list(line)
     edges: dict[str, Any] = {a["name"]: to(b["name"]) for a, b in zip(line, line[1:], strict=False)}
     if ask:
-        nodes.append(ours("Ask for a yes", "AskForYes"))
-        edges[line[-1]["name"]] = to("Ask for a yes")
+        nodes.append(ours("Ask for approval", "AskForYes"))
+        edges[line[-1]["name"]] = to("Ask for approval")
         exits = [*EXITS] if write else [EXITS[0], "Done", *EXITS[2:]]
-        edges["Ask for a yes"] = {
+        edges["Ask for approval"] = {
             "main": [[{"node": e, "type": "main", "index": 0}] for e in exits]
         }
         nodes += [block(e, "n8n-nodes-base.noOp") for e in exits if e != EXITS[1]]
@@ -152,7 +153,7 @@ def test_the_plan_gives_each_block_its_role_its_mode_and_what_it_reads() -> None
         "Tidy": ("other", "runs", None),
         "Compare": ("agent", "ours", None),
         "Propose a change": ("propose", "ours", None),
-        "Ask for a yes": ("ask", "ours", None),
+        "Ask for approval": ("ask", "ours", None),
         "No answer": ("other", "runs", None),
         "Declined": ("other", "runs", None),
         "Nothing to change": ("other", "runs", None),
@@ -217,6 +218,18 @@ def test_a_version_with_no_start_from_the_portal_is_refused_in_words() -> None:
 
 def test_every_kind_applies_to_a_release_check() -> None:
     assert kinds_that_apply(planned(release_check())) == KINDS
+
+
+@pytest.mark.parametrize("gate", ["Ask for approval", "Ask for a yes"])
+def test_the_ask_is_known_by_its_type_under_today_s_name_and_the_one_before_25_nov(
+    gate: str,
+) -> None:
+    """New workflows name it Ask for approval. One set up before 25 Nov 2026 keeps Ask for a yes,
+    and gets the same scenarios, Approver says no included."""
+    version = json.loads(
+        json.dumps(release_check()).replace('"Ask for approval"', json.dumps(gate))
+    )
+    assert kinds_that_apply(planned(version)) == KINDS
 
 
 def test_a_version_with_no_ask_for_a_yes_gets_no_approver_says_no() -> None:
@@ -368,7 +381,7 @@ def test_a_variation_the_sample_has_no_field_for_is_refused() -> None:
 def test_a_kind_that_does_not_apply_is_refused() -> None:
     no_ask = planned(release_check(ask=False, write=False))
     assert check(spec("approver_says_no"), no_ask, RecordedSamples()) == (
-        '"Approver says no" needs an Ask for a yes block, and this version has none.',
+        '"Approver says no" needs an Ask for approval block, and this version has none.',
     )
     no_read = planned(release_check([]))
     assert check(spec("timeout"), no_read, RecordedSamples()) == (
@@ -515,7 +528,7 @@ def test_each_block_offers_the_plays_a_simulation_can_make_of_it() -> None:
     assert found["GitHub releases"] == every
     assert found["Read the issue"] == ("recorded", "varied", "empty")
     assert found["Compare"] == ("recorded", "too_slow")
-    assert found["Ask for a yes"] == found[START] == ()
+    assert found["Ask for approval"] == found[START] == ()
 
 
 def test_listed_samples_are_the_recorded_newest_first_then_the_made_up_ones() -> None:

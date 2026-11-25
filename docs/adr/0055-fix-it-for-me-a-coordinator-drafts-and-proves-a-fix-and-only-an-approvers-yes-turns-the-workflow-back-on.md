@@ -309,3 +309,5 @@ PR 6 brings the start of a fix and its approval (`builder/fixes.py`, `builder/fi
 ## Amended, 26 Nov 2026
 
 The Explain page was removed (ADR 0051, amended 26 Nov 2026). A fix's approval page shows the fix's evidence first, then what every set-up approval shows, all in view: In short, the flags, what it reads, writes and posts, who approves each write, each setting with the key for each write block and every guess marked, and the safety checks, as Fixed for you and Passed. It has no More details. Who may approve a fix, and what turns the workflow back on, are unchanged.
+
+Words, 26 Nov 2026: by the team lead's rule of 25 Nov, nothing a person sees uses "yes" as a noun, so "an Approver's yes" above reads as approval in the app, and the gate block of a new workflow is named Ask for approval; workflows set up before keep Ask for a yes, and the scope check, like the safety checker, knows the block by its type, so both names hold.

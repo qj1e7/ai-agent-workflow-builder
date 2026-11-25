@@ -11,7 +11,7 @@ export const TAKE_IT_BACK = 'Take it back'
  * The sketch's line beside the version says "Only our blocks are on". n8n's IF, Merge, schedule and data blocks are on too, so the
  * line names them, in the words the sketch's build panel uses for them (principle 5).
  */
-export const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for a yes.'
+export const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for approval.'
 /** The platform's own words when it refuses to open such a workflow (builder/n8n_holds.py). */
 export const DRAFT = 'Turn it on first. A draft can’t be opened in n8n.'
 export const GONE = 'This workflow was deleted in n8n, so it can’t be opened there.'

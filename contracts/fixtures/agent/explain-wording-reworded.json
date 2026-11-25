@@ -1,4 +1,4 @@
 {
   "kind": "reworded",
-  "text": "Each day at 8:00 it reads GitHub \u201cfastapi/fastapi\u201d and Jira \u201cMOCK\u201d. It can create Jira tickets in \u201cMOCK\u201d, each after a yes. Nothing else changes."
+  "text": "Each day at 8:00 it reads GitHub \u201cfastapi/fastapi\u201d and Jira \u201cMOCK\u201d. It can create Jira tickets in \u201cMOCK\u201d, each after approval. Nothing else changes."
 }

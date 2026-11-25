@@ -9,9 +9,8 @@ from pathlib import Path
 
 import agent_runtime
 
-YES_NOUN = re.compile(
-    r"\b(?:a|an|your|the|their|no|one|any|second) yes\b|['’]s yes\b|\byeses\b", re.IGNORECASE
-)
+YES_NOUN = re.compile(r"\b(?i:a|an|your|the|their|no|one|any|second) yes\b|['’]s yes\b|\byeses\b")
+"""Lower-case yes only: Yes is the name of a button and of Ask for approval's exit."""
 PACKAGE = Path(agent_runtime.__file__).parent
 READS_PEOPLES_WORDS = (
     "|a yes|yes|",
@@ -55,5 +54,11 @@ def test_no_string_in_the_package_uses_yes_as_a_noun() -> None:
 def test_the_rule_catches_the_shapes_it_names() -> None:
     for words in ("Waits for a yes", "Needs your yes", "after Bob's yes", "up to the yes."):
         assert YES_NOUN.search(words), words
-    for words in ("Waits for approval", "Bob approved.", "Yes", "Approvers say yes or no"):
+    for words in (
+        "Waits for approval",
+        "Bob approved.",
+        "Yes",
+        "Wire the Yes exit",
+        "Approvers say yes or no",
+    ):
         assert not YES_NOUN.search(words), words

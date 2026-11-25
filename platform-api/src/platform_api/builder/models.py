@@ -99,7 +99,7 @@ type N8nBlockKind = Literal[
 
 class N8nExitView(WireModel):
     exit: str | None = Field(
-        description="Which way out: true or false for an IF, the name of an Ask for a yes exit "
+        description="Which way out: true or false for an IF, the name of an Ask for approval exit "
         "(No answer, Yes, No, Nothing to change), or null for a block with one way out."
     )
     to: str = Field(description="The block it leads to, by name.")
@@ -112,7 +112,7 @@ class N8nBlockView(WireModel):
     name: str = Field(description="The block's name, as n8n, the canvas and the run line show it.")
     kind: N8nBlockKind = Field(
         description="What the block does: schedule, start (Start from the Portal), manual and "
-        "error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved "
+        "error start a run; read, agent, propose, ask (Ask for approval), write (Make the approved "
         "changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; "
         "other is one of n8n's own blocks that shapes the data, reads a system or posts a notice, "
         "as its tag says; off is a block the class file turns off, or does not know, for what it "
@@ -227,12 +227,12 @@ class LastRunView(WireModel):
         description="Why it was declined, when the Approver gave a reason. Null otherwise."
     )
     approved_by: list[UserId] = Field(
-        description="Who said yes to its request, in step order. On a declined run, those who "
-        "said yes before it was declined. Empty when nobody did."
+        description="Who approved its request, in step order. On a declined run, those who "
+        "approved before it was declined. Empty when nobody did."
     )
     proposed: int = Field(
-        description="How many writes the run asked a yes for. Counted only while the run waits "
-        "for a yes or after it was declined. 0 for a run that finished or stopped."
+        description="How many writes the run asked approval for. Counted only while the run waits "
+        "for approval or after it was declined. 0 for a run that finished or stopped."
     )
     written: int = Field(description="How many writes the run made. 0 if none.")
     tickets: bool = Field(
@@ -240,7 +240,7 @@ class LastRunView(WireModel):
         "rather than changes."
     )
     you_can_decide: bool = Field(
-        description="True when the person asking may decide the yes this run waits for. False "
+        description="True when the person asking may decide the approval this run waits for. False "
         "for any other run, and in an answer that is not for a person."
     )
     you_can_open: bool = Field(
@@ -254,7 +254,8 @@ class LastRunView(WireModel):
     outcome: RunOutcomeName | None = Field(
         default=None,
         description="How a finished run ended: written, nothing_to_write, or test_passed for a "
-        "test run that stopped before the yes and wrote nothing. Null until it succeeded.",
+        "test run that stopped before the approval step and wrote nothing. Null until it "
+        "succeeded.",
     )
     stop: RunStopView | None = Field(
         description="When and why a stopped run stopped, the words every place that names the "
@@ -280,7 +281,8 @@ class UseCaseView(WireModel):
     state: UseCaseState = Field(
         description="on, paused until an Operator resumes it, or draft until an Operator turns "
         "it on (ADR 0044). A paused workflow starts no run, on its schedule or by hand. A draft "
-        "never runs on its schedule, and by hand only a test run, which stops before the yes and "
+        "never runs on its schedule, and by hand only a test run, which stops before the approval "
+        "step and "
         "writes nothing. A deleted workflow is not shown."
     )
     next_run_at: datetime | None = Field(
@@ -308,7 +310,7 @@ class UseCaseView(WireModel):
     needs_you: Literal["approval", "stopped", "declined", "question", "fix"] | None = Field(
         default=None,
         description="Why this workflow is in the Needs you of the person asking, or null when it "
-        "is not: a yes they may give, a run of theirs that stopped, a test run an Approver "
+        "is not: an approval they may give, a run of theirs that stopped, a test run an Approver "
         "declined, a question to answer, or a workflow that can't run and needs a fix. It holds "
         "exactly when their Home has a row for the workflow.",
     )
@@ -325,8 +327,9 @@ class UseCaseView(WireModel):
     grade: Grade | None = Field(
         default=None,
         description="The safety checker's grade of the version in use, for a workflow n8n "
-        "carries. writes_refused: a write can run without a yes, so the platform refuses this "
-        "version's writes and asks nobody, until the yes is put back or the change undone. "
+        "carries. writes_refused: a write can run without approval, so the platform refuses this "
+        "version's writes and asks nobody, until the approval step is put back or the change "
+        "undone. "
         "needs_a_fix: it uses a block that is off, or cannot run as the platform expects, so "
         "each run stops at its first block. Null for a workflow on the shared n8n workflow.",
     )
@@ -367,7 +370,7 @@ class UseCaseView(WireModel):
         default=None,
         description="Who has it open in n8n now, for everyone to see. While someone does, the "
         "platform refuses every change that would publish over their work: a schedule change, "
-        "Undo, roll back, Add the yes back and Resume. Pause and Delete still work.",
+        "Undo, roll back, Add the approval step back and Resume. Pause and Delete still work.",
     )
 
 
@@ -721,7 +724,8 @@ class VersionView(WireModel):
     )
     by: UserId | None = Field(
         description="Who changed it: the person who saved the schedule, rolled back or put the "
-        "yes back in the Portal, or who published it in n8n. Null for version 1, for a version "
+        "approval step back in the Portal, or who published it in n8n. Null for version 1, for a "
+        "version "
         "the Software watchlist published, and for a version published in n8n by someone the "
         "People list can't match."
     )
@@ -743,8 +747,8 @@ class VersionView(WireModel):
         "published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version "
         "in n8n with its settings saved there and nothing published, which n8n runs with the new "
         "settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for "
-        "a yes back before each write; moved_to_n8n, the version that moved it from the shared "
-        "n8n workflow to its own; or fixed, a fix an Approver said yes to that passed its test "
+        "approval back before each write; moved_to_n8n, the version that moved it from the shared "
+        "n8n workflow to its own; or fixed, a fix an Approver approved that passed its test "
         "run (ADR 0055). Null otherwise.",
     )
     grade: Grade | None = Field(
@@ -1019,7 +1023,8 @@ class CreateAgentUseCase(WireIn):
     on: bool = Field(
         default=True,
         description="False sets it up as a draft (ADR 0044): it never runs on its schedule, a "
-        "test run of it stops before the yes and writes nothing, and turning it on publishes "
+        "test run of it stops before the approval step and writes nothing, and turning it on "
+        "publishes "
         "version 1.",
     )
 

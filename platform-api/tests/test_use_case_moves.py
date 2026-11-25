@@ -51,7 +51,7 @@ pytestmark = pytest.mark.anyio
 __all__ = ["lab", "w"]
 
 SCHEDULE_TRIGGER = "n8n-nodes-base.scheduleTrigger"
-ASK_FOR_A_YES = "Ask for a yes"
+ASK_FOR_A_YES = "Ask for approval"
 NEW_ERROR_WORKFLOW = "wfErrorReporterAgain"
 
 MOVED = RanVersion(

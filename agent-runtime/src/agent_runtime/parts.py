@@ -73,7 +73,7 @@ from agent_runtime.removals import another, points_back, removal_of
 from agent_runtime.watch_words import surely_watches_them
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
-SKIP_PART_NOTE: Final = "I can't skip the yes. Nothing is written without a yes."
+SKIP_PART_NOTE: Final = "I can't skip approval. Nothing is written without approval."
 OWN_TIME: Final = (
     "The Software watchlist checks all your software together, on one schedule. I can't give "
     "one software its own time yet."

@@ -365,7 +365,7 @@ class UnderstandTest(unittest.TestCase):
 
 FASTAPI_WORDING = (
     "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
-    "It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else."
+    "It can create Jira tickets in “MOCK”, each after approval. It changes nothing else."
 )
 REACT_WORDING = (
     "Every Monday at 9:00, it reads GitHub “facebook/react” and Jira “WEB”. "
@@ -395,7 +395,7 @@ class ExplainTest(unittest.TestCase):
         self.assertEqual(
             reworded(FASTAPI_WORDING),
             "Each day at 8:00 it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
-            "It can create Jira tickets in “MOCK”, each after a yes. Nothing else changes.",
+            "It can create Jira tickets in “MOCK”, each after approval. Nothing else changes.",
         )
 
     def test_a_wording_that_changes_nothing_at_all_says_so_smoothly(self) -> None:

@@ -55,7 +55,7 @@ STEPS = [
     ("Read release", True, "Reads GitHub"),
     ("Compare", True, "Runs an agent"),
     ("Newer?", False, "Shapes the data"),
-    ("Ask for a yes", True, "Waits for approval"),
+    ("Ask for approval", True, "Waits for approval"),
     ("Create ticket", True, "Writes after approval"),
     ("Nothing to change", False, "Ends the run"),
 ]

@@ -136,7 +136,7 @@ describe('the rail', () => {
     expect(html).toContain(`href="${path}"`)
     const heading = headings(html)
     expect(heading).toHaveLength(1)
-    expect(heading[0]).toBe(id === 'home' ? 'What should run by itself?' : railLabel)
+    expect(heading[0]).toBe(id === 'home' ? 'What can I help you with today?' : railLabel)
     expect(new Set(currentLinks(html))).toEqual(new Set([path]))
   })
 
@@ -257,7 +257,7 @@ describe('the pages', () => {
 
   it('open Home with the greeting in Singapore time, as a line above the heading', () => {
     const main = text(mainOf(render({ home: ALICE_HOME })))
-    expect(main).toContain('Good morning, Alice What should run by itself?')
+    expect(main).toContain('Good morning, Alice What can I help you with today?')
   })
 
   it('greet Alice and give Home’s times in the team time zone /api/v1/me names', () => {

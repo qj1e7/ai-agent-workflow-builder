@@ -10,7 +10,7 @@ export class MakeApprovedChanges implements INodeType {
     group: ['output'],
     version: 1,
     subtitle: 'Jira',
-    description: 'Our block. Makes the changes an Approver said yes to. Our platform holds the keys and checks for a yes as it writes.',
+    description: 'Our block. Makes the changes an Approver approved. Our platform holds the keys and checks for approval as it writes.',
     defaults: { name: 'Make the approved changes' },
     inputs: ['main'],
     outputs: ['main'],

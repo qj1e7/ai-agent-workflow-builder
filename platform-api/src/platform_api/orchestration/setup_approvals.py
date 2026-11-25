@@ -58,11 +58,13 @@ from platform_api.shared import ApprovalId, Digest, Principal, UserId, new_id
 log = logging.getLogger(__name__)
 
 SET_UP_LINK: Final = "/setup-approvals/{approval_id}"
-DECLINE_REASONS: Final = ("Too risky without a yes", "Wrong project or channel", "Not needed")
+DECLINE_REASONS: Final = ("Too risky without approval", "Wrong project or channel", "Not needed")
 """Why an Approver declines a set-up, picked from a short list (chat-first README, decision 3)."""
 type SetUpDeclineReason = Literal[
-    "Too risky without a yes", "Wrong project or channel", "Not needed"
+    "Too risky without approval", "Wrong project or channel", "Not needed"
 ]
+REASONS_NOW: Final[Mapping[str, str]] = {"Too risky without a yes": "Too risky without approval"}
+"""A reason recorded before 25 Nov 2026, in the words it reads in now."""
 NOTHING_SET_UP: Final = "Nothing was set up."
 LEASE: Final = timedelta(minutes=5)
 """Long enough for a set-up to create the workflow in n8n and read it back."""
@@ -663,7 +665,7 @@ async def _decisions(uow: UnitOfWork, approval_id: ApprovalId) -> list[Decision]
             Verdict(row["verdict"]),
             Digest(row["seen_digest"]),
             row["at"],
-            row["reason"],
+            REASONS_NOW.get(row["reason"], row["reason"]),
         )
         for row in rows
     ]

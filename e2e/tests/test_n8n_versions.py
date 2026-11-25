@@ -68,11 +68,11 @@ class Member:
         return self.client.get(f"/rest/workflows/{workflow_id}").status_code == 200
 
     def publish_without_the_yes(self, workflow_id: str) -> str:
-        """Deletes Ask for a yes in the editor, saves and publishes, as P7 Q4's member did."""
+        """Deletes Ask for approval in the editor, saves and publishes, as P7 Q4's member did."""
 
         def without_the_yes(nodes: list[Json], connections: Json) -> None:
-            nodes[:] = [node for node in nodes if node["name"] != "Ask for a yes"]
-            connections.pop("Ask for a yes")
+            nodes[:] = [node for node in nodes if node["name"] != "Ask for approval"]
+            connections.pop("Ask for approval")
             connections["Newer?"]["main"][0] = [
                 {"node": "Create ticket", "type": "main", "index": 0}
             ]
@@ -196,7 +196,7 @@ def test_a_version_published_in_n8n_is_kept_graded_and_carded_and_undo_restores(
         dana.person,
         False,
     ), "matched by the n8n user id the platform stored"
-    assert "Deleted “Ask for a yes”." in newest["changes"]
+    assert "Deleted “Ask for approval”." in newest["changes"]
     cards = [
         c
         for c in api.get("alice", "/api/v1/home")["changed_in_n8n"]

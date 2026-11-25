@@ -271,7 +271,7 @@ SYSTEM: Final = (
     "word right before it, as GitHub “fastapi/fastapi”.\n"
     "- Keep every negation, such as not, no, never, nothing, can't and without, on the word it "
     "belongs to. Add none.\n"
-    '- Keep each "after a yes" in the sentence of the write it belongs to.\n'
+    '- Keep each "after approval" in the sentence of the write it belongs to.\n'
     "- Use only the words of the same sentence of the wording and small joining words such as "
     "and, then and it. Name no system, place, day, time, number or action that sentence doesn't "
     "name. Never write before, until, always, all, any, some, only or once.\n"

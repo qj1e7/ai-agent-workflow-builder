@@ -578,17 +578,19 @@ DENIES_A_SKIP: Final = (
     r"I\s+(?:can['’]?t|cannot|can\s+not|won['’]?t|don['’]?t|never)\s+"
     r"(?P<action>(?P<verb>[a-z]+)(?:\s+(?:a|an|the|that|this|any|one|new|jira)){0,3}\s+"
     r"(?:tickets?|changes?|it|that|this|one))\s+"
-    r"without\s+(?:an?\s+|any\s+|the\s+)?(?:approver['’]s\s+)?(?:yes|approval)(?:\s+in\s+teams)?"
+    r"without\s+(?:an?\s+|any\s+|the\s+)?(?:approver['’]s\s+)?(?:yes|approval)"
+    r"(?:\s+from\s+an\s+approver)?(?:\s+in\s+teams)?"
 )
 """An honest can't of a skipped yes, as "I can't create a ticket without an Approver's yes": a
 first-person negation right before a change, then the yes it waits for."""
 YES_SAID: Final = (
     r"(?:(?:every|each|any|a|the)\s+(?:new\s+)?(?:jira\s+)?(?:change(?:\s+to\s+data)?|ticket)"
-    r"|it)\s+(?:always\s+)?waits\s+for\s+an\s+approver['’]s\s+yes(?:\s+in\s+teams)?(?:\s+too)?"
-    r"(?:,\s+never\s+the\s+person\s+who\s+asked)?"
+    r"|it)\s+(?:always\s+)?waits\s+for\s+(?:an\s+approver['’]s\s+yes|approval\s+from\s+an\s+"
+    r"approver)(?:\s+in\s+teams)?(?:\s+too)?(?:,\s+never\s+the\s+person\s+who\s+asked)?"
     r"|the\s+person\s+who\s+asked\s+is\s+never\s+the\s+approver\s+of\s+their\s+own\s+request"
 )
-"""That a change waits for an Approver's yes, in the prompt's own words."""
+"""That a change waits for approval from an Approver, in the prompt's own words. The words of
+before 25 Nov, "waits for an Approver's yes", still count."""
 TYPE_IT: Final = (
     r"(?:(?:instead|to\s+start),\s+)?type\s+(?:what\s+the\s+(?:new\s+)?(?:jira\s+)?ticket\s+"
     r"should\s+say|the\s+ticket\s+you\s+want)\s+in\s+the\s+box(?:\s+on\s+home)?"

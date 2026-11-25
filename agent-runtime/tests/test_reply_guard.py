@@ -386,6 +386,7 @@ def test_a_choice_that_skips_a_yes_fails_too():
     "text",
     [
         "Every change to data waits for an Approver's yes in Teams.",
+        "Every change to data waits for approval from an Approver in Teams.",
         "The person who asked is never the Approver of their own request.",
         "You never approve your own requests.",
         "It puts the list in one new Jira ticket every Friday, after an Approver's yes.",
@@ -415,6 +416,11 @@ def test_the_yes_said_plainly_passes(text: str):
         "I can't book a meeting room. Nothing I can do comes close to that, so tap Ask the team.",
         "Uploading to SharePoint isn't something I can do yet. Tap Ask the team.",
         "Every change waits for an Approver's yes.",
+        "I can't create a Jira ticket without approval from an Approver, because every new Jira "
+        "ticket waits for approval from an Approver in Teams.",
+        "I don't create tickets without approval. Type what the ticket should say in the box on "
+        "Home, and it waits for approval from an Approver.",
+        "Every change waits for approval from an Approver.",
     ],
 )
 def test_an_honest_cant_in_an_allowed_shape_passes_for_both_roles(text: str):

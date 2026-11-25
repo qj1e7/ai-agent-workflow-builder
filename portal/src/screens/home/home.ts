@@ -114,8 +114,8 @@ export function approvalsOf(home: HomeOut): Needs {
 /** What waits for the yes of someone who isn’t an Operator, in the sketch’s words, for the chat’s answer and, with no full stop, their Home’s heading. */
 export function approverLine(home: HomeOut): string {
   const total = needsTotal(home)
-  if (total === 0) return 'Nothing waits for your yes.'
-  if (total === home.approvals_total) return `${count(total, 'change')} ${total === 1 ? 'waits' : 'wait'} for your yes.`
+  if (total === 0) return 'Nothing needs your approval.'
+  if (total === home.approvals_total) return `${count(total, 'change')} ${total === 1 ? 'needs' : 'need'} your approval.`
   return total === 1 ? '1 thing needs you.' : `${total} things need you.`
 }
 
@@ -175,7 +175,7 @@ function starterOf(item: ApprovalItem): string {
 
 function approvalWords(item: ApprovalItem, now: Date): ItemWords {
   const tickets = item.first_changes.length === item.changes && item.first_changes.every((change) => change.operation === 'create_ticket')
-  const title = item.changes === 0 ? 'A run is waiting for your yes' : `${count(item.changes, tickets ? 'ticket' : 'change')} ${item.changes === 1 ? 'is' : 'are'} waiting for your yes`
+  const title = item.changes === 0 ? 'A run is waiting for your approval' : `${count(item.changes, tickets ? 'ticket' : 'change')} ${item.changes === 1 ? 'is' : 'are'} waiting for your approval`
   const step = item.steps > 1 ? ` · Step ${item.step + 1} of ${item.steps}` : ''
   const lines = item.first_changes.map((change) => change.title ?? `A change in ${connectorLabel(change.connector)}`)
   const unlisted = item.changes - item.first_changes.length
@@ -203,7 +203,7 @@ function confirmationWords(item: ConfirmationItem, now: Date): ItemWords {
       title: `Confirm ${item.about_name ?? 'a new person'} as an Approver`,
       meta: `Asked by ${item.asked_by_name}, ${runWhen(item.asked_at, now)}`,
       lines: [],
-      note: 'Approvers can say yes to changes in Jira, Teams and other systems.',
+      note: 'Approvers can approve changes in Jira, Teams and other systems.',
       why: null,
     }
   }
@@ -286,7 +286,7 @@ function questionWords(item: QuestionItem): ItemWords {
   return {
     tone: 'info',
     title: `${item.asked_by_name ?? 'An Approver'} asked you about ${item.use_case_name}`,
-    meta: 'The request is still waiting for a yes',
+    meta: 'The request is still waiting for approval',
     lines: [],
     note: `“${item.text}”`,
     why: null,
@@ -378,7 +378,7 @@ export function lineOf(need: Need, now: Date): NeedLine {
       return line('err', need.item.use_case_name, `${stopped} ${atWhen(need.item.stopped_at, now)}`, stopped)
     }
     case 'approval':
-      return line('wait', need.item.use_case_name, 'needs your yes')
+      return line('wait', need.item.use_case_name, 'needs your approval')
     case 'setup':
       return line('wait', need.item.sent_by_name, `${ASKS_FOR_CHECK} of ${need.item.name}`, ASKS_FOR_CHECK)
     case 'connection':
@@ -536,13 +536,13 @@ function whyNotYours(item: WaitingItem): string {
     case 'owns':
       return 'It is your workflow'
     case 'decided_earlier':
-      return 'You already said yes to an earlier step'
+      return 'You already approved an earlier step'
   }
 }
 
 export function waitingWords(item: WaitingItem, now: Date): RowWords & { readonly to: string } {
   return {
-    name: `${item.because === 'decided_earlier' ? 'Another' : 'An'} Approver’s yes on ${item.use_case_name}`,
+    name: `Waiting for ${item.because === 'decided_earlier' ? 'another' : 'an'} Approver on ${item.use_case_name}`,
     sub: `${whyNotYours(item)} · ${lineWhen(item.started_at, now)}`,
     to: `/runs/${item.run_id}`,
   }

@@ -175,7 +175,7 @@ export function BehindAnswer({ now, say }: { now: Date; say: Say }) {
 }
 
 export const DECIDE_SAY = 'I can’t approve or decline for you. Open the request to see exactly what it will write, and decide there.'
-export const NOTHING_TO_DECIDE = 'Nothing is waiting for your yes, so there’s nothing to decide.'
+export const NOTHING_TO_DECIDE = 'Nothing needs your approval, so there’s nothing to decide.'
 
 const requestItems = (needs: Needs): RequestRef[] => needs.shown.flatMap((need) => (need.kind === 'approval' ? [{ approvalId: need.item.approval_id, runId: need.item.run_id }] : []))
 
@@ -236,7 +236,7 @@ export function DecideAnswer({ say }: { say: Say }) {
   if (sentence === null) {
     return (
       <p className="muted" role="status">
-        {home.isError ? 'I couldn’t read what waits for your yes just now.' : 'Checking what waits for your yes'}
+        {home.isError ? 'I couldn’t read what needs your approval just now.' : 'Checking what needs your approval'}
       </p>
     )
   }

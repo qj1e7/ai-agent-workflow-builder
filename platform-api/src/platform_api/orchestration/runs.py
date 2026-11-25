@@ -85,8 +85,8 @@ class Outcome(Enum):
     TEST_PASSED = "test_passed"
 
 
-TEST_PASSED = "Test run passed up to the yes. Nothing was written."
-SKIPPED = "An earlier run is still waiting for a yes."
+TEST_PASSED = "Test run passed up to the approval step. Nothing was written."
+SKIPPED = "An earlier run is still waiting for approval."
 NO_ANSWER = "No answer. Nothing was written."
 DELETED_BEFORE_AN_ANSWER = "Deleted before an answer. Nothing was written."
 STOPPED_BEFORE_WRITING = (
@@ -368,7 +368,7 @@ class Lost:
             deadline(Acting, now),
             self.unread,
         )
-        return Moved(acting, (_resumed(execution, "took the yes after all and carries on"),))
+        return Moved(acting, (_resumed(execution, "took the approval after all and carries on"),))
 
 
 @dataclass(frozen=True)
@@ -478,7 +478,7 @@ class AwaitingApproval:
             deadline(Acting, now),
             self.unread,
         )
-        return Moved(acting, (_resumed(execution, "took the yes and carries on"),))
+        return Moved(acting, (_resumed(execution, "took the approval and carries on"),))
 
     def lose(self, why: str) -> Moved[Lost]:
         lost = PendingEvent(
@@ -577,7 +577,7 @@ class Proposed:
                     self.execution,
                     1,
                     "test_passed",
-                    "A test run of a draft asks nobody for a yes",
+                    "A test run of a draft asks nobody for approval",
                 ),
                 _test_passed(),
             ),

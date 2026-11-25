@@ -194,7 +194,7 @@ async def made_in_n8n(principal: MadeInN8nOperator, made: CurrentMade) -> MadeIn
     "0027). It moves to the platform's project first, and what n8n holds there is graded and "
     "registered, as version 1. One published in n8n is on at once, with its maker as its "
     "publisher. One that is not is set up as a draft, and only when it passes the check. Only a "
-    "safe version asks for a yes and writes, and any Approver decides, never its maker or the "
+    "safe version asks for approval and writes, and any Approver decides, never its maker or the "
     "person who set it up. Only an Operator who can open n8n now.",
     responses={
         **OPERATORS_ONLY,

@@ -73,9 +73,9 @@ describe('the Changed in n8n card', () => {
   it('shows refused writes with the sketch’s line, Add the yes back as the one main button, and Undo', () => {
     const html = draw(REFUSED)
     expect(pill(html)).toBe('Writes refused')
-    expect(text(html)).toContain('Deleted “Ask for a yes”.')
-    expect(text(html)).toContain('Without a yes, our platform refuses the write. The next run stops before the write.')
-    expect(buttons(html)).toEqual(['Add the yes back', 'Undo the change to FastAPI release check'])
+    expect(text(html)).toContain('Deleted “Ask for approval”.')
+    expect(text(html)).toContain('Without approval, our platform refuses the write. The next run stops before the write.')
+    expect(buttons(html)).toEqual(['Add the approval step back', 'Undo the change to FastAPI release check'])
     expect(primaries(html)).toBe(1)
   })
 
@@ -83,7 +83,7 @@ describe('the Changed in n8n card', () => {
     const html = draw(FIX)
     expect(pill(html)).toBe('Needs a fix')
     expect(text(html)).toContain('“Send email” is not a block we run.')
-    expect(text(html)).not.toContain('Add the yes back')
+    expect(text(html)).not.toContain('Add the approval step back')
     expect(buttons(html)).toEqual(['Undo the change to FastAPI release check'])
   })
 
@@ -115,7 +115,7 @@ describe('the Changed in n8n card', () => {
   it('shows that it changed again in n8n and offers the buttons again', () => {
     const html = draw(REFUSED, { phase: { kind: 'lost', words: 'Changed again since, in n8n. Nothing was saved.' } })
     expect(text(html)).toContain('Changed again since, in n8n. Nothing was saved.')
-    expect(buttons(html)).toEqual(['Add the yes back', 'Undo the change to FastAPI release check'])
+    expect(buttons(html)).toEqual(['Add the approval step back', 'Undo the change to FastAPI release check'])
   })
 
   it('shows another refusal in the platform’s words', () => {

@@ -123,7 +123,7 @@ def release_check(run_time: str | None) -> WorkflowPlan:
                     title="={{ 'New release ' + $json.tag }}",
                     subject="={{ $json.tag }}",
                 ),
-                _block("Ask for a yes", "CUSTOM.wabAskForYes"),
+                _block("Ask for approval", "CUSTOM.wabAskForYes"),
                 _block("Make the ticket", "CUSTOM.wabMakeApprovedChanges"),
             ],
             "wires": [
@@ -131,8 +131,8 @@ def release_check(run_time: str | None) -> WorkflowPlan:
                 for a, e, b, i in (
                     ("Every Monday", "main", "Read new releases", 0),
                     ("Read new releases", "main", "Propose a ticket", 0),
-                    ("Propose a ticket", "main", "Ask for a yes", 0),
-                    ("Ask for a yes", "Yes", "Make the ticket", 1),
+                    ("Propose a ticket", "main", "Ask for approval", 0),
+                    ("Ask for approval", "Yes", "Make the ticket", 1),
                 )
             ],
             "settings": [
@@ -203,7 +203,9 @@ def _case(kind: str, verdict: str, happened: str, note: str | None = None) -> Si
 
 
 READ = "Read new releases"
-REACHED_YES = "It reached the yes and would have made 1 change, which the simulation refused."
+REACHED_YES = (
+    "It reached the approval step and would have made 1 change, which the simulation refused."
+)
 NOT_FOUND_NOTE = note_words(
     FailureNote(scenario="source_not_found", block=READ, kind="stopped", source=READ, detail=None),
     [PlayOut(block=READ, serve="not_found")],

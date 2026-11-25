@@ -155,7 +155,7 @@ describe('the fallback card', () => {
     const operator = draw(<DidntFollowCard typed="blorp" page={NO_PAGE} />)
     expect(text(operator)).toBe('I didn’t follow that I can watch software releases, fix stopped runs and change your workflows. Say it another way')
     const approver = draw(<DidntFollowCard typed="blorp" page={NO_PAGE} />, BOB)
-    expect(text(approver)).toBe('I didn’t follow that I can show what waits for your yes, and your past decisions. Say it another way')
+    expect(text(approver)).toBe('I didn’t follow that I can show what needs your approval, and your past decisions. Say it another way')
   })
 
   it('puts their own words back in the box', () => {

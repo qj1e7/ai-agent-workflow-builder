@@ -146,12 +146,12 @@ def named(document: dict[str, Any], name: str) -> dict[str, Any]:
 
 def without_the_yes(document: dict[str, Any]) -> dict[str, Any]:
     changed = copy.deepcopy(document)
-    changed["nodes"] = [n for n in changed["nodes"] if n["name"] != "Ask for a yes"]
-    changed["connections"].pop("Ask for a yes")
+    changed["nodes"] = [n for n in changed["nodes"] if n["name"] != "Ask for approval"]
+    changed["connections"].pop("Ask for approval")
     for exits in changed["connections"].values():
         for targets in exits["main"]:
             for target in targets:
-                if target["node"] == "Ask for a yes":
+                if target["node"] == "Ask for approval":
                     target["node"] = "Create ticket"
     return changed
 
@@ -238,7 +238,7 @@ async def test_each_workflow_in_a_member_s_space_waits_with_its_maker_and_its_gr
         "made_by": "carol",
         "published": False,
         "grade": "writes_refused",
-        "findings": ['"Create ticket" can run without a yes.'],
+        "findings": ['"Create ticket" can run without approval.'],
         "fixed_for_you": [],
         "set_up_notes": [],
         "can_set_up": False,
@@ -262,7 +262,7 @@ async def test_a_published_safe_one_moves_in_and_runs_as_its_maker_s_work(s: Sta
     assert created.status_code == 201, created.text
     body = created.json()
     assert (body["n8n_workflow_id"], body["grade"]) == (workflow_id, "safe")
-    assert "Ask for a yes" in [block["name"] for block in body["blocks"]]
+    assert "Ask for approval" in [block["name"] for block in body["blocks"]]
     assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT, "moved to the platform's project"
     row = await use_case(s, body["use_case_id"])
     assert (row["draft"], row["engine"], row["made_in_n8n_by"], row["owner"]) == (
@@ -315,7 +315,7 @@ async def test_an_unsafe_published_one_is_set_up_with_its_writes_refused_and_its
     assert (view["state"], view["grade"], view["findings"]) == (
         "on",
         "writes_refused",
-        ['"Create ticket" can run without a yes.'],
+        ['"Create ticket" can run without approval.'],
     )
     live = s.n8n.workflows[workflow_id]["activeVersionId"]
     ran = await s.lab.builder.facts.version(workflow_id, live)

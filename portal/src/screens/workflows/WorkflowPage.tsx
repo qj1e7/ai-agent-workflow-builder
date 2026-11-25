@@ -324,12 +324,12 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <div className={listed ? undefined : styles['pair']}>
             {listed ? null : <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} held={held ? cantChangeWords(held) : null} onSaved={say} />}
             {gate ? (
-              <section className={styles['section']} aria-labelledby="who-says-yes">
-                <h2 id="who-says-yes">Who says yes</h2>
+              <section className={styles['section']} aria-labelledby="who-approves">
+                <h2 id="who-approves">Who approves</h2>
                 <p>{whoSaysYes(useCase.owner, viewer, nameOf)}</p>
                 <p>{APPROVAL_RULE}</p>
                 <details className={styles['rule']}>
-                  <summary>Who can’t say yes</summary>
+                  <summary>Who can’t approve</summary>
                   <p>{ownWorkRule(useCase.schedule)}</p>
                 </details>
               </section>

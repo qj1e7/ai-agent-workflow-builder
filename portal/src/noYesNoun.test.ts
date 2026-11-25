@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest'
  * approves, and a run waits for approval. This reads every string and JSX text the Portal's
  * source holds, comments left out. The run page and its side panel have their own sweep.
  */
-const YES_NOUN = /\b(?:a|an|your|the|their|no|one|any|second) yes\b|['’]s yes\b|\byeses\b/i
+// Lower-case yes only: Yes is the name of a button and of Ask for approval's exit.
+const YES_NOUN = /\b(?:[Aa]n?|[Yy]our|[Tt]he|[Tt]heir|[Nn]o|[Oo]ne|[Aa]ny|[Ss]econd) yes\b|['’]s yes\b|\byeses\b/
 const LEFT_TO_THE_RUN_PAGE = ['screens/run']
 
 function sources(folder: string): string[] {
@@ -41,6 +42,6 @@ describe('yes is never a noun in the Portal', () => {
 
   it('catches the shapes the rule names', () => {
     for (const words of ['Waits for a yes', 'Needs your yes', 'created after Bob’s yes', 'up to the yes.', "an Approver's yes"]) expect(words).toMatch(YES_NOUN)
-    for (const words of ['Waits for approval', 'Bob approved.', 'Yes', 'Approvers say yes or no']) expect(words).not.toMatch(YES_NOUN)
+    for (const words of ['Waits for approval', 'Bob approved.', 'Yes', 'Wire the Yes exit', 'Approvers say yes or no']) expect(words).not.toMatch(YES_NOUN)
   })
 })

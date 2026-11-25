@@ -3,7 +3,7 @@
   "drafted_id": "dw_01JDRAFTRELEASE",
   "revision": 2,
   "name": "Release check",
-  "digest": "6655955afce688184abb8e2a6ff389c03184a6a1e40da67c915912b09d3b9586",
+  "digest": "00db7ad2838e389c4d59eda566ff2d9409a5b99d64cd701a5d7e8d1812ec0f94",
   "approval": {
     "approval_id": "apr_01JDRAFTRELEASE",
     "link": "/setup-approvals/apr_01JDRAFTRELEASE",
@@ -103,7 +103,7 @@
         "tag": "Shapes the change"
       },
       {
-        "name": "Ask for a yes",
+        "name": "Ask for approval",
         "ours": true,
         "block_type": null,
         "tag": "Waits for approval"
@@ -281,7 +281,7 @@
       },
       {
         "rule": "second_yes",
-        "words": "No path asks for a yes twice."
+        "words": "No path asks for approval twice."
       }
     ],
     "approves": [
@@ -344,7 +344,7 @@
       {
         "label": [
           {
-            "text": "Who says yes on each run",
+            "text": "Who approves on each run",
             "quoted": false
           }
         ],
@@ -364,7 +364,7 @@
   "you_can_decide": true,
   "why_not": null,
   "decline_reasons": [
-    "Too risky without a yes",
+    "Too risky without approval",
     "Wrong project or channel",
     "Not needed"
   ],

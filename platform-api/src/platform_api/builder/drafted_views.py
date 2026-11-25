@@ -150,7 +150,7 @@ class DraftedWorkflowView(WireModel):
     name: str | None = Field(description="The plan's name. Null until the first plan.")
     state: DraftedState = Field(
         description="drafting while the drafter works; not_drafted with said; draft until it is "
-        "sent; waiting for a yes; approved; declined. An approval that expired or was replaced "
+        "sent; waiting for approval; approved; declined. An approval that expired or was replaced "
         "leaves it a draft."
     )
     words: str = Field(description="The words this revision was drafted from.")

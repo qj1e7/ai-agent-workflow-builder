@@ -186,7 +186,7 @@ class ExecutionLinkedData(WireModel):
 
 class RunSkippedData(WireModel):
     waiting_run_id: RunId = Field(
-        description="The earlier run of the same workflow that is still waiting for a yes."
+        description="The earlier run of the same workflow that is still waiting for approval."
     )
 
 
@@ -195,12 +195,12 @@ class RunExpiredData(WireModel):
 
 
 class ExecutionResumedData(WireModel):
-    execution_id: str = Field(description="The waiting n8n execution that took the yes.")
+    execution_id: str = Field(description="The waiting n8n execution that took the approval.")
 
 
 class RunLostData(WireModel):
     approval_id: ApprovalId
-    why: str = Field(description="Why n8n could not take the yes, in plain words.")
+    why: str = Field(description="Why n8n could not take the approval, in plain words.")
 
 
 class SupportReportedData(WireModel):

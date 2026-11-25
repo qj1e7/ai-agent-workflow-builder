@@ -28,7 +28,7 @@ def test_the_capabilities_card_lists_the_ready_entries_by_their_short_words():
     assert lines == [
         "Watch software for new releases",
         "Watch Maven and npm packages",
-        "Create Jira tickets, after a yes",
+        "Create Jira tickets, after approval",
         "Explain a stopped run, and retry it",
         "Change or pause your workflows",
         "Draft an n8n workflow from your words, for an Approver to check",
@@ -60,7 +60,11 @@ def _cants(answer: PlannerAnswer) -> list[CantRow]:
 
 TEAMS = ("I can't post in Teams channels yet.", "Run results show here, in the chat.", False)
 EMAIL = ("I can't send email yet.", "Run results show here, in the chat.", False)
-CONFLUENCE = ("I can't update Confluence yet.", "I can create a Jira ticket, after a yes.", False)
+CONFLUENCE = (
+    "I can't update Confluence yet.",
+    "I can create a Jira ticket, after approval.",
+    False,
+)
 DELETE = ("I don't delete anything in Jira.", "A Jira admin can do that.", True)
 
 

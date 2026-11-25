@@ -10,10 +10,12 @@ from pathlib import Path
 
 import platform_api
 
-YES_NOUN = re.compile(
-    r"\b(?:a|an|your|the|their|no|one|any|second) yes\b|['’]s yes\b|\byeses\b", re.IGNORECASE
-)
+YES_NOUN = re.compile(r"\b(?i:a|an|your|the|their|no|one|any|second) yes\b|['’]s yes\b|\byeses\b")
+"""Lower-case yes only: Yes is the name of a button and of Ask for approval's exit."""
 PACKAGE = Path(platform_api.__file__).parent
+STORED_BEFORE_THE_RULE = ("Too risky without a yes", "Ask for a yes")
+"""Words stored before 25 Nov: a decline reason, which the platform reads back in today's words,
+and the gate block's name in a workflow set up before then, which n8n keeps."""
 
 
 def _docstrings(tree: ast.AST) -> set[int]:
@@ -36,6 +38,7 @@ def said(path: Path) -> list[str]:
         and isinstance(node.value, str)
         and id(node) not in docs
         and YES_NOUN.search(node.value)
+        and node.value not in STORED_BEFORE_THE_RULE
     ]
 
 
@@ -48,5 +51,11 @@ def test_no_string_in_the_package_uses_yes_as_a_noun() -> None:
 def test_the_rule_catches_the_shapes_it_names() -> None:
     for words in ("Waits for a yes", "Needs your yes", "after Bob's yes", "up to the yes."):
         assert YES_NOUN.search(words), words
-    for words in ("Waits for approval", "Bob approved.", "Yes", "Approvers say yes or no"):
+    for words in (
+        "Waits for approval",
+        "Bob approved.",
+        "Yes",
+        "Wire the Yes exit",
+        "Approvers say yes or no",
+    ):
         assert not YES_NOUN.search(words), words

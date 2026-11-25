@@ -27,7 +27,7 @@ function exitTaken(workflowData: unknown[][] | undefined): string[] {
 beforeEach(() => setEnv({ WAB_API_URL: API_URL, WAB_NODE_KEY: NODE_KEY }));
 afterEach(() => setEnv({ WAB_API_URL: undefined, WAB_NODE_KEY: undefined }));
 
-describe('Ask for a yes, asking', () => {
+describe('Ask for approval, asking', () => {
   it('has the four exits in order, and output 0 is not Yes', () => {
     const { outputNames, outputs } = new AskForYes().description;
     expect(outputNames).toEqual(EXITS);
@@ -82,7 +82,7 @@ describe('Ask for a yes, asking', () => {
   });
 });
 
-describe('Ask for a yes, woken', () => {
+describe('Ask for approval, woken', () => {
   it.each([
     ['yes', 'Yes'],
     ['no', 'No'],

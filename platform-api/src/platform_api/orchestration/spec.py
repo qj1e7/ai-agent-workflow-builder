@@ -96,7 +96,7 @@ class RunSpec:
     test: bool = False
     """A person started it with Do a test run. A row stored without it reads False."""
     stops_at_gate: bool = False
-    """A test run of a draft: it stops at the approval gate, asks nobody for a yes and writes
+    """A test run of a draft: it stops at the approval gate, asks nobody for approval and writes
     nothing (ADR 0044). A row stored without it reads False."""
     expires_after: timedelta = EXPIRES_AFTER
     """How long its request waits for a yes, in working hours, before it expires (ADR 0024)."""

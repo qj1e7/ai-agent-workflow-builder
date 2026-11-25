@@ -11,9 +11,9 @@ export interface MadeInN8nWords {
 function gradeSentence({ grade, findings }: Pick<MadeInN8nView, 'grade' | 'findings'>): string {
   switch (grade) {
     case 'safe':
-      return 'Safe: every change waits for a yes.'
+      return 'Safe: every change waits for approval.'
     case 'writes_refused':
-      return `Writes refused: ${findings.length > 0 ? findings.join(' ') : 'a change can run without a yes.'}`
+      return `Writes refused: ${findings.length > 0 ? findings.join(' ') : 'a change can run without approval.'}`
     case 'needs_a_fix':
       return needsFixBanner(findings)
   }

@@ -188,7 +188,7 @@ def test_a_github_outage_stops_the_version_checker_before_its_model_can_ask_for_
     github.set_mode("unavailable")
     run_id = run_agents(api, "crd_version_checker", LANGGRAPH, "e2e outage")
     stopped = api.wait_for_state("alice", run_id, {"failed", "awaiting_approval"})
-    assert stopped["state"] == "failed", "a check that read nothing must not ask for a yes"
+    assert stopped["state"] == "failed", "a check that read nothing must not ask for approval"
     assert (stopped["reason"], stopped["retryable"]) == ("WorkflowNodeError", True)
     assert stopped["message"].startswith(
         'Stopped before it read anything. "Read release" failed in n8n'

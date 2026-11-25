@@ -18,9 +18,10 @@ HOW_TO: Final = (
     "If the test run passes, the Operator presses Turn it on.",
     "A card you leave stays as a draft by itself. It shows on Workflows marked Draft, and "
     "opening it brings the card back to the chat.",
-    "Anything that writes data, such as a new Jira ticket, waits for an Approver's yes in Teams.",
+    "Anything that writes data, such as a new Jira ticket, waits for approval from an Approver in "
+    "Teams.",
     "The person who asked is never the Approver of their own request.",
-    "Operators set up and change workflows, and Approvers say yes or no to requests.",
+    "Operators set up and change workflows, and Approvers approve or decline requests.",
     "The rail on the left opens Chat, Workflows and the Watchlist.",
     "Needs you lists what waits for you, such as a request to approve or a run that stopped.",
     "The Watchlist holds the software your team runs, and it checks each one for new releases "

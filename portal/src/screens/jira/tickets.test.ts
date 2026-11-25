@@ -121,7 +121,7 @@ describe('ticket keys in a line of words', () => {
 
 describe('the words on the practice Jira page', () => {
   it('says what an empty list means and where the tickets come from', () => {
-    expect(EMPTY_WORDS).toBe('No tickets yet. When a run creates one after a yes, it shows here.')
+    expect(EMPTY_WORDS).toBe('No tickets yet. When a run creates one after approval, it shows here.')
   })
 
   it('says the list could not be loaded', () => {

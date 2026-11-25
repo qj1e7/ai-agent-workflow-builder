@@ -10,7 +10,7 @@ describe('the agents that fix a stopped run', () => {
 
   it('says the troubleshooter still only explains, and what Fix it for me does', () => {
     const troubleshooter = PLATFORM_AGENTS.find((agent) => agent.id === 'troubleshooter')
-    expect(troubleshooter?.rules).toEqual(['Only explains. It never changes a run', 'Fix it for me drafts a change. Nothing changes until an Approver says yes.'])
+    expect(troubleshooter?.rules).toEqual(['Only explains. It never changes a run', 'Fix it for me drafts a change. Nothing changes until an Approver approves it.'])
   })
 
   it('says each new agent never writes to a real system', () => {

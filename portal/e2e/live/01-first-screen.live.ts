@@ -9,7 +9,7 @@ import { openContext, OUT, shot } from './support/ui'
 /** The small line above Home's heading, as in the chat-first sketch. */
 const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening), ${name}$`)
 /** An Operator's Home asks the sketch's question, on day one too. */
-const HOME_ALICE = 'What should run by itself?'
+const HOME_ALICE = 'What can I help you with today?'
 
 test.beforeAll(async ({ baseURL }) => {
   await connectMockModel(String(baseURL))
@@ -60,7 +60,7 @@ test('Home greets the signed-in person and the rail reads Chat, Workflows', asyn
   await expect(mainMenu(page).getByRole('link')).toHaveText(RAIL.map((item) => linkText(item.label)))
   await expect(mainMenu(page).getByRole('link', { name: 'New workflow' }), 'New workflow has no entry in the rail').toHaveCount(0)
   await expect(mainMenu(page).getByRole('link', { name: 'Chat' })).toHaveAttribute('aria-current', 'page')
-  await expect(page).toHaveTitle('What should run by itself? · AI Workflow Builder')
+  await expect(page).toHaveTitle('What can I help you with today? · AI Workflow Builder')
   await shot(page, info, 'p1-01-home')
 })
 

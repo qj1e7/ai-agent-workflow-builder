@@ -59,7 +59,7 @@ describe('the needs strip', () => {
     const one: HomeOut = { ...BOB, confirmations: [] }
     expect(needsTotal(one)).toBe(1)
     expect(text(draw(one))).not.toContain('more')
-    expect(links(draw(one))).toEqual([['Open : Software watchlist needs your yes', '/runs/run_01JB8']])
+    expect(links(draw(one))).toEqual([['Open : Software watchlist needs your approval', '/runs/run_01JB8']])
   })
 
   it('stays when nothing needs the person, calm, and says so with nothing to open', () => {

@@ -2,8 +2,10 @@
 her own n8n account before and after she sets her password, the workflow she holds as n8n holds
 it, and a run of it waiting at the yes and then ended, each block's state read."""
 
+import json
 from dataclasses import replace
 from datetime import timedelta
+from typing import Any
 
 from platform_api.builder.n8n_draft import Checked, blocks_of
 from platform_api.builder.n8n_http import HoldOut
@@ -23,7 +25,13 @@ assert SET_UP_IN_N8N.n8n_workflow_id is not None and isinstance(LAID_OUT, Checke
 WORKFLOW: str = SET_UP_IN_N8N.n8n_workflow_id
 OPENED = ADDED + timedelta(days=1, hours=2)
 CAROL_IN_N8N = replace(CAROL, n8n_access=True, n8n_account=N8nAccount("n8n-user-carol", False))
-NODES, EDGES = graph(LAID_OUT.document)
+OLD_GATE = "Ask for a yes"
+"""Carol's workflow was set up before 25 Nov 2026, so its gate keeps the name it had then. The
+platform knows the block by its type, and the Portal draws it as it draws Ask for approval."""
+SET_UP_BEFORE: dict[str, Any] = json.loads(
+    json.dumps(LAID_OUT.document).replace('"Ask for approval"', json.dumps(OLD_GATE))
+)
+NODES, EDGES = graph(SET_UP_BEFORE)
 IN_N8N = UseCaseN8nView(
     use_case_id=AGENT_USE_CASE.use_case_id,
     workflow_id=WORKFLOW,
@@ -54,12 +62,12 @@ RUN = RunN8nView(
     n8n_version_id=IN_N8N.n8n_version_id,
     nodes=NODES,
     edges=EDGES,
-    blocks=blocks_of(LAID_OUT.document),
+    blocks=blocks_of(SET_UP_BEFORE),
     states={
         "Read release": "done",
         "Compare": "done",
         "Newer?": "done",
-        "Ask for a yes": "waiting",
+        OLD_GATE: "waiting",
     },
     from_n8n=False,
 )
@@ -70,7 +78,7 @@ RUN_ENDED = RUN.model_copy(
             "Read release": "done",
             "Compare": "done",
             "Newer?": "done",
-            "Ask for a yes": "done",
+            OLD_GATE: "done",
             "Create ticket": "failed",
         },
         "from_n8n": True,
