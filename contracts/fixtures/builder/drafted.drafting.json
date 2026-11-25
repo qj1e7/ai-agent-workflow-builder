@@ -22,5 +22,6 @@
   "replaced_waiting": false,
   "approval": null,
   "set_up": null,
-  "simulation": null
+  "simulation": null,
+  "refinement": null
 }

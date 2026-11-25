@@ -35,7 +35,13 @@ from agent_runtime.contract import (
     ModelAccess,
     WireModel,
 )
-from agent_runtime.fixing.coordinator import FixOutcome, FixRequest, HandedBack, coordinate
+from agent_runtime.fixing.coordinator import (
+    FixOutcome,
+    FixRequest,
+    HandedBack,
+    RefineRequest,
+    coordinate,
+)
 from agent_runtime.fixing.drafter import ModelFixDrafter
 from agent_runtime.fixing.events import FixHandBack, FixHandedBackData, FixId, FixRecorder
 from agent_runtime.fixing.ledger import Unlogged
@@ -75,6 +81,23 @@ class FixStart(WireModel):
         max_length=300, description="platform-api's own address, where the fix's calls go."
     )
     token: str = Field(min_length=1, max_length=200, description="The fix's own token.")
+
+
+type DraftedIdText = Annotated[str, StringConstraints(pattern=r"^dw_[0-9A-Za-z]{1,40}$")]
+
+
+class RefineStart(WireModel):
+    """A refinement platform-api kept for a drafted workflow's Check, with its token minted for
+    the same deadline (ADR 0054, section 7). There is no stopped run and no run's activity."""
+
+    drafted_id: DraftedIdText
+    request: RefineRequest
+    facts: DrafterFacts = Field(description="The team's facts the Fix drafter may use.")
+    model: ModelAccess = Field(description="The connected model, as Settings holds it.")
+    platform_url: str = Field(
+        max_length=300, description="platform-api's own address, where the refinement's calls go."
+    )
+    token: str = Field(min_length=1, max_length=200, description="The refinement's own token.")
 
 
 class FixAccepted(WireModel):
@@ -125,13 +148,15 @@ class Starter:
         self,
         run: Callable[[FixStart], object],
         spawn: Callable[[Callable[[], None]], None] = _in_a_thread,
+        refine: Callable[[RefineStart], object] | None = None,
     ) -> None:
         self._run = run
+        self._refine = refine
         self._spawn = spawn
         self._started: set[str] = set()
         self._lock = threading.Lock()
 
-    def start(self, body: FixStart) -> FixAccepted:
+    def start(self, body: FixStart | RefineStart) -> FixAccepted:
         fix_id = body.request.fix_id
         with self._lock:
             if fix_id in self._started:
@@ -140,10 +165,15 @@ class Starter:
         self._spawn(lambda: self._safely(body))
         return FixAccepted(fix_id=fix_id, started=True)
 
-    def _safely(self, body: FixStart) -> None:
+    def _safely(self, body: FixStart | RefineStart) -> None:
         """Only the error's type is logged: its words can quote the run."""
         try:
-            self._run(body)
+            if isinstance(body, RefineStart):
+                if self._refine is None:
+                    raise LookupError("this runtime refines no draft")
+                self._refine(body)
+            else:
+                self._run(body)
         except Exception as error:
             log.warning("fix %s failed: %s", body.request.fix_id, type(error).__name__)
 
@@ -217,6 +247,57 @@ def run_fix(
     coordinating = chats(drafting) or _no_model
     parts = FixParts(
         troubleshooter=ModelTroubleshooter(body, chats(body.model) or _no_model),
+        drafter=ModelFixDrafter(coordinating, blocks, body.facts, drafting),
+        scenario_writer=platform,
+        simulation=platform,
+        scope=PlanScope(),
+        checker=platform,
+        revisions=platform,
+        recorder=platform,
+    )
+    outcome = coordinate(request, coordinating, parts, now=now)
+    hand_back_again(outcome, platform, request.fix_id, until, now, sleep)
+    return outcome
+
+
+class NoTroubleshooter:
+    """A refinement has no stopped run, so nothing to troubleshoot. Its coordinator offers no
+    find_cause, so this is never asked."""
+
+    def find_cause(self, look_at: str | None, seconds: float) -> CauseFound | None:
+        return None
+
+
+def run_refinement(
+    body: RefineStart,
+    chats: Callable[[ModelAccess], ChatFor | None],
+    drafter_model: str,
+    catalogue: Callable[[], Catalogue],
+    *,
+    client: httpx.Client | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> FixOutcome:
+    """One refinement of a drafted workflow's Check, from platform-api's start to its hand-in or
+    hand-back: the same coordinator, Fix drafter, scope check and platform parts as a fix, under
+    the refinement's own routes and token."""
+    request = body.request
+    platform = PlatformParts.of_a_draft(
+        body.platform_url, body.drafted_id, request.fix_id, body.token, client=client, sleep=sleep
+    )
+    until = request.ends_by + TOKEN_GRACE
+    try:
+        blocks = catalogue()
+    except CatalogueUnusable as unusable:
+        log.error("refinement %s: %s", request.fix_id, unusable)
+        lost = Unlogged("fix_handed_back", None, "failed")
+        outcome = HandedBack(why="gave_up", cause=None, rounds=(), unlogged=(lost,))
+        hand_back_again(outcome, platform, request.fix_id, until, now, sleep)
+        return outcome
+    drafting = body.model.model_copy(update={"model": drafter_model})
+    coordinating = chats(drafting) or _no_model
+    parts = FixParts(
+        troubleshooter=NoTroubleshooter(),
         drafter=ModelFixDrafter(coordinating, blocks, body.facts, drafting),
         scenario_writer=platform,
         simulation=platform,

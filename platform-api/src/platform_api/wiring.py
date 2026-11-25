@@ -19,6 +19,7 @@ from platform_api.builder.made_in_n8n import MadeInN8n
 from platform_api.builder.n8n_holds import Holding
 from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner_facts import PlannerFactsReader
+from platform_api.builder.refinements import Refinements, RefineSettings
 from platform_api.builder.simulations import Simulations
 from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.watchlist import OnN8n
@@ -178,6 +179,8 @@ class Services:
     simulation_client: SimulationClient | None = None
     fix_parts: FixParts | None = None
     fixes: Fixes | None = None
+    refine_parts: FixParts | None = None
+    refinements: Refinements | None = None
 
 
 def simulations_for(
@@ -255,6 +258,8 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.made_in_n8n = services.made_in_n8n
     app.state.fix_parts = services.fix_parts
     app.state.fixes = services.fixes
+    app.state.refine_parts = services.refine_parts
+    app.state.refinements = services.refinements
 
 
 class ConnectedModel:
@@ -664,6 +669,23 @@ async def build(settings: Settings) -> Services:
         ExplainWordings(db, model_settings, agents),
     )
     drafted.serve_fixes(fixes)
+    uses_model = settings.simulation is not None and settings.simulation.uses_model
+    refinements = Refinements(
+        db,
+        drafted,
+        simulations,
+        agents,
+        ConnectedModel(connected_model(db, model_settings)),
+        RefineSettings(
+            on=uses_model,
+            signing_key=settings.callback_signing_key,
+            platform_url=settings.platform_internal_url,
+        ),
+    )
+    drafted.serve_refinements(refinements)
+    fix_layouts = FixLayouts(
+        facts, n8n.drafts, settings.public_base_url, settings.team_time_zone.key
+    )
     return Services(
         settings=settings,
         db=db,
@@ -692,13 +714,21 @@ async def build(settings: Settings) -> Services:
         use_case_simulations=use_case_simulations,
         simulation_client=simulation_client,
         fix_parts=FixParts(
-            FixLayouts(facts, n8n.drafts, settings.public_base_url, settings.team_time_zone.key),
+            fix_layouts,
             simulation_client,
-            simulation_model if settings.simulation and settings.simulation.uses_model else None,
+            simulation_model if uses_model else None,
             fixes,
             fixes,
         ),
         fixes=fixes,
+        refine_parts=FixParts(
+            fix_layouts,
+            simulation_client,
+            simulation_model if uses_model else None,
+            None,
+            refinements,
+        ),
+        refinements=refinements,
         setup_approvals=setup_approvals,
         home=home,
         watchlist=watchlist,

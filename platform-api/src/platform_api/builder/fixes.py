@@ -455,7 +455,7 @@ def _read_list(stopped: WorkflowPlan, fixed: WorkflowPlan) -> str | None:
     return READ_LIST.format(places=" and ".join(f"“{place}”" for place in added))
 
 
-def _settings_kept(stopped: WorkflowPlan, fixed: WorkflowPlan) -> bool:
+def settings_kept(stopped: WorkflowPlan, fixed: WorkflowPlan) -> bool:
     """Every setting as it was: its id, kind, value and mark, where it says it fills, and each
     placeholder at the same block and parameter path. A fix that moves a placeholder elsewhere,
     and writes a value where it stood, changes a setting a person filled."""
@@ -527,13 +527,13 @@ def changes_between(stopped: WorkflowPlan, fixed: WorkflowPlan) -> list[FixChang
     return changes
 
 
-def _changed_blocks(stopped: WorkflowPlan, fixed: WorkflowPlan) -> set[str]:
+def changed_blocks(stopped: WorkflowPlan, fixed: WorkflowPlan) -> set[str]:
     """The blocks whose values differ, and any block one plan has that the other lacks."""
     before, after = _resolved(stopped), _resolved(fixed)
     return {name for name in set(before) | set(after) if before.get(name) != after.get(name)}
 
 
-def _same_shape(stopped: WorkflowPlan, fixed: WorkflowPlan) -> bool:
+def same_shape(stopped: WorkflowPlan, fixed: WorkflowPlan) -> bool:
     """The same name, the same blocks of the same types and versions, and the same wires: a fix
     changes only values inside blocks, as the runtime's scope check holds it to."""
 
@@ -749,7 +749,7 @@ class Fixes:
                 or stored.run_id != run_id
                 or stored.made_by != "fix_drafter"
                 or stored.digest is None
-                or (stored.version, _named(stored.digest)) != (data.version, data.digest)
+                or (stored.version, named_digest(stored.digest)) != (data.version, data.digest)
             ):
                 raise NotStored(NOT_THE_STORED)
         refused = await self._log.note_fix(run_id, data)
@@ -774,13 +774,13 @@ class Fixes:
         set_up = await self._drafted.set_up_plan(row.use_case_id)
         if set_up is None:
             raise NotStored(ENDED, 409)
-        if not _settings_kept(set_up.plan, plan):
+        if not settings_kept(set_up.plan, plan):
             raise NotStored(SETTING)
         part = set(cause.failed_part)
         if (
             not part <= set(row.stopped_at)
-            or not _same_shape(set_up.plan, plan)
-            or not _changed_blocks(set_up.plan, plan) <= part
+            or not same_shape(set_up.plan, plan)
+            or not changed_blocks(set_up.plan, plan) <= part
         ):
             raise NotStored(OUTSIDE)
         laid = await self._drafted.fix_laid(row.drafted_id, plan, set_up.sources)
@@ -794,7 +794,7 @@ class Fixes:
             assert locked is not None
             if locked.stored_at is not None and locked.digest == digest:
                 assert locked.version is not None
-                return FixRevisionOut(version=locked.version, digest=_named(digest))
+                return FixRevisionOut(version=locked.version, digest=named_digest(digest))
             if locked.proposed_at is not None or fix_state(locked, uow.now) != "drafting":
                 raise NotStored(ENDED, 409)
             if not proven(locked.simulated.get(plan_key(plan))):
@@ -814,7 +814,7 @@ class Fixes:
                 ),
             )
         log.info("fix %s: stored version %d", fix_id, version)
-        return FixRevisionOut(version=version, digest=_named(digest))
+        return FixRevisionOut(version=version, digest=named_digest(digest))
 
     async def take_call(self, fix_id: str, kind: ModelCall) -> bool:
         column = CALL_COLUMNS[kind]
@@ -1307,14 +1307,14 @@ class Fixes:
         drafter = row.made_by == "fix_drafter"
         cause = row.cause
         part = list(cause.failed_part) if cause is not None else list(row.stopped_at)
-        changed = _changed_blocks(set_up.plan, row.plan)
+        changed = changed_blocks(set_up.plan, row.plan)
         results = row.simulated.get(plan_key(row.plan), {}) if drafter else {}
         checks = [("inside_the_failed_part", changed <= set(part))]
         if drafter:
             checks.append(("every_scenario_passed", proven(results)))
         checks.append(("safety_check", laid.grade == "safe"))
         if drafter:
-            checks.append(("settings_unchanged", _settings_kept(set_up.plan, row.plan)))
+            checks.append(("settings_unchanged", settings_kept(set_up.plan, row.plan)))
         names = await self._approvals.names(
             [row.asked_by, *([row.answered_by] if row.answered_by else [])]
         )
@@ -1425,7 +1425,7 @@ class Fixes:
         )
 
 
-def _named(digest: str) -> str:
+def named_digest(digest: str) -> str:
     """A digest as the fix's events name it: the activity log's contract prefixes sha256."""
     return f"sha256:{digest}"
 

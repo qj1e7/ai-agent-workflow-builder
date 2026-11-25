@@ -27,6 +27,7 @@ from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent_runtime.contract import (
+    MOST_COVER,
     MOST_KINDS,
     ModelProblem,
     SampleAnswer,
@@ -140,10 +141,26 @@ def _block_line(block: ScenarioBlock) -> str:
     return line + "."
 
 
+ONE_EACH: Final = "Write exactly one scenario for each kind on the list of kinds, and no other."
+TO_REACH: Final = (
+    f"Write one to {MOST_COVER} scenarios that reach the blocks to reach, each of a kind on the "
+    "list of kinds. A block is reached when the run gets to it: pick the kind and the plays "
+    "that lead the run through the blocks before it."
+)
+COVER_SYSTEM: Final = SYSTEM.replace(ONE_EACH, TO_REACH)
+"""The writer aimed at blocks no scenario reached yet (ADR 0054, section 7)."""
+
+
 def scenario_messages(request: ScenarioWriteRequest) -> tuple[str, str]:
-    """The system and user text: the kinds, the blocks and the samples, and nothing else."""
+    """The system and user text: the kinds, the blocks and the samples, and nothing else. With
+    blocks to reach, those too, each with the blocks that lead straight to it."""
+    reach = [
+        f'- "{c.name}"' + (f", after {_names(c.after)}" if c.after else "") + "."
+        for c in request.cover
+    ]
     lines = [
-        "The kinds of scenario to write:",
+        *(["The blocks to reach:", *reach, ""] if reach else []),
+        "The kinds of scenario to write:" if not reach else "The kinds of scenario to pick from:",
         *(f"- {kind}" for kind in request.kinds),
         "",
         "The blocks of the workflow, in order:",
@@ -159,7 +176,11 @@ def scenario_messages(request: ScenarioWriteRequest) -> tuple[str, str]:
     ]
     if not request.samples:
         lines.append("- none")
-    return SYSTEM, "\n".join(lines)
+    return COVER_SYSTEM if request.cover else SYSTEM, "\n".join(lines)
+
+
+def _names(names: list[str]) -> str:
+    return ", ".join(f'"{name}"' for name in names)
 
 
 def _items(items: object) -> str:
@@ -171,8 +192,15 @@ def offered(
 ) -> ScenariosWritten | ScenarioCheck:
     """The scenarios when every name is one the request offers, or the first check a pick
     fails: the kinds, each once, then each read, each sample and each Agent block, each named
-    at most once in its scenario."""
-    if sorted(s.kind for s in asked.scenarios) != sorted(set(request.kinds)):
+    at most once in its scenario. A request to reach blocks takes one to MOST_COVER scenarios,
+    each of a kind on its list."""
+    kinds = [s.kind for s in asked.scenarios]
+    if request.cover:
+        if not 1 <= len(kinds) <= MOST_COVER:
+            return "too_many"
+        if not set(kinds) <= set(request.kinds):
+            return "not_the_kinds"
+    elif sorted(kinds) != sorted(set(request.kinds)):
         return "not_the_kinds"
     reads = {b.name for b in request.blocks if b.role == "read"}
     agents = {b.name for b in request.blocks if b.role == "agent"}

@@ -535,5 +535,6 @@
     "not_tried": [],
     "said": null,
     "can_try_again": false
-  }
+  },
+  "refinement": null
 }

@@ -100,6 +100,9 @@ class FixDraftRequest:
     change_only: tuple[str, ...]
     failed: tuple[ScenarioResult, ...]
     round: int
+    of_a_draft: bool = False
+    """A refinement of a drafted workflow's Check: `stopped` is the draft as the Check tried it,
+    and `cause` names the blocks where a scenario failed on it."""
 
 
 type NotDrafted = Literal["not_in_catalogue", "no_answer"]
@@ -183,9 +186,13 @@ class Checker(Protocol):
 
 class Revisions(Protocol):
     """Stores a fixed version under the fix's id, with the cause code confirmed. It waits for a
-    yes only once the fix's proposal names it. It turns nothing on and approves nothing."""
+    yes only once the fix's proposal names it. It turns nothing on and approves nothing. For a
+    refinement it keeps a new revision of the drafted workflow, which goes through the normal
+    Check, and the cause is None when no scenario failed on the draft it hands in unchanged."""
 
-    def store(self, fixed: WorkflowPlan, cause: CauseFound, seconds: float) -> StoredRevision: ...
+    def store(
+        self, fixed: WorkflowPlan, cause: CauseFound | None, seconds: float
+    ) -> StoredRevision: ...
 
 
 @dataclass(frozen=True)

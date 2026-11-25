@@ -224,6 +224,19 @@ class Simulations:
         empty = self._empty()
         return empty.model_copy(update={"state": "waiting"}) if self.available else empty
 
+    async def gaps(self, digest: str) -> Gaps:
+        """The failed cases and the blocks no case reached in a finished try of the digest, or
+        none while it isn't done."""
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT result FROM builder.simulations WHERE digest = %s AND state = 'done'",
+                    (digest,),
+                )
+            ).fetchone()
+        result: Mapping[str, Any] = {} if row is None else row["result"]
+        return Gaps(tuple(result.get("failed", ())), tuple(result.get("not_reached", ())))
+
     async def view(self, digest: str, operator: bool) -> SimulationView:
         """A version's simulation, by its digest, as this person may act on it."""
         empty = self._empty()
@@ -290,7 +303,25 @@ def _result(out: SimulationOut, notes: Mapping[str, str]) -> dict[str, Any]:
             for r in out.results
         ],
         "not_tried": [{"block": n.block, "why": n.why} for n in out.coverage.not_tried],
+        "not_reached": list(out.coverage.not_reached),
+        "failed": [
+            {"kind": r.kind, "step": r.stopped_at, "why": r.ending}
+            for r in out.results
+            if r.verdict == "failed"
+        ],
     }
+
+
+@dataclass(frozen=True)
+class Gaps:
+    """What a refinement can start from (ADR 0054, section 7): each case that failed, where and
+    how it ended, and the blocks no case reached. A try kept before these were kept has none."""
+
+    failed: tuple[Mapping[str, Any], ...]
+    not_reached: tuple[str, ...]
+
+    def __bool__(self) -> bool:
+        return bool(self.failed or self.not_reached)
 
 
 def _done(view: SimulationView, result: Mapping[str, Any]) -> SimulationView:

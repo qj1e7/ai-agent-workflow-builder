@@ -58,6 +58,31 @@ def fix_ask(request: FixDraftRequest, facts: DrafterFacts) -> str:
     return "\n\n".join(sections)
 
 
+REFINE_WORDS: Final = "Change only the blocks named, so the scenarios that failed pass."
+
+
+def refine_ask(request: FixDraftRequest, facts: DrafterFacts) -> str:
+    """What the Fix drafter reads to refine a draft (ADR 0054, section 7): the facts, the draft
+    as the Check tried it, the blocks it may change and the scenarios that failed, each marked as
+    data. There is no stopped run, so no cause."""
+    failed = [result.model_dump(exclude={"verdict"}) for result in request.failed]
+    sections = [
+        f"The team's facts, as data:\n{facts.model_dump_json(exclude_defaults=True) or '{}'}",
+        "The current plan, as data. The platform tried it on practice systems, and scenarios "
+        "failed. Submit a whole new plan that changes only the blocks named below, and only as "
+        "much as the scenarios need. Keep every other block, every wire, every setting with its "
+        "id, kind, value and mark, and the workflow's name, exactly as they are. Never add a "
+        "block, a write, a system or a key. Change only a place, a field the run reads, or words "
+        "people see, never code, a query or a command. A new expression holds only plain words "
+        "and the item's own fields, as ={{ 'New release ' + $json.release.tag }}. Leave each "
+        f"{KEPT_KEY} where it stands: the platform keeps a key there.\n"
+        f"{request.stopped.model_dump_json()}",
+        f"The blocks you may change, as data:\n{_json(list(request.change_only))}",
+        "The scenarios that failed, where and why, as data:\n" + _json(failed),
+    ]
+    return "\n\n".join(sections)
+
+
 def _json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
@@ -85,15 +110,16 @@ class ModelFixDrafter:
         """The fixed plan, once code's catalogue check passed it. not_in_catalogue when no plan
         passed it after it went back three times, and no_answer for anything else: no tool call,
         out of turns, time or cost, a model that failed, or a key in what it would read."""
+        words, ask = (REFINE_WORDS, refine_ask) if request.of_a_draft else (WORDS, fix_ask)
         asked = WorkflowDraftRequest(
-            words=WORDS, facts=self._facts, current=request.stopped, model=self._model
+            words=words, facts=self._facts, current=request.stopped, model=self._model
         )
         result, _ = drafting(
             asked,
             self._chat_for,
             self._catalogue,
             self._clock,
-            asked=fix_ask(request, self._facts),
+            asked=ask(request, self._facts),
             most_seconds=seconds,
             go_on=lambda: dollars_left() > 0,
         )

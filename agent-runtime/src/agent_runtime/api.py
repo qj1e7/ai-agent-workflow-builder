@@ -69,7 +69,14 @@ from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
 from agent_runtime.explain_wording import reword
 from agent_runtime.find_software import SoftwareFinder
-from agent_runtime.fixing.starter import FixAccepted, FixStart, Starter, run_fix
+from agent_runtime.fixing.starter import (
+    FixAccepted,
+    FixStart,
+    RefineStart,
+    Starter,
+    run_fix,
+    run_refinement,
+)
 from agent_runtime.github import GitHubConnection, GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
@@ -531,7 +538,10 @@ def create_app(
     store = TaskStore()
     catalogues = CatalogueSource(config.n8n_catalogue)
     starter = fixes or Starter(
-        lambda body: run_fix(body, active.chat_source, config.drafter_model, catalogues.get)
+        lambda body: run_fix(body, active.chat_source, config.drafter_model, catalogues.get),
+        refine=lambda body: run_refinement(
+            body, active.chat_source, config.drafter_model, catalogues.get
+        ),
     )
     app = FastAPI(title="Agent API", version="0.1.0")
     expected_key = config.agent_api_key.encode()
@@ -679,6 +689,15 @@ def create_app(
     def start_a_fix(body: FixStart) -> FixAccepted:
         """Runs a fix platform-api started (ADR 0055, PR 6), once for its fix id, and answers at
         once. The fix's token goes only to an allowed origin."""
+        if origin_of(body.platform_url) not in config.callback_allowed_origins:
+            raise HTTPException(status_code=422, detail="platform_url is not at an allowed origin")
+        return starter.start(body)
+
+    @app.post("/v1/refinements", status_code=202, dependencies=[Depends(require_key)])
+    def start_a_refinement(body: RefineStart) -> FixAccepted:
+        """Runs a refinement of a drafted workflow's Check that platform-api started (ADR 0054,
+        section 7), once for its id, and answers at once. Its token goes only to an allowed
+        origin."""
         if origin_of(body.platform_url) not in config.callback_allowed_origins:
             raise HTTPException(status_code=422, detail="platform_url is not at an allowed origin")
         return starter.start(body)

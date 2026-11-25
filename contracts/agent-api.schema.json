@@ -1689,6 +1689,28 @@
       ],
       "type": "string"
     },
+    "CoverBlock": {
+      "additionalProperties": false,
+      "description": "A block no scenario reached yet, with the blocks whose exits lead straight to it.",
+      "properties": {
+        "after": {
+          "items": {
+            "$ref": "#/$defs/RunBlockName"
+          },
+          "maxItems": 100,
+          "title": "After",
+          "type": "array"
+        },
+        "name": {
+          "$ref": "#/$defs/RunBlockName"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CoverBlock",
+      "type": "object"
+    },
     "DidntFollowAnswer": {
       "additionalProperties": false,
       "description": "The fixed fallback for a free reply that failed or that the guard rejected: one line on\nwhat the Planner can do for this person, and Say it another way. Never a bare cross.",
@@ -4240,7 +4262,8 @@
         "not_the_kinds",
         "not_a_read",
         "not_a_sample",
-        "not_an_agent"
+        "not_an_agent",
+        "too_many"
       ],
       "type": "string"
     },
@@ -4413,7 +4436,7 @@
     },
     "ScenarioWriteRequest": {
       "additionalProperties": false,
-      "description": "A version's plan, for the model to write one scenario for each kind that applies.",
+      "description": "A version's plan, for the model to write one scenario for each kind that applies. With\n`cover`, it writes one to three scenarios, each of a kind that applies, that reach the blocks\nno scenario reached yet (ADR 0054, section 7).",
       "properties": {
         "blocks": {
           "items": {
@@ -4422,6 +4445,15 @@
           "maxItems": 100,
           "minItems": 1,
           "title": "Blocks",
+          "type": "array"
+        },
+        "cover": {
+          "description": "Blocks no scenario reached yet, to reach. Empty for one scenario a kind.",
+          "items": {
+            "$ref": "#/$defs/CoverBlock"
+          },
+          "maxItems": 100,
+          "title": "Cover",
           "type": "array"
         },
         "kinds": {

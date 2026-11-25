@@ -29,7 +29,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Annotated, Any, Final, Literal, Protocol
+from typing import Annotated, Any, Final, Literal, Protocol, cast
 
 from pydantic import Field, StringConstraints
 
@@ -40,6 +40,7 @@ from platform_api.orchestration import (
     DONT_FIT,
     GITHUB_RELEASES,
     CauseFound,
+    CoverBlock,
     FailureNote,
     KnownOptions,
     NotSimulated,
@@ -65,8 +66,9 @@ MOST_SECONDS: Final = 20 * 60
 MOST_SCENARIOS: Final = 20
 """As many as the coordinator holds in one fix, its replay of the stop included."""
 type ModelCall = Literal["writer", "explainer"]
-MOST_CALLS: Final[Mapping[ModelCall, int]] = {"writer": 1, "explainer": 4}
-"""The model calls one fix may make here: the Scenario writer once, and the explainer a few
+MOST_CALLS: Final[Mapping[ModelCall, int]] = {"writer": 3, "explainer": 4}
+"""The model calls one fix, or one refinement, may make here: the Scenario writer once for its
+first scenarios and twice more to reach blocks no scenario reached, and the explainer a few
 times, at most one for each simulation of a draft."""
 NOT_HERE: Final = "Simulation on practice systems isn't available here."
 """The Check card's words for a platform with no simulation gateway (ADR 0054, PR 7)."""
@@ -91,9 +93,27 @@ def fix_token_ok(key: str, run_id: str, fix_id: str, token: str, now: datetime) 
     return hmac.compare_digest(signature, _signature(key, run_id, fix_id, expires))
 
 
-def _signature(key: str, run_id: str, fix_id: str, expires: int) -> str:
-    message = f"fix|{run_id}|{fix_id}|{expires}".encode()
+def _signature(key: str, run_id: str, fix_id: str, expires: int, what: str = "fix") -> str:
+    message = f"{what}|{run_id}|{fix_id}|{expires}".encode()
     return hmac.new(key.encode(), message, hashlib.sha256).hexdigest()
+
+
+def refine_token(key: str, drafted_id: str, fix_id: str, ends_by: datetime) -> str:
+    """The token for one refinement of one drafted workflow's Check (ADR 0054, section 7). It is
+    signed for a refinement, so it never opens a fix's routes, and a fix's never opens these."""
+    expires = int((ends_by + FIX_TOKEN_GRACE).timestamp())
+    return f"{expires}.{_signature(key, drafted_id, fix_id, expires, 'refine')}"
+
+
+def refine_token_ok(key: str, drafted_id: str, fix_id: str, token: str, now: datetime) -> bool:
+    expires_text, dot, signature = token.partition(".")
+    if dot != "." or not expires_text.isdigit():
+        return False
+    expires = int(expires_text)
+    if int(now.timestamp()) >= expires:
+        return False
+    expected = _signature(key, drafted_id, fix_id, expires, "refine")
+    return hmac.compare_digest(signature, expected)
 
 
 # What the coordinator sends and gets back
@@ -107,8 +127,8 @@ class FixScenariosIn(WireIn):
     cover: list[str] = Field(
         default_factory=list[str],
         max_length=100,
-        description="Blocks no scenario reached. The Scenario writer can't aim at a block yet, so "
-        "an ask to cover blocks finds nothing new.",
+        description="Blocks no scenario reached, for the Scenario writer to reach. Without its "
+        "model, code's templates can't aim at a block, so the answer holds no scenario.",
     )
     may_ask_model: bool = Field(
         default=False,
@@ -197,7 +217,9 @@ class Gateway(Protocol):
 class Model(Protocol):
     """The Scenario writer and the explainer, as SimulationModel asks them."""
 
-    async def write(self, plan: PlanOut) -> list[ScenarioSpec] | None: ...
+    async def write(
+        self, plan: PlanOut, cover: Sequence[CoverBlock] = ()
+    ) -> list[ScenarioSpec] | None: ...
 
     async def notes(self, results: Sequence[ResultOut]) -> dict[str, FailureNote]: ...
 
@@ -260,9 +282,11 @@ class FixParts:
         layouts: FixLayouts,
         gateway: Gateway | None,
         model: Model | None,
-        log: FixLog,
+        log: FixLog | None,
         records: FixRecords,
     ) -> None:
+        """`log` is the stopped run's activity log. A refinement's parts have none: its events
+        go to the drafted workflow's own record (`refinements.py`)."""
         self._layouts = layouts
         self._gateway = gateway
         self._model = model
@@ -271,9 +295,10 @@ class FixParts:
 
     async def scenarios(self, fix_id: str, asked: FixScenariosIn) -> FixScenariosOut | NotSimulated:
         """Code's template for each kind that applies to the stopped version, named by its kind,
-        or the Scenario writer's when the model is on, paid for, and the fix's one call of it is
-        still left here."""
-        if asked.cover:
+        or the Scenario writer's when the model is on, paid for, and a call of it is still left
+        here. With blocks to cover, only the writer's, aimed at them and named by how they play:
+        code's templates can't aim at a block, so without the model the answer is empty."""
+        if asked.cover and self._model is None:
             return FixScenariosOut(scenarios=[], asked_model=False)
         if self._gateway is None:
             return NotSimulated(NOT_HERE, again=False)
@@ -288,9 +313,12 @@ class FixParts:
                 if isinstance(plan, NotSimulated):
                     return plan
                 asks = await self._may_ask(fix_id, "writer", asked.may_ask_model)
-                written = None if model is None or not asks else await model.write(plan)
+                cover = _cover(asked.cover, laid.document)
+                written = None if model is None or not asks else await model.write(plan, cover)
         except TimeoutError:
             return NotSimulated(DIDNT_ANSWER, again=True)
+        if asked.cover:
+            return FixScenariosOut(scenarios=written or [], asked_model=asks)
         specs = written or [ScenarioSpec(kind=kind, name=kind) for kind in plan.kinds]
         return FixScenariosOut(scenarios=specs, asked_model=asks)
 
@@ -344,8 +372,23 @@ class FixParts:
 
     async def note(self, run_id: RunId, data: FixData) -> str | None:
         """Writes one event of the fix on the stopped run, or gives the log's refusal."""
+        assert self._log is not None, "a refinement's events go to the drafted workflow"
         refused = await self._log.note_fix(run_id, data)
         return None if refused is None else refused.why
+
+
+def _cover(names: Sequence[str], document: Mapping[str, Any]) -> list[CoverBlock]:
+    """Each block to cover, with the blocks whose exits lead straight to it in the laid-out
+    version, so the Scenario writer can see how a run gets there."""
+    before: dict[str, list[str]] = {}
+    connections = cast(Mapping[str, Any], document.get("connections") or {})
+    for source, outputs in connections.items():
+        for links in cast(list[Any], cast(Mapping[str, Any], outputs).get("main") or []):
+            for link in cast(list[Any], links or []):
+                target = str(cast(Mapping[str, Any], link).get("node"))
+                if source not in before.setdefault(target, []):
+                    before[target].append(source)
+    return [CoverBlock(name=name, after=before.get(name, [])[:20]) for name in names]
 
 
 def _kept(result: ResultOut, kind: str | None) -> dict[str, Any]:

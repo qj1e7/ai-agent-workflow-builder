@@ -47,6 +47,7 @@ from agent_runtime.contract import (
     ChosenAgent,
     Connected,
     ConnectRequest,
+    CoverBlock,
     DidntFollowAnswer,
     DraftApproval,
     DraftBlock,
@@ -115,8 +116,8 @@ from agent_runtime.contract import (
     WrittenScenario,
     agent_event_adapter,
 )
-from agent_runtime.fixing.coordinator import FixRequest
-from agent_runtime.fixing.starter import FixAccepted, FixStart
+from agent_runtime.fixing.coordinator import CheckedCase, FixRequest, RefineRequest
+from agent_runtime.fixing.starter import FixAccepted, FixStart, RefineStart
 from agent_runtime.free_reply import answer_of_envelope
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
@@ -1228,6 +1229,34 @@ def fix_start_request() -> FixStart:
     )
 
 
+def refine_start_request() -> RefineStart:
+    """platform-api's ask to refine a drafted workflow's Check it kept, with the token for the
+    same deadline (ADR 0054, section 7): the case that failed and the block no case reached."""
+    fix = fix_start_request()
+    return RefineStart(
+        drafted_id="dw_01JB8DRAFTED",
+        request=RefineRequest(
+            fix_id="fix_01JB8REFINE",
+            asked_by="alice",
+            ends_by=fix.request.ends_by,
+            version=fix.request.version,
+            failed=[CheckedCase(kind="source_not_found", step="Read releases", why="no_reason")],
+            not_reached=[],
+        ),
+        facts=fix.facts,
+        model=fix.model,
+        platform_url=fix.platform_url,
+        token=fix.token,
+    )
+
+
+def scenario_write_cover_request() -> ScenarioWriteRequest:
+    """The writer aimed at a block no scenario reached yet, with the block that leads to it."""
+    return scenario_write_request().model_copy(
+        update={"cover": [CoverBlock(name="Ask for a yes", after=["Propose a change"])]}
+    )
+
+
 def explain_wording_request() -> ExplainWordingRequest:
     facts = [
         ExplainFact(kind="runs", together=["day", "8:00"], negated=False),
@@ -1425,6 +1454,8 @@ def fixtures() -> dict[str, WireModel]:
             kept=[],
         ),
         "fix-start-request.json": fix_start_request(),
+        "refine-start-request.json": refine_start_request(),
+        "scenario-write-cover-request.json": scenario_write_cover_request(),
         "fix-accepted.json": FixAccepted(fix_id="fix_01JB8EXAMPLE", started=True),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
