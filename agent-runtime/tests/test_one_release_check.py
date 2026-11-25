@@ -9,6 +9,7 @@ from agent_runtime.abilities import why_not
 from agent_runtime.answers import SkipRead, TaskRead, answer_of, decide, parts_of
 from agent_runtime.contract import (
     CantAnswer,
+    PartAnswer,
     PlannerFacts,
     SetupCardAnswer,
     WatchedFact,
@@ -275,3 +276,35 @@ def test_the_project_its_ticket_names_is_its_own_and_never_also_crossed(place: P
     assert isinstance(answer, SetupCardAnswer), answer
     assert rows(answer)["where"][:2] == ("Jira project MOCK", "understood")
     assert all(p.mark != "cant" for p in parts_of(fields, IN_MOCK, answer))
+
+
+DUE = "Check FastAPI on GitHub for new releases and create a Jira ticket "
+
+
+@pytest.mark.parametrize(
+    ("task", "crossed"),
+    [
+        (f"{DUE}before Friday at 5pm.", "Friday at 5pm"),
+        (f"{DUE}due Friday at 5pm.", "due Friday at 5pm"),
+        (f"{DUE}and set the due date to Friday at 5pm.", "set the due date to Friday at 5pm"),
+    ],
+)
+def test_a_due_date_the_model_read_as_the_schedule_is_never_taken_as_it(task: str, crossed: str):
+    """Review of d7b0b1ac: a later run of schedule words was read alone, so a due date the model
+    misread as "Fridays at 5pm" became the schedule. It is crossed as before, and the card keeps
+    the model's schedule as filled in, never as the person's own words."""
+    fields = fastapi(schedule="Fridays at 5pm")
+    answer = answer_of(fields, task, facts())
+    card = answer.alternative if isinstance(answer, CantAnswer) else answer
+    assert isinstance(card, SetupCardAnswer | PartAnswer), answer
+    assert rows(card)["schedule"][:2] == ("Fridays at 5pm", "changed")
+    assert [p.text for p in parts_of(fields, task, answer) if p.mark == "cant"] == [crossed]
+
+
+def test_a_ticket_in_words_that_name_no_jira_project_reads_no_project():
+    """Review of d7b0b1ac: "create a Jira ticket in CSV format" read CSV as the Jira project."""
+    task = "Check FastAPI for new releases every weekday at 9am, and create a ticket in CSV format"
+    answer = answer_of(fastapi(schedule="every weekday at 9am"), task, facts())
+    card = answer.alternative if isinstance(answer, CantAnswer) else answer
+    assert isinstance(card, SetupCardAnswer | PartAnswer), answer
+    assert rows(card)["where"][1] == "missing"

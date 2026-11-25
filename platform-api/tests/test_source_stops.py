@@ -345,6 +345,29 @@ def test_n8n_s_own_block_never_speaks_for_our_platform():
     assert stopped(GITHUB, said) == f'"Get releases" failed in n8n: {said}'
 
 
+@pytest.mark.parametrize("source", ["Acme", "The repository", "Our platform"])
+def test_only_a_source_our_platform_reads_is_named_as_not_finding_a_place(source: str):
+    """Review of d7b0b1ac: the source is read from an allow-list, so words of another shape that
+    happen to say "can't find" are n8n's words for the block, never a source stop."""
+    said = f"{source} can't find {GONE}."
+    assert stopped(OUR_READ, said) == f'"Read release" failed in n8n: {said}'
+    assert (
+        read_stop(f'{source} can\'t find {GONE}, so "Read release" stopped. {NOT_FOUND_CAUSE}')
+        is None
+    )
+
+
+def test_the_answers_for_a_place_the_source_does_not_have_say_not_to_retry():
+    """Review of d7b0b1ac: a retry reads the same name and stops the same way, so the answers say
+    no, as the advice does."""
+    found = answers(run_failed(stopped(OUR_READ, f"GitHub can't find {GONE}.")))
+    assert found.safe_to_retry == (
+        "No. A retry reads the same name and stops the same way. Check that the workflow names "
+        "the right one and that it still exists on GitHub, then start a new run."
+    )
+    assert (found.retry.possible, found.next) == (False, "report")
+
+
 def run_failed(message: str) -> RunFailedData:
     return RunFailedData(
         stage="working", reason="WorkflowNodeError", retryable=True, message=message
