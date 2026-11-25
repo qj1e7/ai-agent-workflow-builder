@@ -7,6 +7,22 @@ const VERDICT: Readonly<Record<Fix['scenarios'][number]['verdict'], string>> = {
 export const CHECKS_ARE_CODES = 'These come from the platform’s own checks, never from an AI’s summary.'
 export const NO_CHECKS = 'The platform has no checks to show for this fix.'
 
+/** What a block's parameter is for, in plain words, by the last part of its path. A path we don't know reads as a field. */
+const PARAMETER_WORDS: Readonly<Record<string, string>> = {
+  place: 'Place it reads',
+  title: 'Title',
+  body: 'Body',
+  subject: 'Subject',
+  what: 'What it tells',
+  inputs: 'What it reads',
+  url: 'Address',
+  owner: 'Owner',
+  repository: 'Repository',
+  text: 'Message',
+  value: 'Value',
+}
+export const parameterWords = (path: string): string => PARAMETER_WORDS[path.split('.').at(-1)?.replace('[]', '') ?? ''] ?? 'Field it reads'
+
 /** The coordinator's own replay of the stop has a name made for code. Say it in plain words. */
 const SCENARIO_NAME: Readonly<Record<string, string>> = { replay_the_stop: 'Replay the stop' }
 
@@ -31,7 +47,7 @@ export function FixEvidence({ fix }: { fix: Fix }) {
           <ul className={styles['rows']}>
             {fix.changes.map((change) => (
               <li key={`${change.block}:${change.parameter}`}>
-                <b>{change.block}</b> <span className="muted">{change.parameter}</span> <s>{change.before ?? 'nothing'}</s> <span aria-hidden="true">→</span> <b>{change.after ?? 'nothing'}</b>
+                <b>{change.block}</b> <span className="muted">{parameterWords(change.parameter)}</span> <s>{change.before ?? 'nothing'}</s> <span aria-hidden="true">→</span> <b>{change.after ?? 'nothing'}</b>
               </li>
             ))}
           </ul>

@@ -64,7 +64,7 @@ describe('why a fix was handed back', () => {
   it('is the platform’s words for the reason code the hand-back carried', () => {
     expect(handedBackWords(fix({ ended: 'handed_back', why: 'no_progress' }), BEFORE)).toBe('A round made no progress.')
     expect(handedBackWords(fix({ ended: 'handed_back', why: 'cost_limit' }), BEFORE)).toBe('I reached the cost limit for one fix.')
-    expect(handedBackWords(fix({ ended: 'handed_back', why: 'not_replayed' }), BEFORE)).toBe('The practice systems couldn't replay the stop, so no fix could be proven.')
+    expect(handedBackWords(fix({ ended: 'handed_back', why: 'not_replayed' }), BEFORE)).toBe("The practice systems couldn't replay the stop, so no fix could be proven.")
   })
 
   it('is the time limit when the deadline passed and nothing said why', () => {

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { unwrap } from './client'
 import { useApiClient, useCacheScope } from './context'
 import type { FixView } from './types'
@@ -6,6 +6,8 @@ import type { FixView } from './types'
 export const FIX_POLL_MS = 3000
 
 export const fixKey = (user: string, fixId: string) => ['fix', user, fixId] as const
+/** The platform's reply to the press on a run, kept until the run's own events carry the fix. */
+export const startedKey = (user: string, runId: string) => ['fix-started', user, runId] as const
 
 /** True while the platform still moves a fix on its own: it drafts, an Approver's yes is awaited, or its test run goes. */
 export function fixMoving(view: Pick<FixView, 'state'> | undefined): boolean {
@@ -36,10 +38,15 @@ function useKeepFix() {
 /** Asks for a fix on a stopped run. The platform answers at once, while the fix drafts. */
 export function useStartFix(runId: string) {
   const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
   const { keep, reread } = useKeepFix()
   return useMutation({
     mutationFn: async () => unwrap(await client.POST('/api/v1/runs/{run_id}/fixes', { params: { path: { run_id: runId } } })),
-    onSuccess: keep,
+    onSuccess: (view) => {
+      keep(view)
+      queryClient.setQueryData(startedKey(user, runId), view)
+    },
     onSettled: reread,
   })
 }
@@ -70,4 +77,10 @@ export function useAnswerFix(fixId: string) {
     onSuccess: keep,
     onSettled: reread,
   })
+}
+
+/** What the platform answered to the press on this run, until the run's own events carry the fix. Nothing before a press. */
+export function useStartedFix(runId: string): FixView | undefined {
+  const user = useCacheScope()
+  return useQuery<FixView>({ queryKey: startedKey(user, runId), queryFn: skipToken }).data
 }

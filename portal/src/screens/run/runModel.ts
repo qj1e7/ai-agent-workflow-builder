@@ -60,6 +60,9 @@ export interface Written {
   readonly url?: string | null
 }
 
+/** Why a fix was handed back, as the hand-back event's code says it. */
+export type FixHandBack = DataOf<'fix_handed_back'>['why']
+
 /** A sub-agent a fix brought in, and the event that brought it, so one that arrives live can rise in. */
 export interface BroughtIn {
   readonly agent: AgentRef
@@ -77,8 +80,8 @@ export interface FixState {
   readonly endsBy: RunTime
   /** Each round's sentence, as the platform wrote it, for the hand-back card. */
   readonly rounds: readonly string[]
-  /** The hand-back's own sentence, once an event gave it. */
-  readonly back: string | null
+  /** The hand-back's reason code, once an event gave it. */
+  readonly why: FixHandBack | null
 }
 
 /** How a fix ended by now: as an event said, or handed back once its deadline passed with no event, as the platform counts it. */
@@ -344,7 +347,7 @@ const REFUSED: ReadonlySet<DataOf<'fix_handoff'>['found']> = new Set(['not_in_ve
 type FixEvent = EventOf<'fix_started' | 'fix_handoff' | 'fix_round' | 'fix_proposed' | 'fix_handed_back' | 'fix_decided' | 'fix_tried'>
 
 function fixOf(fix: FixState | null, event: FixEvent): FixState | null {
-  if (event.kind === 'fix_started') return { id: event.data.fix_id, agents: [], ended: null, endsBy: Date.parse(event.data.ends_by) as RunTime, rounds: [], back: null }
+  if (event.kind === 'fix_started') return { id: event.data.fix_id, agents: [], ended: null, endsBy: Date.parse(event.data.ends_by) as RunTime, rounds: [], why: null }
   if (fix === null || fix.id !== event.data.fix_id) return fix
   switch (event.kind) {
     case 'fix_handoff': {
@@ -355,7 +358,7 @@ function fixOf(fix: FixState | null, event: FixEvent): FixState | null {
     case 'fix_proposed':
       return { ...fix, ended: 'proposed' }
     case 'fix_handed_back':
-      return { ...fix, ended: 'handed_back', back: event.summary }
+      return { ...fix, ended: 'handed_back', why: event.data.why }
     case 'fix_round':
       return { ...fix, rounds: [...fix.rounds, event.summary] }
     case 'fix_decided':

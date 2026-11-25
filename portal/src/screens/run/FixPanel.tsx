@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useErrorWords } from '../../api/context'
-import { useAnswerFix, useFix, useStartFix, useTurnBackOn } from '../../api/fixQueries'
+import { useAnswerFix, useFix, useStartedFix, useStartFix, useTurnBackOn } from '../../api/fixQueries'
 import { pressOnce, useLatch } from '../../api/latch'
-import type { FixQuestionView, FixView } from '../../api/types'
+import type { FixOffer, FixQuestionView, FixView } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
 import { FixCrew } from './FixCrew'
-import { askFix, fixLine, fixStageOf, HANDED_BACK_HEAD, handedBackWords, NEXT_STEP, type Ask, type FixStage } from './fixCard'
+import { askFix, fixLeads, fixLine, fixStageOf, HANDED_BACK_HEAD, handedBackWords, NEXT_STEP, OPERATOR_ANSWERS, type Ask, type FixStage } from './fixCard'
 import type { FixState } from './runModel'
 import styles from './FixPanel.module.css'
 
@@ -70,14 +70,22 @@ function TurnBackOn({ fixId }: { fixId: string }) {
   )
 }
 
-/** The one setting a hand-back asks a person for, which a fix never changes itself: a button for each choice, and a box to type in. */
-function Question({ fixId, question }: { fixId: string; question: FixQuestionView }) {
+/**
+ * The one setting a hand-back asks a person for, which a fix never changes itself: a button for each choice, and a box to type
+ * in. Only an Operator can answer, so anyone else reads the question and a note, with no live button.
+ */
+function Question({ fixId, question, operator }: { fixId: string; question: FixQuestionView; operator: boolean }) {
   const answer = useAnswerFix(fixId)
   const latch = useLatch()
   const words = useErrorWords()
   const [typing, setTyping] = useState(false)
   const [text, setText] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
+  const box = useRef<HTMLInputElement>(null)
+  // Focus goes to the box only when the person opens it, never on a later redraw.
+  useEffect(() => {
+    if (typing) box.current?.focus()
+  }, [typing])
   const send = (body: { choice: string } | { typed: string }) =>
     pressOnce(latch, (outcome) => answer.mutate({ setting: question.setting, ...body }, outcome), {
       onSuccess: () => {
@@ -98,7 +106,9 @@ function Question({ fixId, question }: { fixId: string; question: FixQuestionVie
         <b>{question.key}</b> {question.words}
       </p>
       {question.waits ? <p className={styles['hint']}>{question.waits}</p> : null}
-      {question.choices.length > 0 || question.typed !== null ? (
+      {!operator ? (
+        <p className={styles['hint']}>{OPERATOR_ANSWERS}</p>
+      ) : question.choices.length > 0 || question.typed !== null ? (
         <div className={styles['picks']}>
           {question.choices.map((choice) => (
             <Button key={choice.value} loading={answer.isPending} onClick={() => send({ choice: choice.value })}>
@@ -112,9 +122,9 @@ function Question({ fixId, question }: { fixId: string; question: FixQuestionVie
           ) : null}
         </div>
       ) : null}
-      {typing ? (
+      {operator && typing ? (
         <form className={styles['typeForm']} onSubmit={submit}>
-          <input ref={(node) => node?.focus()} type="text" autoComplete="off" className={styles['input']} aria-label={question.typed ?? 'Type it here'} placeholder="Type it here" value={text} onChange={(event) => setText(event.target.value)} />
+          <input ref={box} type="text" autoComplete="off" className={styles['input']} aria-label={question.typed ?? 'Type it here'} placeholder="Type it here" value={text} onChange={(event) => setText(event.target.value)} />
           <Button type="submit" loading={answer.isPending}>
             Set
           </Button>
@@ -129,7 +139,7 @@ function Question({ fixId, question }: { fixId: string; question: FixQuestionVie
   )
 }
 
-function HandedBack({ fix, view, now }: { fix: FixState; view: FixView | undefined; now: number }) {
+function HandedBack({ fix, view, now, operator }: { fix: FixState; view: FixView | undefined; now: number; operator: boolean }) {
   const why = handedBackWords(fix, now)
   return (
     <>
@@ -157,7 +167,7 @@ function HandedBack({ fix, view, now }: { fix: FixState; view: FixView | undefin
       </dl>
       {view ? (
         <>
-          {view.question ? <Question fixId={view.fix_id} question={view.question} /> : null}
+          {view.question ? <Question fixId={view.fix_id} question={view.question} operator={operator} /> : null}
           <p>{NEXT_STEP}</p>
           <div className={styles['buttons']}>
             <ButtonLink to={`/workflows/${encodeURIComponent(view.use_case_id)}`}>Open the workflow</ButtonLink>
@@ -168,61 +178,89 @@ function HandedBack({ fix, view, now }: { fix: FixState; view: FixView | undefin
   )
 }
 
-function Next({ stage, fix, view, operator, now }: { stage: FixStage | 'ready'; fix: FixState; view: FixView | undefined; operator: boolean; now: number }) {
+function Next({ stage, fix, view, operator, approverId, now }: { stage: FixStage; fix: FixState; view: FixView | undefined; operator: boolean; approverId: string | null; now: number }) {
   switch (stage) {
-    case 'ready':
-      return view?.approval_id ? (
+    case 'ready': {
+      if (!view?.approval_id) return null
+      const to = `/setup-approvals/${encodeURIComponent(view.approval_id)}`
+      return (
         <div className={styles['buttons']}>
-          <ButtonLink to={`/setup-approvals/${encodeURIComponent(view.approval_id)}`}>Open the approval</ButtonLink>
+          {approverId !== null && view.asked_by !== approverId ? (
+            <ButtonLink variant="primary" to={to}>
+              Review the fix
+            </ButtonLink>
+          ) : (
+            <ButtonLink to={to}>Open the approval</ButtonLink>
+          )}
         </div>
-      ) : null
+      )
+    }
     case 'approved':
       if (view === undefined || !view.can_turn_back_on) return null
       return operator ? <TurnBackOn fixId={view.fix_id} /> : <p className={styles['hint']}>{OPERATOR_TURNS_ON}</p>
     case 'handed_back':
-      return <HandedBack fix={fix} view={view} now={now} />
+      return <HandedBack fix={fix} view={view} now={now} operator={operator} />
     default:
       return null
   }
 }
 
+interface FixingProps {
+  readonly runId: string
+  readonly fix: FixState | null
+  readonly operator: boolean
+  readonly next: 'retry' | 'report' | undefined
+  /** The platform's answer to whether a fix can start on this stop. Nothing until it has said. */
+  readonly offer: FixOffer | null | undefined
+  readonly now: number
+  /** The signed-in person's id when they are an Approver, else null. */
+  readonly approverId?: string | null
+}
+
+function useFixing({ runId, fix, operator, next, offer, now, approverId = null }: FixingProps) {
+  const view = useFix(fix?.id ?? null).data
+  const started = useStartedFix(runId)
+  const stage = fixStageOf(fix, view, now)
+  // A press the platform answered, before the run's own events carry the fix: nothing more to ask.
+  const waiting = fix === null && started !== undefined && started.state !== 'handed_back'
+  const ask = waiting ? null : askFix({ operator, next, offer, stage })
+  const leads = waiting ? false : fixLeads({ ask, stage, view, operator, approverId })
+  return { view, started: waiting ? started : undefined, stage, ask, leads }
+}
+
+/** Whether the fix holds the stop's one main button, so the stop's own next step steps back to a plain one. */
+export function useFixLeads(props: FixingProps): boolean {
+  return useFixing(props).leads
+}
+
 /**
  * The run's fix under the stop, drawn from one source for each fact: the activity says which sub-agents came in and each round,
  * and the platform's own state says where the fix stands, in its own words. Past its deadline a fix reads as ended, never as
- * spinning. An Operator asks for one on a stop a retry won't fix, and everyone else reads why not.
+ * spinning. An Operator asks for one when the platform says it can start, and everyone else reads why not.
  */
-export function FixSection({
-  runId,
-  fix,
-  operator,
-  next,
-  modelOff,
-  now,
-  loadedUpTo,
-}: {
-  runId: string
-  fix: FixState | null
-  operator: boolean
-  next: 'retry' | 'report' | undefined
-  modelOff: boolean
-  now: number
-  loadedUpTo?: number
-}) {
-  const query = useFix(fix?.id ?? null)
-  const view = query.data
-  const stage = fixStageOf(fix, view, now)
-  const ask = askFix({ operator, next, stage, modelOff })
-  if (fix === null || stage === null) return ask === null ? null : (
-    <div className={styles['fix']}>
-      <Ask runId={runId} ask={ask} />
-    </div>
-  )
+export function FixSection(props: FixingProps & { loadedUpTo?: number }) {
+  const { runId, fix, operator, now, loadedUpTo, approverId = null } = props
+  const { view, started, stage, ask } = useFixing(props)
+  if (started) {
+    return (
+      <div className={styles['fix']}>
+        <p role="status">{started.said}</p>
+      </div>
+    )
+  }
+  if (fix === null || stage === null) {
+    return ask === null ? null : (
+      <div className={styles['fix']}>
+        <Ask runId={runId} ask={ask} />
+      </div>
+    )
+  }
   const ended = stage === 'handed_back'
   return (
     <div className={styles['fix']}>
       <FixCrew fix={fix} now={now} line={ended ? null : fixLine(fix, view, now)} {...(loadedUpTo === undefined ? {} : { loadedUpTo })} />
       {ended ? <p className={styles['head']}>{HANDED_BACK_HEAD}</p> : null}
-      <Next stage={stage} fix={fix} view={view} operator={operator} now={now} />
+      <Next stage={stage} fix={fix} view={view} operator={operator} approverId={approverId} now={now} />
       {ask === null ? null : <Ask runId={runId} ask={ask} />}
     </div>
   )
