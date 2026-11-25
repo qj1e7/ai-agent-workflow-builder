@@ -25,6 +25,7 @@ import { BuildPanel } from './BuildPanel'
 import { cardFrom, planView, taskWithoutSchedule } from './card'
 import { PartsList } from './PartsList'
 import { CardMemoryContext, newCardMemory, type CardKept } from './cardMemory'
+import { sayOf } from './answers'
 import { frozenParts, SetupCard, type CardStart } from './SetupCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator'] }
@@ -384,6 +385,79 @@ describe('the finder’s trouble and the agent’s own boxes on the set-up card'
     const html = render(card(reply, WORDS))
     expect(watchText(html)).toContain('Looking for the repository on GitHub…')
     expect(html).toMatch(/<input[^>]*type="text"/)
+  })
+})
+
+describe('the lead and the footer say the same count', () => {
+  const ROWS: SetupCardReply['rows'] = [
+    { kind: 'schedule', text: 'Every weekday', state: 'understood', note: null },
+    { kind: 'look_for', text: 'New releases of FastAPI', state: 'understood', note: null },
+    { kind: 'do', text: 'Tell me here', state: 'understood', note: null },
+    { kind: 'where', text: 'Here in the chat', state: 'understood', note: null },
+  ]
+  const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
+  const WORDS = 'Every weekday, check FastAPI for new releases'
+  const match = (repo: string, what: string) => ({ kind: 'github' as const, repo, what, why: 'On the reviewed list.', releases: 'published' as const, newest: '0.121.0', already_listed: null })
+  const ONE = { status: 'found' as const, matches: [match('fastapi/fastapi', 'FastAPI web framework')] }
+  const leadCount = (sentence: string | null): number => {
+    if (sentence === null || !sentence.includes('Pick')) return 0
+    return /Pick the (\d+) missing parts/.exec(sentence)?.[1] === undefined ? 1 : Number(/Pick the (\d+) missing parts/.exec(sentence)?.[1])
+  }
+  const footerCount = (html: string): number => Number(/Pick (\d+) more to finish/.exec(text(html))?.[1] ?? 0)
+
+  it('with one clear match and no time, both say 1', () => {
+    const lead = sayOf(reply, 'operator', { plan: null, matches: [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework' }] })
+    const html = render(card(reply, WORDS), { found: { name: 'FastAPI', answer: ONE } })
+    expect(footerCount(html)).toBe(1)
+    expect(leadCount(lead)).toBe(footerCount(html))
+  })
+
+  it('with nothing found yet, both say 2', () => {
+    const lead = sayOf(reply, 'operator')
+    const html = render(card(reply, WORDS))
+    expect(footerCount(html)).toBe(2)
+    expect(leadCount(lead)).toBe(footerCount(html))
+  })
+})
+
+describe('a choice shows in its row whatever state the row was in', () => {
+  const answer = (inputs: readonly { name: string; kind: string; what: string }[], tools: readonly string[]) =>
+    ({
+      decision: 'use_one',
+      agents: [{ card: { card_id: 'crd_x', name: 'Checker', inputs: inputs.map((one) => ({ ...one, example: '' })), blocks: tools.map((tool) => ({ say: 'Do it.', tool })) }, values: {}, part: '', missing: [] }],
+      reason: '',
+      questions: [],
+    }) as unknown as PlanOut
+  const partText = (html: string, key: string) => text((html.split(`data-part="${key}"`)[1] ?? '').split('data-part=')[0]?.replace(/^[^>]*>/, '').replace(/<[^>]*$/, '') ?? '')
+
+  it('shows a project picked while the Where part already said “In Jira”, with Change', () => {
+    const rows: SetupCardReply['rows'] = [
+      { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+      { kind: 'look_for', text: 'New releases of langchain-ai/langgraph', state: 'understood', note: null },
+      { kind: 'do', text: 'Create a Jira ticket', state: 'understood', note: null },
+      { kind: 'where', text: 'In Jira', state: 'understood', note: null },
+    ]
+    const form = cardFrom('Release check', rows, 'x', [])
+    const start: CardStart = { form: { ...form, typed: { jira_project: 'MOCK' } }, plan: { task: taskWithoutSchedule(form.rows), answer: answer([{ name: 'Jira project', kind: 'jira_project', what: 'The project.' }], ['jira.create_ticket']) }, draftId: null, similar: null }
+    const html = render(<SetupCard start={start} />, { projects: ['MOCK'] })
+    expect(partText(html, 'Then')).toContain('Create 1 Jira ticket in MOCK')
+    expect(buttons(html)).toContain('Change the Jira project')
+    expect(html.match(/data-mark="ask"/g)).toBeNull()
+  })
+
+  it('shows a repository picked when the words name no software, with Change', () => {
+    const rows: SetupCardReply['rows'] = [
+      { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+      { kind: 'look_for', text: 'New releases', state: 'understood', note: null },
+      { kind: 'do', text: 'Tell me here', state: 'understood', note: null },
+      { kind: 'where', text: 'Here in the chat', state: 'understood', note: null },
+    ]
+    const form = cardFrom('Release check', rows, 'x', [])
+    const start: CardStart = { form: { ...form, typed: { github_repo: 'langchain-ai/langgraph' } }, plan: { task: taskWithoutSchedule(form.rows), answer: answer([{ name: 'GitHub repository', kind: 'github_repo', what: 'The repository.' }], ['github.read_releases']) }, draftId: null, similar: null }
+    const html = render(<SetupCard start={start} />)
+    expect(partText(html, 'Watch')).toContain('langchain-ai/langgraph')
+    expect(buttons(html)).toContain('Change the repository')
+    expect(html.match(/data-mark="ask"/g)).toBeNull()
   })
 })
 

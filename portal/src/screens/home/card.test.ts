@@ -27,6 +27,7 @@ import {
   chooseRepo,
   effectiveRepo,
   REPO_CHOICE,
+  openPartsFor,
   REPO_FOUND,
   JIRA_CHOICE,
   hasTicketWrite,
@@ -936,6 +937,27 @@ describe('the Planner’s set-up card', () => {
       const reopened = restoreDraft({ draft_id: 'd1', step: 2, content: saved, created_at: '2026-11-03T07:00:00Z', saved_at: '2026-11-03T07:00:00Z' })
       expect(reopened.form.rows.find((row) => row.kind === 'where')).toMatchObject({ text: 'In the MOCK project', state: 'edited' })
       expect(reopened.form.rows.some((row) => row.state === 'checking')).toBe(false)
+    })
+  })
+
+  describe('what the Watch words may name as a repository, and one count for the lead and the footer', () => {
+    const missing = (kind: RowKind, text = '') => ({ kind, text, state: (text === '' ? 'missing' : 'understood') as RowState, note: null })
+    const rows = (look: string, when = 'Every weekday at 9am') => cardFrom('x', [missing('schedule', when), missing('look_for', look), missing('do', 'Tell me here'), missing('where', 'Here in the chat')], '')
+    const ONE = [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework' }]
+
+    it('reads owner/name only as the release target, a GitHub address or the whole phrase, never any a/b in the words', () => {
+      expect(effectiveRepo(rows('Tickets opened/closed this week'))).toBeNull()
+      expect(softwareOf(rows('Tickets opened/closed this week'))).toBeNull()
+      expect(effectiveRepo(rows('New releases of tiangolo/fastapi on GitHub'))).toBe('tiangolo/fastapi')
+      expect(effectiveRepo(rows('github.com/django/django'))).toBe('django/django')
+      expect(effectiveRepo(rows('django/django'))).toBe('django/django')
+    })
+
+    it('counts the same for the lead and the footer: one function of the form, the plan and the finder’s answer', () => {
+      const noTime = rows('New releases of FastAPI', 'Every weekday')
+      expect(openPartsFor(noTime, null, [])).toBe(2)
+      expect(openPartsFor(noTime, null, ONE), 'one clear match fills the repository').toBe(1)
+      expect(openParts(noTime), 'the form alone is the same function with nothing from the finder').toBe(openPartsFor(noTime, null, []))
     })
   })
 
