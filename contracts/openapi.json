@@ -16957,6 +16957,14 @@
       "ToolList": {
         "additionalProperties": false,
         "properties": {
+          "jira_projects": {
+            "description": "The Jira projects the platform may write in, as the Planner reads them, sorted. The set-up card shows them as buttons for \"Which Jira project should the ticket go in?\". Empty when the platform names none.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Jira Projects",
+            "type": "array"
+          },
           "tools": {
             "items": {
               "$ref": "#/components/schemas/ToolView"
@@ -16966,7 +16974,8 @@
           }
         },
         "required": [
-          "tools"
+          "tools",
+          "jira_projects"
         ],
         "title": "ToolList",
         "type": "object"

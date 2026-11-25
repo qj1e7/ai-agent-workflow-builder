@@ -195,6 +195,12 @@ test.describe('with the AI model on', () => {
 
   /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard, and a project the Planner already filled in is left as it is. */
   async function fillTheRest(page: Page, project: string): Promise<void> {
+    const asked = card(page).last().getByRole('group', { name: 'Create 1 Jira ticket in which project?' })
+    if (await asked.count()) {
+      // One click answers it. The platform's projects are the buttons, and MOCK is the one on the local stack.
+      await asked.getByRole('button', { name: project, exact: true }).click()
+      return
+    }
     const field = card(page).last().getByLabel(/^Jira project/)
     if ((await field.count()) && (await field.inputValue()) === '') {
       await field.focus()
@@ -277,18 +283,19 @@ test.describe('with the AI model on', () => {
       await expect(card(page), 'the Planner answers with a set-up card').toBeVisible()
       const parts = card(page).getByRole('list', { name: 'Each part of your request' })
       await expect(parts.locator('[data-part]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-part')))).resolves.toEqual(['Watch', 'When', 'Then'])
-      await expect(parts.locator('[data-part="Then"]'), 'what it writes waits for a yes, and says so').toContainText('After a yes')
+      await expect(parts.locator('[data-part="Then"]'), 'what it writes needs approval, and says so').toContainText('Each ticket needs an Approver’s approval in Teams.')
       await expect(pillOf(page)).toHaveText('Draft')
-      await expect(parts.locator('[data-mark="ask"]'), 'one question at a time').toHaveCount(1)
-      await expect(parts.locator('[data-part="When"]'), 'a time is never guessed: it asks how often first').toContainText('How often?')
+      await expect(parts.locator('[data-mark="ask"]'), 'only the When part is open').toHaveCount(1)
+      await expect(parts.locator('[data-part="When"]'), 'a time is never guessed: it asks how often, and the time beside it').toContainText('How often?')
+      await expect(parts.locator('[data-part="When"]')).toContainText('At what time?')
       await expect(setUp(page), 'no dead Turn on while a question is open').toHaveCount(0)
-      await expect(left(page)).toContainText(/Answer \d questions? first/)
+      await expect(left(page)).toContainText(/Pick \d more to finish/)
       await shot(page, info, `n11-card-${phone ? '390' : '1440'}`)
 
       await card(page).getByRole('button', { name: 'Every week', exact: true }).click()
       await expect(parts.locator('[data-part="When"]')).toContainText('Which day?')
       await card(page).getByRole('button', { name: 'Friday', exact: true }).click()
-      await expect(parts.locator('[data-part="When"]')).toContainText('Fridays, at what time?')
+      await expect(parts.locator('[data-part="When"]')).toContainText('At what time?')
       await card(page).getByRole('button', { name: '17:00', exact: true }).click()
       await expect(parts.locator('[data-part="When"]')).toContainText('Every Friday at 17:00, Singapore time')
       await expect(parts.locator('[data-part="When"]')).toHaveAttribute('data-mark', 'ok')
@@ -511,14 +518,14 @@ test.describe('with the AI model on', () => {
     await expect(whenPart(page)).toContainText('Which day?')
     await expect(newestCard(page).getByRole('button', { name: 'Monday', exact: true }), 'focus moves to the next question').toBeFocused()
     await newestCard(page).getByRole('button', { name: 'Friday', exact: true }).click()
-    await expect(whenPart(page)).toContainText('Fridays, at what time?')
+    await expect(whenPart(page)).toContainText('At what time?')
     await shot(page, info, 'r5-question')
     await newestCard(page).getByRole('button', { name: '9:00', exact: true }).click()
     await expect(whenPart(page)).toContainText('Every Friday at 9:00, Singapore time')
 
     await ask(page, `Every Friday at 9, ${STALE}`)
     await expect(whenPart(page), 'a bare hour asks morning or evening').toContainText('At 9:00 or 21:00?')
-    await expect(left(page).last()).toContainText(/Answer \d questions? first/)
+    await expect(left(page).last()).toContainText(/Pick \d more to finish/)
     assertClean(watch)
     await context.close()
     await forgetNewDrafts(backend, before)

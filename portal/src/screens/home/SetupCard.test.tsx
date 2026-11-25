@@ -11,12 +11,13 @@ import success from '../../../../contracts/fixtures/runs/success.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import setupCross from '../../../../contracts/fixtures/planner/answer.setup_card.cross.json'
 import simulated from '../../../../contracts/fixtures/builder/drafted.simulated.json'
+import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
 import planUseOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
-import type { DraftedWorkflowView, Me, PlanOut, RunView, SetupCardReply, SimulationView, UseCaseCreated, UseCaseSimulationView, UseCaseView, WatchlistView } from '../../api/types'
+import type { FindOut, DraftedWorkflowView, Me, PlanOut, RunView, SetupCardReply, SimulationView, UseCaseCreated, UseCaseSimulationView, UseCaseView, WatchlistView } from '../../api/types'
 import type { Made, SetUp } from '../../api/workflowQueries'
 import { emptyModel, foldWire, type RunModel } from '../run/runModel'
 import { BuildingCard, type CardProps } from './Building'
@@ -24,7 +25,8 @@ import { BuildPanel } from './BuildPanel'
 import { cardFrom, planView, taskWithoutSchedule } from './card'
 import { PartsList } from './PartsList'
 import { CardMemoryContext, newCardMemory, type CardKept } from './cardMemory'
-import { frozenParts, SetupCard } from './SetupCard'
+import { sayOf } from './answers'
+import { frozenParts, SetupCard, type CardStart } from './SetupCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator'] }
 const CREATED = created as UseCaseCreated
@@ -48,18 +50,29 @@ interface World {
   readonly kept?: CardKept
   /** The workflow's version tried on practice systems, as GET /api/v1/use-cases/{id}/simulation answers it. */
   readonly simulation?: UseCaseSimulationView
+  /** The Jira projects the platform may use, as GET /api/v1/tools lists them. */
+  readonly projects?: readonly string[]
+  /** What the software finder answered for a name, as POST /api/v1/watchlist/find gives it. */
+  readonly found?: { readonly name: string; readonly answer: FindOut }
+  /** The finder's call failed, as the platform or the network answered it. */
+  readonly findFailed?: { readonly name: string; readonly error: Error }
+  /** Who is signed in. Alice, an Operator, unless a test says otherwise. */
+  readonly who?: Me
 }
 
 const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, simulation }: World = {}): string {
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, simulation, projects, found, findFailed, who = ALICE }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
-  queryClient.setQueryData(['me', scope], ALICE)
+  queryClient.setQueryData(['me', scope], who)
   if (run) queryClient.setQueryData(keys.run(scope, run.run_id), run)
   if (unread) queryClient.getQueryCache().build(queryClient, { queryKey: keys.useCase(scope, useCase.use_case_id) }).setState({ status: 'error', error: new Error('no answer'), fetchStatus: 'idle' })
   else queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
   if (setUp) queryClient.setQueryData(keys.setUp(scope, CREATED.use_case_id), setUp)
   if (watched) queryClient.setQueryData(keys.watchlist(scope), watched)
+  if (projects) queryClient.setQueryData(keys.tools(), { tools: [], jira_projects: projects })
+  if (found) queryClient.setQueryData(keys.softwareFind(scope, found.name), found.answer)
+  if (findFailed) queryClient.getQueryCache().build(queryClient, { queryKey: keys.softwareFind(scope, findFailed.name) }).setState({ status: 'error', error: findFailed.error, fetchStatus: 'idle' })
   if (made) queryClient.setQueryData(keys.made(scope, made.key), made.made)
   if (simulation) queryClient.setQueryData(keys.useCaseSimulation(scope, simulation.use_case_id), simulation)
   const memory = newCardMemory()
@@ -105,11 +118,11 @@ function building(test: RunModel | null, world: World = {}, more: Partial<CardPr
 }
 
 describe('the set-up card before Set up', () => {
-  it('is a Draft that asks one question at a time and says Answer 1 question first in place of the main button', () => {
+  it('is a Draft that asks every open question in its own row and says Pick 1 more to finish in place of the main button', () => {
     const html = render(card(SETUP))
     expect(pill(html)).toBe('Draft')
     expect(html.match(/data-mark="ask"/g)).toHaveLength(1)
-    expect(text(html)).toContain('Answer 1 question first')
+    expect(text(html)).toContain('Pick 1 more to finish')
     expect(buttons(html)).not.toContain('Turn on')
     expect(buttons(html).slice(-1)).toEqual(['Never mind'])
     expect(html, 'no button is shown dead').not.toMatch(/<button[^>]*disabled/)
@@ -145,7 +158,7 @@ describe('the set-up card before Set up', () => {
     const refused = render(card(SETUP), { kept: { form, draft: null, phase: { kind: 'creating', key: 'press_2' } }, made: { key: 'press_2', made: { kind: 'refused', said: ['Give the workflow a name.'] } } })
     expect(pill(refused)).toBe('Draft')
     expect(text(refused)).toContain('Give the workflow a name.')
-    expect(text(refused)).toMatch(/Answer \d questions? first/)
+    expect(text(refused)).toMatch(/Pick \d more to finish/)
   })
 
   it('keeps their own words quoted for a clause it didn’t follow, as the sketch does', () => {
@@ -157,6 +170,303 @@ describe('the set-up card before Set up', () => {
     const html = render(card(setupCard as SetupCardReply), { useCase: { ...ON, use_case_id: 'uc_01JB8', name: 'Weekly summary of closed tickets', schedule: { ...DRAFT.schedule!, day: 'friday', at: '17:00' } } })
     expect(text(html)).toContain('It already watches langchain-ai/langgraph, every Friday at 17:00.')
     expect(buttons(html)).toEqual(['Set up another', 'Open it'])
+  })
+})
+
+describe('the Jira step of the set-up card', () => {
+  const TICKET = 'Check LangGraph on GitHub for new releases every weekday at 9am, and create a Jira ticket when there’s a new one.'
+  const ROWS: SetupCardReply['rows'] = [
+    { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+    { kind: 'look_for', text: 'New releases of langchain-ai/langgraph', state: 'understood', note: null },
+    { kind: 'do', text: 'Create a Jira ticket for each new one', state: 'understood', note: null },
+    { kind: 'where', text: '', state: 'missing', note: null },
+  ]
+  const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
+  const TICKET_PLAN = {
+    decision: 'use_one',
+    agents: [
+      {
+        card: {
+          card_id: 'crd_tickets',
+          name: 'Ticket maker',
+          inputs: [{ name: 'Jira project', kind: 'jira_project', what: 'The Jira project that gets the ticket.', example: 'MOCK' }],
+          blocks: [{ say: 'Create a ticket.', tool: 'jira.create_ticket' }],
+        },
+        values: {},
+        part: '',
+        missing: [],
+      },
+    ],
+    reason: '',
+    questions: [],
+  } as unknown as PlanOut
+  /** The card once the Planner's plan has loaded, which is what says a ticket is written. */
+  const planned = (r: SetupCardReply, typed: string) => {
+    const form = cardFrom(r.name, r.rows, typed, r.parts)
+    return <SetupCard start={{ form, plan: { task: taskWithoutSchedule(form.rows), answer: TICKET_PLAN }, draftId: null, similar: null }} />
+  }
+  const partText = (html: string, key: string) =>
+    text(
+      (html.split(`data-part="${key}"`)[1] ?? '')
+        .split('data-part=')[0]
+        ?.replace(/^[^>]*>/, '')
+        .replace(/<[^>]*$/, '') ?? '',
+    )
+
+  it('asks which project in the Then row, with the platform’s projects as buttons and a link to type another', () => {
+    const html = render(planned(reply, TICKET), { projects: ['MOCK'] })
+    const then = partText(html, 'Then')
+    expect(then).toContain('Create 1 Jira ticket in which project?')
+    expect(buttons(html)).toEqual(expect.arrayContaining(['MOCK', 'Another project']))
+    expect(html.match(/data-mark="ask"/g), 'the Then row is the one open part').toHaveLength(1)
+    expect(then, 'no empty chip for where it goes').not.toContain('where it goes')
+    expect(then).not.toContain('Where should the result go?')
+    expect(html, 'no free-text box until Another project').not.toMatch(/<input[^>]*type="text"/)
+    expect(text(html)).toContain('Pick 1 more to finish')
+  })
+
+  it('waits for the plan before it asks where the result goes: no empty chip and no question yet', () => {
+    const html = render(card(reply, TICKET), { projects: ['MOCK'] })
+    expect(partText(html, 'Then')).not.toContain('where it goes')
+    expect(partText(html, 'Then')).not.toContain('Where should the result go?')
+    expect(partText(html, 'Then')).not.toContain('in which project?')
+  })
+
+  it('says each ticket needs an Approver’s approval in Teams under the project question, in place of the old line', () => {
+    const html = render(planned(reply, TICKET), { projects: ['MOCK'] })
+    expect(text(html)).not.toContain('After a yes')
+    expect(partText(html, 'Then')).toContain('Each ticket needs an Approver’s approval in Teams.')
+  })
+
+  it('keeps the same sentence once Set up is pressed', () => {
+    const form = cardFrom(reply.name, ROWS, TICKET, [])
+    const words = text(renderToStaticMarkup(<PartsList parts={frozenParts(form, null, null, null)} />))
+    expect(words).toContain('Each ticket needs an Approver’s approval in Teams.')
+    expect(words).not.toContain('After a yes')
+  })
+
+  it('asks every open part at once from the start: How often?, At what time? and the project, each with its buttons, and counts them', () => {
+    const open: SetupCardReply = { ...reply, rows: ROWS.map((row) => (row.kind === 'schedule' ? { ...row, text: '', state: 'missing' as const } : row)) }
+    const html = render(planned(open, 'Check LangGraph and create a Jira ticket'), { projects: ['MOCK'] })
+    expect(html.match(/data-mark="ask"/g), 'When and Then are both open').toHaveLength(2)
+    const when = partText(html, 'When')
+    expect(when).toContain('How often?')
+    expect(when).toContain('At what time?')
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Every day', 'Every weekday', 'Every week', 'Only when I run it', '8:00', '9:00', '13:00', '17:00', 'Another time', 'MOCK', 'Another project']))
+    expect(text(html)).toContain('Pick 2 more to finish')
+    expect(buttons(html), 'Turn on waits until nothing is left').not.toContain('Turn on')
+  })
+
+  it('shows no dead button, and the project buttons are a group named by the question', () => {
+    const html = render(planned(reply, TICKET), { projects: ['MOCK'] })
+    expect(html).not.toMatch(/<button[^>]*disabled/)
+    expect(html).toMatch(/role="group" aria-labelledby="[^"]+"/)
+  })
+
+  it('opens the key box at once when the platform lists no project', () => {
+    const html = render(planned(reply, TICKET), { projects: [] })
+    expect(html).toMatch(/<input[^>]*type="text"/)
+    expect(buttons(html)).not.toContain('Another project')
+  })
+})
+
+describe('the repository row of the set-up card', () => {
+  const ROWS: SetupCardReply['rows'] = [
+    { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+    { kind: 'look_for', text: 'New releases of FastAPI', state: 'understood', note: null },
+    { kind: 'do', text: 'Tell me here', state: 'understood', note: null },
+    { kind: 'where', text: 'Here in the chat', state: 'understood', note: null },
+  ]
+  const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
+  const TYPED_WORDS = 'Every weekday at 9am, check FastAPI for new releases'
+  const match = (repo: string, what: string) => ({ kind: 'github' as const, repo, what, why: 'On the reviewed list.', releases: 'published' as const, newest: '0.121.0', already_listed: null, found_by: 'reviewed_list' as const, stars: null })
+  const partText = (html: string) => text((html.split('data-part="Watch"')[1] ?? '').split('data-part=')[0]?.replace(/^[^>]*>/, '').replace(/<[^>]*$/, '') ?? '')
+
+  it('fills the repository with the one clear match, with a tick, Change and where it was found', () => {
+    const html = render(card(reply, TYPED_WORDS), { found: { name: 'FastAPI', answer: { status: 'found', matches: [match('fastapi/fastapi', 'FastAPI web framework')] } } })
+    const watch = partText(html)
+    expect(watch).toContain('fastapi/fastapi')
+    expect(watch).toContain('Found on GitHub')
+    expect(buttons(html)).toContain('Change the repository')
+    expect(html.match(/data-mark="ask"/g)).toBeNull()
+  })
+
+  it('shows several matches as buttons with what each is, and Another repository', () => {
+    const html = render(card(reply, TYPED_WORDS), { found: { name: 'FastAPI', answer: { status: 'found', matches: [match('fastapi/fastapi', 'FastAPI web framework'), match('tiangolo/fastapi', 'An older address')] } } })
+    expect(partText(html)).toContain('Which repository should I watch?')
+    expect(buttons(html)).toEqual(expect.arrayContaining(['fastapi/fastapi FastAPI web framework', 'tiangolo/fastapi An older address', 'Another repository']))
+    expect(text(html)).toContain('Pick 1 more to finish')
+  })
+
+  it('never fills the row from one match found by searching GitHub: it is a button with its stars, marked as found by searching', () => {
+    const searched = { ...match('someone/fastapi-fork', 'A fork'), found_by: 'github_search' as const, stars: 1234 }
+    const html = render(card(reply, TYPED_WORDS), { found: { name: 'FastAPI', answer: { status: 'found', matches: [searched] } } })
+    expect(partText(html)).toContain('Which repository should I watch?')
+    expect(buttons(html).some((one) => one.includes('someone/fastapi-fork') && one.includes('1,234 stars') && one.includes('found by searching GitHub'))).toBe(true)
+    expect(partText(html)).not.toContain('Found on GitHub')
+    expect(text(html)).toContain('Pick 1 more to finish')
+  })
+
+  it('shows only Another repository, with its hint, when the finder knows none', () => {
+    const html = render(card(reply, TYPED_WORDS), { found: { name: 'FastAPI', answer: { status: 'not_known', message: 'I don’t know it.' } } })
+    expect(partText(html)).toContain('The public repository to watch, as owner/name.')
+    expect(html).toMatch(/<input[^>]*type="text"/)
+    expect(buttons(html)).not.toContain('Another repository')
+  })
+
+  it('says it is looking while the finder works, and counts the row as open', () => {
+    const html = render(card(reply, TYPED_WORDS))
+    expect(partText(html)).toContain('Looking for the repository')
+    expect(text(html)).toContain('Pick 1 more to finish')
+  })
+})
+
+describe('the finder’s trouble and the agent’s own boxes on the set-up card', () => {
+  const ROWS: SetupCardReply['rows'] = [
+    { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+    { kind: 'look_for', text: 'New releases of FastAPI', state: 'understood', note: null },
+    { kind: 'do', text: 'Create a Jira ticket for each new one', state: 'understood', note: null },
+    { kind: 'where', text: 'In the MOCK project', state: 'understood', note: null },
+  ]
+  const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
+  const WORDS = 'Every weekday at 9am, check FastAPI for new releases and create a Jira ticket in MOCK'
+  const watchText = (html: string) => text((html.split('data-part="Watch"')[1] ?? '').split('data-part=')[0]?.replace(/^[^>]*>/, '').replace(/<[^>]*$/, '') ?? '')
+  const withPlan = (): CardStart => {
+    const form = cardFrom(reply.name, ROWS, WORDS, [])
+    const answer = {
+      decision: 'use_one',
+      agents: [
+        {
+          card: {
+            card_id: 'crd_checker',
+            name: 'Release checker',
+            inputs: [
+              { name: 'GitHub repository', kind: 'github_repo', what: 'The repository to read.', example: 'langchain-ai/langgraph' },
+              { name: 'Jira project', kind: 'jira_project', what: 'The Jira project that gets the ticket.', example: 'MOCK' },
+            ],
+            blocks: [{ say: 'Read the releases.', tool: 'github.read_releases' }, { say: 'Create a ticket.', tool: 'jira.create_ticket' }],
+          },
+          values: { 'GitHub repository': 'fastapi/fastapi', 'Jira project': 'MOCK' },
+          part: '',
+          missing: [],
+        },
+      ],
+      reason: '',
+      questions: [],
+    } as unknown as PlanOut
+    return { form: { ...form, typed: { github_repo: 'fastapi/fastapi', github_repo_found: '1' } }, plan: { task: taskWithoutSchedule(form.rows), answer }, draftId: null, similar: null }
+  }
+
+  it('draws no text box for the agent’s Jira project or GitHub repository once the plan is loaded', () => {
+    const html = render(<SetupCard start={withPlan()} />, { projects: ['MOCK'] })
+    expect(html).not.toMatch(/<input[^>]*type="text"/)
+    expect(text(html)).not.toContain('The Jira project that gets the ticket.')
+    expect(text(html)).not.toContain('The repository to read.')
+    expect(watchText(html)).toContain('fastapi/fastapi')
+  })
+
+  it('says GitHub did not check, in the finder’s own message, with Another repository', () => {
+    const html = render(card(reply, WORDS), { found: { name: 'FastAPI', answer: { status: 'not_checked', message: 'GitHub did not answer.' } } })
+    expect(watchText(html)).toContain('GitHub did not answer.')
+    expect(watchText(html)).not.toContain('The public repository to watch')
+    expect(html).toMatch(/<input[^>]*type="text"/)
+  })
+
+  it('says it is only for an Operator when the platform refuses (403), and still lets the key be typed', () => {
+    const html = render(card(reply, WORDS), { findFailed: { name: 'FastAPI', error: new ApiError(403, { detail: 'Operators only' }) } })
+    expect(watchText(html)).toContain('Only an Operator can look a repository up.')
+    expect(html).toMatch(/<input[^>]*type="text"/)
+  })
+
+  it('says GitHub could not be reached when the network fails, never “no match”', () => {
+    const html = render(card(reply, WORDS), { findFailed: { name: 'FastAPI', error: new TypeError('Failed to fetch') } })
+    expect(watchText(html)).toContain('I couldn’t reach GitHub just now.')
+    expect(watchText(html)).not.toContain('I don’t know it')
+  })
+
+  it('does not ask the finder, and says why, for someone who is not an Operator', () => {
+    const html = render(card(reply, WORDS), { who: { id: 'bob', display: 'Bob', roles: ['approver'] } })
+    expect(watchText(html)).toContain('Only an Operator can look a repository up.')
+    expect(watchText(html)).not.toContain('Looking for the repository')
+  })
+
+  it('offers Another repository at once while it looks, so nobody waits on the finder', () => {
+    const html = render(card(reply, WORDS))
+    expect(watchText(html)).toContain('Looking for the repository on GitHub…')
+    expect(html).toMatch(/<input[^>]*type="text"/)
+  })
+})
+
+describe('the lead and the footer say the same count', () => {
+  const ROWS: SetupCardReply['rows'] = [
+    { kind: 'schedule', text: 'Every weekday', state: 'understood', note: null },
+    { kind: 'look_for', text: 'New releases of FastAPI', state: 'understood', note: null },
+    { kind: 'do', text: 'Tell me here', state: 'understood', note: null },
+    { kind: 'where', text: 'Here in the chat', state: 'understood', note: null },
+  ]
+  const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
+  const WORDS = 'Every weekday, check FastAPI for new releases'
+  const match = (repo: string, what: string) => ({ kind: 'github' as const, repo, what, why: 'On the reviewed list.', releases: 'published' as const, newest: '0.121.0', already_listed: null, found_by: 'reviewed_list' as const, stars: null })
+  const ONE = { status: 'found' as const, matches: [match('fastapi/fastapi', 'FastAPI web framework')] }
+  const leadCount = (sentence: string | null): number => {
+    if (sentence === null || !sentence.includes('Pick')) return 0
+    return /Pick the (\d+) missing parts/.exec(sentence)?.[1] === undefined ? 1 : Number(/Pick the (\d+) missing parts/.exec(sentence)?.[1])
+  }
+  const footerCount = (html: string): number => Number(/Pick (\d+) more to finish/.exec(text(html))?.[1] ?? 0)
+
+  it('with one clear match and no time, both say 1', () => {
+    const lead = sayOf(reply, 'operator', { plan: null, matches: [{ repo: 'fastapi/fastapi', what: 'FastAPI web framework', searched: false, stars: null }] })
+    const html = render(card(reply, WORDS), { found: { name: 'FastAPI', answer: ONE } })
+    expect(footerCount(html)).toBe(1)
+    expect(leadCount(lead)).toBe(footerCount(html))
+  })
+
+  it('with nothing found yet, both say 2', () => {
+    const lead = sayOf(reply, 'operator')
+    const html = render(card(reply, WORDS))
+    expect(footerCount(html)).toBe(2)
+    expect(leadCount(lead)).toBe(footerCount(html))
+  })
+})
+
+describe('a choice shows in its row whatever state the row was in', () => {
+  const answer = (inputs: readonly { name: string; kind: string; what: string }[], tools: readonly string[]) =>
+    ({
+      decision: 'use_one',
+      agents: [{ card: { card_id: 'crd_x', name: 'Checker', inputs: inputs.map((one) => ({ ...one, example: '' })), blocks: tools.map((tool) => ({ say: 'Do it.', tool })) }, values: {}, part: '', missing: [] }],
+      reason: '',
+      questions: [],
+    }) as unknown as PlanOut
+  const partText = (html: string, key: string) => text((html.split(`data-part="${key}"`)[1] ?? '').split('data-part=')[0]?.replace(/^[^>]*>/, '').replace(/<[^>]*$/, '') ?? '')
+
+  it('shows a project picked while the Where part already said “In Jira”, with Change', () => {
+    const rows: SetupCardReply['rows'] = [
+      { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+      { kind: 'look_for', text: 'New releases of langchain-ai/langgraph', state: 'understood', note: null },
+      { kind: 'do', text: 'Create a Jira ticket', state: 'understood', note: null },
+      { kind: 'where', text: 'In Jira', state: 'understood', note: null },
+    ]
+    const form = cardFrom('Release check', rows, 'x', [])
+    const start: CardStart = { form: { ...form, typed: { jira_project: 'MOCK' } }, plan: { task: taskWithoutSchedule(form.rows), answer: answer([{ name: 'Jira project', kind: 'jira_project', what: 'The project.' }], ['jira.create_ticket']) }, draftId: null, similar: null }
+    const html = render(<SetupCard start={start} />, { projects: ['MOCK'] })
+    expect(partText(html, 'Then')).toContain('Create 1 Jira ticket in MOCK')
+    expect(buttons(html)).toContain('Change the Jira project')
+    expect(html.match(/data-mark="ask"/g)).toBeNull()
+  })
+
+  it('shows a repository picked when the words name no software, with Change', () => {
+    const rows: SetupCardReply['rows'] = [
+      { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+      { kind: 'look_for', text: 'New releases', state: 'understood', note: null },
+      { kind: 'do', text: 'Tell me here', state: 'understood', note: null },
+      { kind: 'where', text: 'Here in the chat', state: 'understood', note: null },
+    ]
+    const form = cardFrom('Release check', rows, 'x', [])
+    const start: CardStart = { form: { ...form, typed: { github_repo: 'langchain-ai/langgraph' } }, plan: { task: taskWithoutSchedule(form.rows), answer: answer([{ name: 'GitHub repository', kind: 'github_repo', what: 'The repository.' }], ['github.read_releases']) }, draftId: null, similar: null }
+    const html = render(<SetupCard start={start} />)
+    expect(partText(html, 'Watch')).toContain('langchain-ai/langgraph')
+    expect(buttons(html)).toContain('Change the repository')
+    expect(html.match(/data-mark="ask"/g)).toBeNull()
   })
 })
 
@@ -219,7 +529,7 @@ describe('the set-up card after Set up', () => {
     const html = building(null)
     expect(pill(html)).toBe('Building')
     expect(html).not.toContain('data-off')
-    expect(text(html)).toContain('Added a yes before the ticket.')
+    expect(text(html)).toContain('I added an approval step. Before each ticket is made, an Approver must approve it in Teams.')
     expect(text(html)).toContain('Saved as a draft in n8n.')
     expect(text(html)).not.toContain('Test run…')
     expect(html, 'the yes the safety checker added is ringed').toContain('data-added="true"')
@@ -335,7 +645,7 @@ describe('Building in n8n', () => {
     expect(text(html)).toContain('Saved as a draft in n8n.')
     expect(html).toContain('<svg')
     expect(text(html)).toContain('The blocks fit together.')
-    expect(text(html)).toContain('Every write waits for a yes.')
+    expect(text(html)).toContain('Every write waits for approval.')
     expect(text(html)).toContain('The builder saves a draft. It can’t publish by itself.')
     expect(text(html)).not.toContain('Only our blocks')
   })

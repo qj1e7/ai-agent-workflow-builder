@@ -121,7 +121,7 @@ describe('the build panel’s status line and checks', () => {
     expect(checksOf(LOG.slice(0, 2), null)).toEqual([{ ok: true, text: 'The blocks fit together.' }])
     expect(checksOf(LOG, testStatus(PASSED))).toEqual([
       { ok: true, text: 'The blocks fit together.' },
-      { ok: true, text: 'Every write waits for a yes.' },
+      { ok: true, text: 'Every write waits for approval.' },
       { ok: true, text: 'Test run passed up to the yes. Nothing was written.' },
     ])
     expect(testStatus(STOPPED, "GitHub didn't answer.")).toEqual({ ok: false, text: "The test run stopped. GitHub didn't answer." })
@@ -132,7 +132,7 @@ describe('the build panel’s status line and checks', () => {
 
   it('gives the card the safety checker’s note once its line has shown', () => {
     expect(notesOf(LOG.slice(0, 3))).toEqual([])
-    expect(notesOf(LOG)).toEqual(['Added a yes before the ticket.'])
+    expect(notesOf(LOG)).toEqual(['I added an approval step. Before each ticket is made, an Approver must approve it in Teams.'])
   })
 })
 

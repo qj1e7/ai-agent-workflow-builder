@@ -142,7 +142,11 @@ def test_the_build_log_reads_as_the_sketch_s_set_up_card() -> None:
     assert checked.lines == (
         ("check", FIT),
         ("status", CHECKING),
-        ("note", "Added a yes before the ticket."),
+        (
+            "note",
+            "I added an approval step. Before each ticket is made, "
+            "an Approver must approve it in Teams.",
+        ),
         ("check", EVERY_WRITE),
     )
 

@@ -22,12 +22,12 @@
     {
       "at": "2026-11-02T01:00:00.040000Z",
       "kind": "note",
-      "text": "Added a yes before the ticket."
+      "text": "I added an approval step. Before each ticket is made, an Approver must approve it in Teams."
     },
     {
       "at": "2026-11-02T01:00:00.040000Z",
       "kind": "check",
-      "text": "Every write waits for a yes."
+      "text": "Every write waits for approval."
     },
     {
       "at": "2026-11-02T01:00:00.820000Z",
