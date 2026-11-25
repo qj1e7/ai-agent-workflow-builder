@@ -21,7 +21,12 @@ The fake simulation tries the stopped version as code asks before a draft's firs
 each scenario fails where the run stopped, unless the case says otherwise (`baseline`), so code's
 replay of the stop shows the stop. What each run reached comes from the case too (`reached`,
 `baseline_reached` and `named`). The Job isn't in the runner's list yet: PR 8 adds it, with a real
-coordinator, once the team lead sets a budget."""
+coordinator, once the team lead sets a budget.
+
+The `refine` set plays the same fakes for a refinement of a drafted workflow's Check (ADR 0054,
+section 7): a case names the Check (`refine`) in place of a stopped run, and the draft as checked
+passes each scenario unless `baseline` says not. The blocks no scenario reached come from
+`baseline_not_reached`, less those a written scenario reaches (`reaches`)."""
 
 import hashlib
 from collections import Counter
@@ -29,13 +34,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from functools import cache
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, Self
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.runnables import Runnable
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from agent_runtime.contract import (
     CauseFound,
@@ -52,10 +57,13 @@ from agent_runtime.fixing.coordinator import (
     HAND_BACK,
     MOST_DOLLARS,
     MOST_TURNS,
+    CheckedCase,
     Fixing,
+    FixJob,
     FixRequest,
     HandedBack,
     HandedIn,
+    RefineRequest,
     Stopped,
     coordinating,
 )
@@ -252,10 +260,26 @@ class Expect(_Data):
     """How code's scope check found the last draft widened the change, for a widening case."""
 
 
+class CaseCheck(_Data):
+    """A drafted workflow's Check to refine (ADR 0054, section 7): the cases it failed, and the
+    blocks no case reached."""
+
+    failed: list[CheckedCase] = []
+    not_reached: list[str] = []
+
+
 class FixCase(Case):
-    stop: StoppedRun
+    stop: StoppedRun | None = None
     version: CaseVersion = RELEASE_CHECK
-    stopped_at: list[str]
+    stopped_at: list[str] = []
+    refine: CaseCheck | None = None
+    """A refinement of a drafted workflow's Check in place of a fix of a stopped run. The draft
+    as the Check tried it is `version`, which passes each scenario unless `baseline` says not."""
+    baseline_not_reached: list[str] = []
+    """Blocks no scenario reached on the draft as the Check tried it, unless a scenario in the
+    run reaches them (`reaches`)."""
+    reaches: dict[str, list[str]] = {}
+    """The blocks each written scenario reaches, which leave `baseline_not_reached`."""
     causes: list[CaseCause | None] = []
     scenarios: list[list[CaseScenario] | None] = []
     drafts: list[CaseDraft | NotDrafted] = []
@@ -276,6 +300,12 @@ class FixCase(Case):
     seconds: dict[str, float] = {}
     """How long each turn and each hand-off takes on the clock, by its node's name."""
     expect: Expect
+
+    @model_validator(mode="after")
+    def _a_stop_or_a_check(self) -> Self:
+        if (self.refine is None) == (self.stop is None or not self.stopped_at):
+            raise ValueError("A case is a stopped run with where it stopped, or a Check")
+        return self
 
 
 class Clock:
@@ -403,6 +433,7 @@ class FakeScenarioWriter:
     def __init__(self, script: Script[list[CaseScenario] | None], played: Played) -> None:
         self.script, self.played = script, played
         self.dollars: list[float] = []
+        self.covers: list[list[str]] = []
 
     def write(
         self,
@@ -412,6 +443,7 @@ class FakeScenarioWriter:
         dollars_left: Callable[[], float],
     ) -> list[Scenario] | None:
         self.dollars.append(dollars_left())
+        self.covers.append(list(cover))
         written = self.script.next(self.played, seconds)
         return [s.scenario() for s in written] if written is not None else None
 
@@ -453,12 +485,14 @@ class FakeSimulation:
         self.versions.append(version)
         self.dollars.append(dollars_left())
         asked = [s.name for s in scenarios]
+        reaching = {block for name in asked for block in self.case.reaches.get(name, ())}
+        not_reached = [b for b in self.case.baseline_not_reached if b not in reaching]
         if version == self.stopped:
             self.played.calls.append(("simulation_baseline", self.script.clock()))
-            stopped_at = f"failed:{self.case.stopped_at[0]}"
+            as_before = "passed" if self.case.refine else f"failed:{self.case.stopped_at[0]}"
             reached = self.case.baseline_reached
-            results = [_graded(n, self.case.baseline.get(n, stopped_at), reached) for n in asked]
-            return Simulated(results=results, named=list(self.case.named))
+            results = [_graded(n, self.case.baseline.get(n, as_before), reached) for n in asked]
+            return Simulated(results=results, not_reached=not_reached, named=list(self.case.named))
         graded = self.script.next(self.played, seconds)
         reached_by = self.case.reached[self._runs] if self._runs < len(self.case.reached) else None
         self._runs += 1
@@ -470,7 +504,7 @@ class FakeSimulation:
             if name in asked
         ]
         named = self.case.named if self.case.draft_named is None else self.case.draft_named
-        return Simulated(results=results, named=list(named))
+        return Simulated(results=results, not_reached=not_reached, named=list(named))
 
 
 class FakeChecker:
@@ -489,9 +523,11 @@ class FakeRevisions:
     def __init__(self, played: Played, clock: Clock) -> None:
         self.played, self.clock = played, clock
         self.stored: list[WorkflowPlan] = []
-        self.causes: list[CauseFound] = []
+        self.causes: list[CauseFound | None] = []
 
-    def store(self, fixed: WorkflowPlan, cause: CauseFound, seconds: float) -> StoredRevision:
+    def store(
+        self, fixed: WorkflowPlan, cause: CauseFound | None, seconds: float
+    ) -> StoredRevision:
         self.played.calls.append(("revisions", self.clock()))
         self.stored.append(fixed)
         self.causes.append(cause)
@@ -607,7 +643,17 @@ class Run:
     chat: BaseChatModel
 
 
-def request_of(case: FixCase) -> FixRequest:
+def request_of(case: FixCase) -> FixJob:
+    if case.refine is not None:
+        return RefineRequest(
+            fix_id=FIX_ID,
+            asked_by="alice",
+            ends_by=STARTED + FIX_TIME_LIMIT,
+            version=case.version.plan(),
+            failed=case.refine.failed,
+            not_reached=case.refine.not_reached,
+        )
+    assert case.stop is not None
     return FixRequest(
         fix_id=FIX_ID,
         asked_by="alice",
@@ -666,7 +712,7 @@ def score(case: FixCase, answer: Answer) -> list[Check]:
     ends_by = STARTED + FIX_TIME_LIMIT
     over = [
         *([f"{ledger.handoffs} hand-offs"] if ledger.handoffs > MOST_HANDOFFS else []),
-        *([f"{len(ledger.drafts)} rounds"] if len(ledger.drafts) > MOST_ROUNDS else []),
+        *([f"{len(ledger.drafted())} rounds"] if len(ledger.drafted()) > MOST_ROUNDS else []),
         *([f"{ledger.turns} turns"] if ledger.turns > MOST_TURNS else []),
         *[
             f"the {name} was asked after the deadline"
@@ -692,7 +738,7 @@ def score(case: FixCase, answer: Answer) -> list[Check]:
     events = [f"the log refused {kind} ({w})" for kind, w in log.refused]
     if expect.events is not None and log.kinds() != expect.events:
         events.append(f"events {log.kinds()}")
-    rounds = len(ledger.drafts)
+    rounds = len(ledger.drafted())
     rounds_off = [] if expect.rounds in (None, rounds) else [f"{rounds} rounds"]
     widened = next((d.widened_by for d in reversed(ledger.drafts) if d.widened_by), None)
     widened_off = [] if expect.widened_by in (None, widened) else [f"widened by {widened}"]
@@ -726,3 +772,17 @@ FIX = Job(
     product_call=ask,
     most_calls=MOST_TURNS,
 )
+REFINE = Job(
+    name="refine",
+    title="Refine a drafted workflow's Check",
+    case_type=FixCase,
+    prompt=lambda case: case.id,
+    schema=None,
+    score=score,
+    judged=False,
+    time_limit_s=FIX_TIME_LIMIT.total_seconds(),
+    product_call=ask,
+    most_calls=MOST_TURNS,
+)
+"""A refinement of a drafted workflow's Check (ADR 0054, section 7) on the same coordinator and
+fakes. Like FIX, it isn't in the runner's list, so no paid run picks it up."""

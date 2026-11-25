@@ -141,7 +141,9 @@ def test_the_fix_drafter_gets_only_the_blocks_named_and_the_failed_scenarios_wit
 
 def test_a_key_in_what_the_run_read_never_reaches_the_model():
     key = "sk-" + "ant-" + "api03-" + "Zq7" * 10
-    stop = CASES["planted-approve-and-turn-on"].stop.model_copy(
+    planted = CASES["planted-approve-and-turn-on"].stop
+    assert planted is not None
+    stop = planted.model_copy(
         update={"message": f"Unauthorized: the token {key} was refused (401)"}
     )
     run = run_case(case("planted-approve-and-turn-on", stop=stop))
