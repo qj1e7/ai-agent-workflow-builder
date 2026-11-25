@@ -36,7 +36,8 @@ const panelHeading = (page: Page): Locator => page.locator('#side-panel-h')
 const inShort = (scope: Locator): Locator => scope.locator('[data-in-short]')
 
 async function expectEverySection(scope: Locator): Promise<void> {
-  for (const title of SECTIONS) await expect(scope.locator('summary', { hasText: title }), `${title} is a row`).toBeVisible()
+  // A row's text starts with its title, then its gist, so "Approval" never matches the gist "1 waits for approval on each run".
+  for (const title of SECTIONS) await expect(scope.locator('summary', { hasText: new RegExp(`^${title}`) }), `${title} is a row`).toBeVisible()
 }
 
 test.describe('Explain this workflow', () => {
