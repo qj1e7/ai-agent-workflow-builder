@@ -334,7 +334,7 @@ describe('the set-up card after Set up', () => {
     const html = building(null)
     expect(pill(html)).toBe('Building')
     expect(html).not.toContain('data-off')
-    expect(text(html)).toContain('Added a yes before the ticket.')
+    expect(text(html)).toContain('I added an approval step. Before each ticket is made, an Approver must say yes in Teams.')
     expect(text(html)).toContain('Saved as a draft in n8n.')
     expect(text(html)).not.toContain('Test run…')
     expect(html, 'the yes the safety checker added is ringed').toContain('data-added="true"')
