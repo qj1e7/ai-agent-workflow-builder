@@ -15,5 +15,6 @@
   "reason": "AgentError",
   "retryable": true,
   "message": "UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 Service Unavailable three times",
-  "what_happened": "GitHub didn't answer."
+  "what_happened": "GitHub didn't answer.",
+  "fix_offer": null
 }

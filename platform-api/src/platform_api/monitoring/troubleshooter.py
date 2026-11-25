@@ -188,6 +188,17 @@ MISSING_START = Advice(
 )
 
 
+def inside_the_workflow(failure: RunFailedData) -> bool:
+    """Whether the stop's cause can be in the workflow itself (ADR 0055, section 1): a block that
+    failed in n8n, and not an outage of a source it read. It is an allow-list, so any other stop
+    gets no fix: a key, n8n, the platform's own code, a write that failed, a timeout, an outage."""
+    return (
+        failure.reason == "WorkflowNodeError"
+        and _source_stop(failure) is None
+        and not failure.retryable
+    )
+
+
 def explain(reason: FailureReason) -> Advice:
     return ADVICE[reason]
 

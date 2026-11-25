@@ -39,10 +39,12 @@ describe('read and write labels', () => {
 })
 
 describe('platform agents', () => {
-  it('lists the Planner and the AI troubleshooter, each with what it reaches instead of other systems', () => {
+  it('lists the Planner, the AI troubleshooter and the two agents that fix a stop, each with what it reaches instead of other systems', () => {
     expect(PLATFORM_AGENTS.map((agent) => [agent.id, agent.reach])).toEqual([
       ['planner', 'It only plans.'],
       ['troubleshooter', 'It reads the run’s own record.'],
+      ['fix_drafter', 'It changes a copy on practice systems, never a real system.'],
+      ['scenario_writer', 'It writes scenarios for practice systems, never for a real system.'],
     ])
     expect(PLATFORM_AGENT_MARK).toBe('Platform agent')
   })

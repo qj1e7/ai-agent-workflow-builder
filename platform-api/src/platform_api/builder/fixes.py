@@ -85,6 +85,7 @@ from platform_api.monitoring import (
     cause_words,
     current_failure,
     explain_failure,
+    inside_the_workflow,
     stop_kind,
 )
 from platform_api.monitoring import RunFailedData as StopData
@@ -116,7 +117,7 @@ from platform_api.orchestration import (
     workflow_digest,
 )
 from platform_api.shared import ApprovalId, Digest, Principal, RunId, UserId, new_id
-from platform_api.wire import WireIn, WireModel
+from platform_api.wire import FixOffer, WireIn, WireModel
 
 log = logging.getLogger(__name__)
 
@@ -134,6 +135,12 @@ CALL_COLUMNS: Final[Mapping[ModelCall, LiteralString]] = {
 OFF: Final = "Fix it for me is off here."
 NO_MODEL: Final = "Fix it for me needs an AI model, and none is connected yet."
 NOT_STOPPED: Final = "This run isn't stopped, so there's nothing to fix."
+NOT_IN_THE_WORKFLOW: Final = (
+    "The cause isn't in the workflow's own settings or wiring, so a fix can't help."
+)
+CANT_TELL_OFFER: Final = "The platform couldn't tell whether a fix can start. Try again soon."
+MODEL_CHECK_FOR: Final = timedelta(seconds=30)
+"""A read of the run asks whether a model is set at most this often, and never opens its key."""
 NOT_DRAFTED: Final = "Fix it for me works only for a workflow drafted here, as it was approved."
 CANT_TELL: Final = "The platform can't tell where the run stopped, so it can't be fixed."
 NEWER: Final = (
@@ -350,6 +357,18 @@ class FixTries(Protocol):
 
 
 # One fix, as it is kept
+
+
+@dataclass(frozen=True)
+class _Ready:
+    """What a start has read and checked before it writes anything."""
+
+    events: Sequence[Any]
+    created: RunCreatedData
+    failure: Any
+    model: ModelAccess | None
+    set_up: SetUpPlan
+    stopped_at: list[str]
 
 
 @dataclass(frozen=True)
@@ -575,31 +594,24 @@ class Fixes:
         self.settings = settings
         self._wordings = wordings
         self._wake = asyncio.Event()
+        self._model_seen: tuple[datetime, bool] | None = None
 
     # The start
 
     async def start(self, run_id: RunId, asker: Principal) -> FixView | Refused | NotFound:
         """Starts a fix on a stopped run for an Operator, whom the route checked."""
-        if not self.settings.on:
-            return Refused(OFF)
-        events = await self._log.read_after(run_id, 0)
-        created = next((e.data for e in events if isinstance(e.data, RunCreatedData)), None)
-        if created is None:
-            return NotFound()
-        failure = current_failure(events)
-        if failure is None:
-            return Refused(NOT_STOPPED)
-        model = await self._models.access()
-        if model is None:
-            return Refused(NO_MODEL)
-        set_up = await self._drafted.set_up_plan(created.use_case_id)
-        if set_up is None:
-            return Refused(NOT_DRAFTED)
-        record = await self._records.read(run_id)
-        nodes: Mapping[str, str] = {} if record is None else record.nodes
-        stopped_at = [name for name, state in nodes.items() if state == "failed"]
-        if not stopped_at or not set(stopped_at) <= {b.name for b in set_up.plan.blocks}:
-            return Refused(CANT_TELL)
+        ready = await self._preflight(run_id, for_offer=False)
+        if not isinstance(ready, _Ready):
+            return ready
+        model = ready.model
+        assert model is not None
+        events, created, failure, set_up, stopped_at = (
+            ready.events,
+            ready.created,
+            ready.failure,
+            ready.set_up,
+            ready.stopped_at,
+        )
         facts = await self._drafted.drafter_facts()
         await self.reconcile(created.use_case_id)
         stop = StoppedRun(
@@ -637,6 +649,109 @@ class Fixes:
         log.info("%s asked for fix %s on %s", asker.user_id, begun.fix_id, run_id)
         return await self._viewed(begun.fix_id)
 
+    async def offer(self, run_id: RunId) -> FixOffer:
+        """Whether a fix could start on this stopped run now, in the words start would refuse
+        with. It reads only, so it writes no event and keeps no row."""
+        try:
+            return await self._offer(run_id)
+        except Exception:
+            log.warning("fix offer for %s: couldn't be worked out", run_id, exc_info=True)
+            return FixOffer(can=False, why_not=CANT_TELL_OFFER)
+
+    async def _offer(self, run_id: RunId) -> FixOffer:
+        ready = await self._preflight(run_id, for_offer=True)
+        if isinstance(ready, NotFound):
+            return FixOffer(can=False, why_not=NOT_STOPPED)
+        if isinstance(ready, Refused):
+            return FixOffer(can=False, why_not=ready.words)
+        async with self._db.connection("builder") as conn:
+            refused = await self._workflow_refusal(
+                conn, ready.created, ready.set_up, self._db.clock()
+            )
+        if refused is None:
+            return FixOffer(can=True, why_not=None)
+        return FixOffer(
+            can=False, why_not=NOT_STOPPED if isinstance(refused, NotFound) else refused.words
+        )
+
+    async def _model_is_set(self) -> bool:
+        """Whether a model is connected, asked afresh at most every half minute. The run is read
+        every few seconds, and opening the saved key each time is more than a read needs."""
+        now = self._db.clock()
+        if self._model_seen is not None and now - self._model_seen[0] < MODEL_CHECK_FOR:
+            return self._model_seen[1]
+        is_set = await self._models.access() is not None
+        # Only a yes is kept, so connecting a model shows at once.
+        self._model_seen = (now, True) if is_set else None
+        return is_set
+
+    async def _preflight(self, run_id: RunId, *, for_offer: bool) -> _Ready | Refused | NotFound:
+        """The checks a start makes before it writes anything. A read of the offer makes the
+        same ones, and never opens the model's key."""
+        if not self.settings.on:
+            return Refused(OFF)
+        events = await self._log.read_after(run_id, 0)
+        created = next((e.data for e in events if isinstance(e.data, RunCreatedData)), None)
+        if created is None:
+            return NotFound()
+        failure = current_failure(events)
+        if failure is None:
+            return Refused(NOT_STOPPED)
+        if not inside_the_workflow(failure.data):
+            return Refused(NOT_IN_THE_WORKFLOW)
+        if for_offer:
+            if not await self._model_is_set():
+                return Refused(NO_MODEL)
+            model = None
+        else:
+            model = await self._models.access()
+            if model is None:
+                return Refused(NO_MODEL)
+        set_up = await self._drafted.set_up_plan(created.use_case_id)
+        if set_up is None:
+            return Refused(NOT_DRAFTED)
+        record = await self._records.read(run_id)
+        nodes: Mapping[str, str] = {} if record is None else record.nodes
+        stopped_at = [name for name, state in nodes.items() if state == "failed"]
+        if not stopped_at or not set(stopped_at) <= {b.name for b in set_up.plan.blocks}:
+            return Refused(CANT_TELL)
+        return _Ready(events, created, failure, model, set_up, stopped_at)
+
+    async def _workflow_refusal(
+        self, conn: Any, created: RunCreatedData, set_up: SetUpPlan, now: datetime
+    ) -> Refused | NotFound | None:
+        """Why the workflow itself can't take a fix now: gone, changed since the run, held in n8n,
+        not as it was approved, or already has one under way."""
+        use_case_id = created.use_case_id
+        workflow = await (
+            await conn.execute(
+                "SELECT current_version, held_by, deleted_at FROM builder.use_cases"
+                " WHERE use_case_id = %s",
+                (use_case_id,),
+            )
+        ).fetchone()
+        if workflow is None or workflow["deleted_at"] is not None:
+            return NotFound()
+        if workflow["current_version"] != created.use_case_version:
+            return Refused(NEWER)
+        if workflow["held_by"] is not None:
+            return Refused(IN_N8N)
+        ran = await (
+            await conn.execute(
+                "SELECT document FROM builder.use_case_versions"
+                " WHERE use_case_id = %s AND version = %s",
+                (use_case_id, created.use_case_version),
+            )
+        ).fetchone()
+        if ran is None or ran["document"] is None:
+            return Refused(NOT_DRAFTED)
+        if workflow_digest(ran["document"]) != set_up.digest:
+            return Refused(NOT_DRAFTED)
+        for row in await _rows_of(conn, use_case_id):
+            if fix_state(row, now) in BUSY_STATES:
+                return Refused(BUSY)
+        return None
+
     async def _begin(
         self,
         run_id: RunId,
@@ -671,33 +786,9 @@ class Fixes:
         use_case_id = created.use_case_id
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, f"fix:{use_case_id}", alone=True)
-            workflow = await (
-                await uow.conn.execute(
-                    "SELECT current_version, held_by, deleted_at FROM builder.use_cases"
-                    " WHERE use_case_id = %s",
-                    (use_case_id,),
-                )
-            ).fetchone()
-            if workflow is None or workflow["deleted_at"] is not None:
-                return NotFound()
-            if workflow["current_version"] != created.use_case_version:
-                return Refused(NEWER)
-            if workflow["held_by"] is not None:
-                return Refused(IN_N8N)
-            ran = await (
-                await uow.conn.execute(
-                    "SELECT document FROM builder.use_case_versions"
-                    " WHERE use_case_id = %s AND version = %s",
-                    (use_case_id, created.use_case_version),
-                )
-            ).fetchone()
-            if ran is None or ran["document"] is None:
-                return Refused(NOT_DRAFTED)
-            if workflow_digest(ran["document"]) != set_up.digest:
-                return Refused(NOT_DRAFTED)
-            for row in await _rows_of(uow.conn, use_case_id):
-                if fix_state(row, uow.now) in BUSY_STATES:
-                    return Refused(BUSY)
+            refused_now = await self._workflow_refusal(uow.conn, created, set_up, uow.now)
+            if refused_now is not None:
+                return refused_now
             fix_id = new_id("fix")
             ends_by = uow.now + FIX_TIME_LIMIT
             name = _shown_name(asker)

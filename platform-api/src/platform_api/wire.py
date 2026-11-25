@@ -199,6 +199,16 @@ def _not_a_dot_segment(repo: str) -> str:
 type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
 
 
+class FixOffer(WireModel):
+    """Whether Fix it for me could start on a stopped run now (ADR 0055, section 1), read only."""
+
+    can: bool
+    why_not: str | None = Field(
+        description="Why a fix can't start now, in the words the start would refuse with. "
+        "Null when it can."
+    )
+
+
 # The package names the registries of ADR 0025 hold, kept the same as the agent runtime's.
 MAVEN_COORDINATE_PATTERN = (
     r"^[A-Za-z0-9_-]{1,60}(?:\.[A-Za-z0-9_-]{1,60}){0,10}:[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"

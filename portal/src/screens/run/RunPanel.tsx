@@ -1,6 +1,7 @@
 import { ApiError } from '../../api/client'
 import { useSession } from '../../api/context'
 import { useRun } from '../../api/queries'
+import { useNow } from '../../api/ticking'
 import type { ApprovalView, RunView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { useAfterPanelAction } from '../../ui/sidePanel'
@@ -8,6 +9,7 @@ import { useChat } from '../home/ChatProvider'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { openStep, partyOf, useDecision, useNotChecked } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
+import { FixSection, useFixLeads } from './FixPanel'
 import { AnswerList, DeclinedNext, StopAnswers, StopNext } from './Outcome'
 import { QuestionThread } from './QuestionThread'
 import { useQuestions } from './questions'
@@ -148,6 +150,16 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const status = statusWords(decision, live)
   const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
   const safeId = `${run.run_id}-safe`
+  const now = useNow(() => new Date()).getTime()
+  const fixAsk = {
+    runId: run.run_id,
+    operator: story.stopped.me?.operator === true,
+    next: story.stopped.advice?.answers.next,
+    offer: run.state === 'failed' ? run.fix_offer : undefined,
+    now,
+    approverId: me?.roles.includes('approver') ? me.id : null,
+  }
+  const fixLeading = useFixLeads({ ...fixAsk, fix: story.model.fix })
 
   if (useCase.isLoading) return <Loading />
   if (waiting && story.approvalId !== null && (!approval || notChecked === null)) return LOADING_WRITES
@@ -170,8 +182,9 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
       {failure ? (
         <>
           <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
+          <FixSection {...fixAsk} fix={story.model.fix} />
           <div className={styles['panelFoot']}>
-            <StopNext runId={run.run_id} failure={failure} {...story.stopped} safeId={safeId} />
+            <StopNext runId={run.run_id} failure={failure} {...story.stopped} quiet={fixLeading} safeId={safeId} />
           </div>
         </>
       ) : story.answers.length > 0 && !waiting ? (

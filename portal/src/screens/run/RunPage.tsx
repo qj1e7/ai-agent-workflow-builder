@@ -16,7 +16,7 @@ import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { DECISION_ID, DecisionArea, LONG_LOG, StepLog } from './Chat'
-import { FixCrew } from './FixCrew'
+import { FixSection, useFixLeads } from './FixPanel'
 import { RunInN8n } from './InN8n'
 import { canDecideNow, foundOf, partyOf, useDecision, useNotChecked, type Decision } from './decision'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
@@ -191,6 +191,15 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   /** Redrawn each minute, so a fix whose twenty minutes run out stops showing as at work. */
   const now = useNow(() => new Date()).getTime()
   const shownView = n8nAccess ? view : 'main'
+  const fixAsk = {
+    runId: run.run_id,
+    operator: story.stopped.me?.operator === true,
+    next: story.stopped.advice?.answers.next,
+    offer: run.state === 'failed' ? run.fix_offer : undefined,
+    now,
+    approverId: me?.roles.includes('approver') ? me.id : null,
+  }
+  const fixLeading = useFixLeads({ ...fixAsk, fix: shown.fix })
 
   const waiting = shown.phase.state === 'awaiting_approval'
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
@@ -272,7 +281,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       <DecisionArea label="Why it stopped">
         <TroubleshooterBlock face={troubleFace}>
           <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
-          {shown.fix ? <FixCrew fix={shown.fix} now={now} loadedUpTo={loadedUpTo} /> : null}
+          <FixSection {...fixAsk} fix={shown.fix} loadedUpTo={loadedUpTo} />
         </TroubleshooterBlock>
       </DecisionArea>
     ) : story.answers.length > 0 && !waiting ? (
@@ -352,7 +361,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       {failure ? (
         <RunPlaceContext.Provider value={place}>
           <div className={styles['foot']}>
-            <StopNext runId={run.run_id} failure={failure} {...story.stopped} safeId={safeId} />
+            <StopNext runId={run.run_id} failure={failure} {...story.stopped} quiet={fixLeading} safeId={safeId} />
           </div>
         </RunPlaceContext.Provider>
       ) : null}

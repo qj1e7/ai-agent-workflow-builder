@@ -166,3 +166,37 @@ describe('how a fix ends', () => {
     expect(troubleFaceOf('failed', null, BEFORE)).toBe('idle')
   })
 })
+
+describe('what a hand-back and the later steps keep', () => {
+  const round = (n: number, passed: number, summary: string) => wire('fix_round', summary, { fix_id: FIX, round: n, passed, scenarios: 3, progress: n === 1 })
+
+  it('keeps each round’s sentence and the hand-back’s reason code, for the card', () => {
+    const model = withFix(
+      started(),
+      round(1, 0, 'Round 1: 0 of 3 scenarios passed.'),
+      round(2, 0, 'Round 2: 0 of 3 scenarios passed, no better than before.'),
+      wire('fix_handed_back', "I couldn't fix this. A round made no progress. Nothing was changed.", { fix_id: FIX, why: 'no_progress' }),
+    )
+    expect(model.fix?.rounds).toEqual(['Round 1: 0 of 3 scenarios passed.', 'Round 2: 0 of 3 scenarios passed, no better than before.'])
+    expect(model.fix?.why).toBe('no_progress')
+  })
+
+  it('puts the Approver’s yes and no in the log, a no marked as a stop', () => {
+    const BOB = { kind: 'user', id: 'bob', display: 'Bob' }
+    const decided = (verdict: string, summary: string) => wire('fix_decided', summary, { fix_id: FIX, approval_id: 'apr_01A', verdict, by: 'bob', by_name: 'Bob', reason: null }, BOB)
+    const yes = withFix(started(), decided('approved', 'Bob said yes to the fix.'))
+    expect(logRowsOf(yes.chat, nameOf, []).at(-1)).toMatchObject({ tone: 'plain', text: 'Bob said yes to the fix.' })
+    const no = withFix(started(), decided('declined', 'Bob said no to the fix. The workflow stays as it was.'))
+    expect(logRowsOf(no.chat, nameOf, []).at(-1)).toMatchObject({ tone: 'bad', text: 'Bob said no to the fix. The workflow stays as it was.' })
+  })
+
+  it('puts the test run’s result in the log, a failed one marked as a stop, and never moves the run', () => {
+    const tried = (result: string, summary: string) =>
+      wire('fix_tried', summary, { fix_id: FIX, approval_id: 'apr_01A', approved_by: 'bob', approved_by_name: 'Bob', pressed_by: 'alice', result, test_run_id: null }, ALICE)
+    const on = withFix(started(), tried('turned_on', 'The fix passed its test run, so the workflow is back on with it. Bob said yes to it.'))
+    expect(logRowsOf(on.chat, nameOf, []).at(-1)?.tone).toBe('plain')
+    const failed = withFix(started(), tried('test_failed', 'The fix’s test run didn’t pass, so the workflow stays as it was. Bob said yes to it.'))
+    expect(logRowsOf(failed.chat, nameOf, []).at(-1)?.tone).toBe('bad')
+    expect(failed.phase).toEqual(stopped().phase)
+  })
+})

@@ -113,13 +113,13 @@ describe('the What it can do tab', () => {
 })
 
 describe('the Agents tab list', () => {
-  it('shows the two platform agents and every card once, each with its tool count', () => {
+  it('shows the four platform agents and every card once, each with its tool count', () => {
     const html = render()
-    expect(tileNames(html)).toEqual(['Planner', 'AI troubleshooter', 'Version checker', 'Weekly summary'])
+    expect(tileNames(html)).toEqual(['Planner', 'AI troubleshooter', 'Fix drafter', 'Scenario writer', 'Version checker', 'Weekly summary'])
     const main = mainOf(html)
     expect(main).toContain('Platform agents')
     expect(main).toContain('Specialist agents')
-    expect(main.match(/Platform agent\b/g)?.length).toBe(2)
+    expect(main.match(/Platform agent\b/g)?.length).toBe(4)
     expect(main).toContain('Changes data after a yes 5 tools')
     expect(main).toContain('Reads only 1 tool')
     expect(main).toContain('No access to other systems')
@@ -301,7 +301,7 @@ describe('when the agent runtime is down', () => {
     const html = render({ tools: down })
     const main = mainOf(html)
     expect(main).toContain(toolsUnavailableWords(true))
-    expect(tileNames(html)).toEqual(['Planner', 'AI troubleshooter', 'Version checker', 'Weekly summary'])
+    expect(tileNames(html)).toEqual(['Planner', 'AI troubleshooter', 'Fix drafter', 'Scenario writer', 'Version checker', 'Weekly summary'])
     expect(mainOf(render({ path: HOW, tools: down }))).not.toContain(toolsUnavailableWords(true))
   })
 
@@ -323,6 +323,6 @@ describe('when the agent runtime is down', () => {
   it('keeps the platform agents when the cards fail', () => {
     const html = render({ cards: down })
     expect(mainOf(html)).toContain(CARDS_UNAVAILABLE_WORDS)
-    expect(tileNames(html)).toEqual(['Planner', 'AI troubleshooter'])
+    expect(tileNames(html)).toEqual(['Planner', 'AI troubleshooter', 'Fix drafter', 'Scenario writer'])
   })
 })

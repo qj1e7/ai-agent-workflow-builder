@@ -337,6 +337,20 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
 .askf input, .fl-why input, .fb-why input, .add input { flex: 1 1 220px; min-width: 0; border: 1.5px solid var(--line-strong); border-radius: var(--r-sm); padding: 7px 12px; min-height: 38px; background: var(--surface); font-size: var(--fs-body); }
 .askf input:focus, .fl-why input:focus, .fb-why input:focus, .add input:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgb(15 26 43 / .14); }
 .note-line { padding: 10px 12px; border-radius: var(--r-sm); background: var(--subtle); }
+/* Fix it for me (ADR 0055): the button, its progress, the hand-back, and the approval's fix section */
+.fx { display: grid; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.fx-say { margin: 0; font-weight: 600; }
+.fx-crew { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: 0; padding: 0; }
+.fx-crew li { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-small); font-weight: 600; }
+.fx .qa div { grid-template-columns: 96px minmax(0, 1fr); }
+.fx-rows { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.fx-sc { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.fx-sc li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.fx-sc .v { font-weight: 600; font-size: var(--fs-small); }
+.fx-sc .v.ok { color: var(--ok-text); }
+.fx-sc .v.no { color: var(--stop-text); }
+.fx-note { margin: 0; font-size: var(--fs-small); color: var(--text-2); }
+.fx .c-act { margin: 0; justify-content: flex-start; flex-direction: row; flex-wrap: wrap; }
 
 /* Side panel and pages */
 .panel { min-height: 0; overflow-y: auto; background: var(--surface); padding: 18px 24px 28px; box-shadow: -1px 0 0 var(--line); view-transition-name: panel; }
@@ -895,6 +909,8 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
     <div class="ctl"><span class="lbl" id="tasks-l">Play</span><div class="seg" id="tasks" role="group" aria-labelledby="tasks-l">
       <button type="button" data-t="morning">Morning check</button><button type="button" data-t="words">Ask in my words</button><button type="button" data-t="edit">Change by talking</button><button type="button" data-t="cant">Something it can’t do</button><button type="button" data-t="decline">Bob declines</button><button type="button" data-t="browse">Browse</button><button type="button" data-t="n8n">Edit in n8n</button><button type="button" data-t="draft">Draft a workflow</button><button type="button" data-t="setupyes">Bob approves a draft</button><button type="button" data-t="second">Second Approver</button><button type="button" data-t="explain">Explain</button>
     </div></div>
+    <div class="ctl"><span class="lbl" id="cause-l">Why it stopped</span><div class="seg" id="causeSeg" role="group" aria-labelledby="cause-l"><button type="button" data-cause="quiet">No answer</button><button type="button" data-cause="moved">A field moved</button></div></div>
+    <div class="ctl"><span class="lbl" id="fixp-l">Fix it for me</span><div class="seg" id="fixSeg" role="group" aria-labelledby="fixp-l"><button type="button" data-fixplan="ready">Ready</button><button type="button" data-fixplan="fails">Test fails</button><button type="button" data-fixplan="back">Handed back</button></div></div>
     <button class="btn ghost sm" id="reset" type="button">Start over</button>
   </div>
 
@@ -951,6 +967,18 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
     </ul>
   </section>
 
+  <section class="read" aria-labelledby="h-fix">
+    <h2 id="h-fix">Fix it for me, added 25 Nov 2026 (ADR 0055)</h2>
+    <ul>
+      <li>Set “Why it stopped” to “A field moved”, then open the run. An Operator sees “Fix it for me” under the AI troubleshooter’s answers, and Retry is gone because it would stop in the same place. Bob, an Approver, reads “An Operator can ask for a fix.” instead of a button.</li>
+      <li>“Drafting a fix.” shows the Scenario writer and the Fix drafter as Orbs, and each hand-off lands in the step log in the platform’s own words. “A fix is ready” waits for a yes. Past its 20 minutes with nothing to show, it reads as handed back, never as spinning.</li>
+      <li>“Handed back” shows the sentence the team lead chose, why it stopped, each round it tried, and what the person can do next.</li>
+      <li>View as Bob and open the approval: the cause, the change, each scenario with the platform’s verdict, and the platform’s four checks. Alice sees why she can’t approve it. After Bob’s yes, Alice presses “Turn back on”, and the card shows the test run, then the result. “Test fails” plays the failed result.</li>
+      <li>“Handed back” asks which repository “Read release” should read, because a fix never changes a setting itself. Alice picks one and the fix waits for a yes again. The approval then says Alice answered, and the read-list sentence says which repository joins the team’s list. Bob reads “An Operator answers this.” instead of buttons.</li>
+      <li>To reach every outcome: set “A field moved”, press “Fix it for me” as Alice, switch “View as” to Bob (the fix stays, and shows in his Needs you as “Check it”, as a set-up approval does), press “Review the fix” or “Check it” and Approve or Decline, then switch back to Alice for “Turn back on”. A no offers “Fix it for me” again. Choose Ready, Test fails or Handed back before pressing.</li>
+      <li>The AI troubleshooter, Fix drafter and Scenario writer have cards on the Agents page in the app, which this sketch has no page for.</li>
+    </ul>
+  </section>
   <section class="read" aria-labelledby="h-read">
     <h2 id="h-read">What’s new in version 3</h2>
     <ul>
@@ -988,6 +1016,8 @@ const AG = {
   tester: { name: 'Tester', hue: '#526d10', tint: '#ebf2d3', job: 'check' },
   trouble: { name: 'AI troubleshooter', hue: '#7a4bd6', tint: '#ece3ff', job: 'wrench' },
   version: { name: 'Version checker', hue: '#0a7068', tint: '#d3f0ec', job: 'magnifier' },
+  drafter: { name: 'Fix drafter', hue: '#9b2f63', tint: '#fde4f0' },
+  scenario: { name: 'Scenario writer', hue: '#6a5a00', tint: '#f6efc3' },
   writer: { name: 'Ticket writer', hue: '#b2520a', tint: '#ffe7d3', job: 'pen' },
 };
 const KIND = { none: 'No system access', read: 'Reads GitHub', gate: 'Waits for a yes', write: 'Writes after a yes' };
@@ -1160,7 +1190,7 @@ const d8 = { day: null, time: '8:00' };
 const d9 = { day: null, time: '9:00' };
 const WORLD = {
   user: 'alice', maint: false, stage: 'stopped', run: { when: 'done', read: 'err', compare: '', yes: '', write: '' },
-  appr: 'none', apprUI: null, reason: '', asked: '', paused: {}, focus: null, key: true, langserve: true, schedEdit: null, sd: null, pendingEdit: '',
+  appr: 'none', apprUI: null, fix: 'none', cause: 'quiet', reason: '', asked: '', paused: {}, focus: null, key: true, langserve: true, schedEdit: null, sd: null, pendingEdit: '',
   wf: {
     fastapi: { name: 'FastAPI release check', soft: 'fastapi', sched: d8, then: 'jira', ver: 3, yes: true, by: 'Alice', on: '2 Nov' },
     react: { name: 'React release check', soft: 'react', sched: d8, then: 'jira', ver: 2, yes: true, by: 'Alice', on: '30 Oct' },
@@ -1180,6 +1210,10 @@ function resetWorld(over = {}) {
   Object.assign(W, clone(WORLD), { soft: clone(SOFT0) }, clone(over));
 }
 const canEdit = () => W.user !== 'bob';
+/* Why the run stopped. 'quiet': GitHub didn’t answer, so a retry is safe. 'moved': GitHub answered, but a field the Read release block reads is gone, so a retry would stop again and Fix it for me is offered. */
+const moved = () => W.cause === 'moved';
+const stopWhy = () => (moved() ? 'GitHub answered without the “tag” field' : 'GitHub didn’t answer');
+let FIXPLAN = 'ready';
 const flagged = (id) => W.wf[id].then === 'jira' && !W.wf[id].yes;
 function wfState(id) {
   if (W.paused[id]) return ['Paused', 'idle'];
@@ -1195,10 +1229,12 @@ function softState(k) {
   if (!s.run) return ['Watching', 'idle'];
   return s.run === s.latest ? ['Up to date', 'ok'] : ['Newer out', 'wait'];
 }
+/* A fix that waits for a yes is a row in an Approver’s Needs you, as any set-up approval is. The person who asked has no row. */
+const fixNeeds = () => (W.user === 'bob' && moved() && W.fix === 'ready' ? [{ g: 'now', t: '<b>Alice</b> asks for a check of a fix for <b>FastAPI release check</b>', s: '<b>FastAPI fix</b> needs your yes', sub: 'The cause, the change and the platform’s checks are on the approval.', go: 'Check it', open: 'fixappr', tone: 'wait' }] : []);
 function needs() {
-  if (W.user === 'bob') return [...(W.appr === 'waiting' ? [{ g: 'now', t: '<b>FastAPI upgrade ticket</b> needs your yes', s: '<b>FastAPI ticket</b> needs your yes', sub: 'Upgrade FastAPI from 0.115.2 to 0.121.0', go: 'Review and decide', open: 'appr', tone: 'wait' }] : []), ...setupNeeds()];
+  if (W.user === 'bob') return [...fixNeeds(), ...(W.appr === 'waiting' ? [{ g: 'now', t: '<b>FastAPI upgrade ticket</b> needs your yes', s: '<b>FastAPI ticket</b> needs your yes', sub: 'Upgrade FastAPI from 0.115.2 to 0.121.0', go: 'Review and decide', open: 'appr', tone: 'wait' }] : []), ...setupNeeds()];
   const l = W.order.filter(flagged).map((id) => ({ g: 'now', t: `<b>${W.wf[id].name}</b> can’t write without a yes`, s: `<b>${W.soft[id].name} check</b> can’t write`, open: `wf:${id}`, tone: 'err' }));
-  if (!flagged('fastapi') && W.stage === 'stopped' && !W.paused.fastapi) l.push({ g: 'now', t: '<b>FastAPI release check</b> stopped at 8:00', s: '<b>FastAPI check</b> stopped', sub: 'GitHub didn’t answer', go: 'Open the run', open: 'run', tone: 'err' });
+  if (!flagged('fastapi') && W.stage === 'stopped' && !W.paused.fastapi) l.push({ g: 'now', t: '<b>FastAPI release check</b> stopped at 8:00', s: '<b>FastAPI check</b> stopped', sub: stopWhy(), go: 'Open the run', open: 'run', tone: 'err' });
   if (W.langserve) l.push({ g: 'set', t: '<b>LangServe</b> can’t be found on GitHub', s: '<b>LangServe</b> not found', open: 'soft:langserve', tone: 'wait' });
   if (W.key) l.push({ g: 'set', t: '<b>Jira key</b> expires Friday', s: '<b>Jira key</b> expires Friday', open: 'key', tone: 'wait' });
   return l;
@@ -1210,7 +1246,7 @@ function needsHTML(l) {
 }
 const needsHead = () => {
   const n = needs().length;
-  if (W.user === 'bob') return !n ? 'Nothing waits for your yes' : n > 1 ? `${n} things wait for your yes` : W.appr === 'waiting' ? '1 change waits for your yes' : '1 workflow waits for your yes';
+  if (W.user === 'bob') return !n ? 'Nothing waits for your yes' : n > 1 ? `${n} things wait for your yes` : fixNeeds().length ? '1 fix waits for your yes' : W.appr === 'waiting' ? '1 change waits for your yes' : '1 workflow waits for your yes';
   return n ? `${n} ${n === 1 ? 'thing needs' : 'things need'} you` : 'Nothing needs you';
 };
 
@@ -1304,7 +1340,127 @@ function line(o = {}) {
     <span class="nlbl">${s.id === 'when' && o.first ? o.first : s.short}</span>
   </li>`).join('')}</ol>`;
 }
+
+/* ---------- Fix it for me (ADR 0055): the button, its progress, the hand-back, and the approval's fix section ----------
+   Offered to an Operator when the cause is inside the workflow. Everyone else reads why not. The words after a press are the platform’s. */
+const FIX = {
+  drafting: 'Drafting a fix. Nothing changes until an Approver says yes.',
+  ready: 'Waiting for a yes. Nothing changes until an Approver says yes.',
+  approved: 'An Approver said yes. Turn it back on to try the fix with a test run, which writes nothing.',
+  testing: 'Trying the fix with a test run, which writes nothing.',
+  on: 'The fix passed its test run, so the workflow is back on with it.',
+  failed: 'The test run didn’t pass, so the fix wasn’t turned on. The workflow stays as it was.',
+  back: 'I couldn’t fix this. Here’s the cause and what I tried.',
+  declined: 'An Approver said no, so the fix stays off. The workflow stays as it was.',
+};
+const FIX_CRUMBS = [
+  ['8:02:10', 'Alice asked for a fix.'],
+  ['8:02:14', 'I found the cause in the “Read release” block, and the platform checked the run stopped there.'],
+  ['8:02:20', 'I asked the Scenario writer for scenarios, and the platform checked they fit this workflow.'],
+  ['8:02:31', 'I asked the Fix drafter to change only the “Read release” block. The platform checked the change stays inside the failed part.'],
+];
+const fixCrew = () => `<ul class="fx-crew" aria-label="Agents on the fix"><li>${fw('scenario', 28)}Scenario writer</li><li>${fw('drafter', 28)}Fix drafter</li></ul>`;
+function fixHTML() {
+  if (W.stage !== 'stopped' || !moved()) return '';
+  const f = W.fix;
+  if (f === 'none') {
+    return canEdit()
+      ? '<p class="fx-note">Drafts a change to the failed block, and proves it on practice systems. Nothing changes until an Approver says yes.</p><div class="c-act"><button class="btn" type="button" data-fix="ask">Fix it for me</button></div>'
+      : '<p class="note-line">An Operator can ask for a fix.</p>';
+  }
+  if (f === 'drafting') return `<p class="fx-say" role="status">Drafting a fix.</p>${fixCrew()}`;
+  if (f === 'back') {
+    const ask = canEdit()
+      ? '<div class="c-act"><button class="btn ghost" type="button" data-fix="answer|fastapi/fastapi">fastapi/fastapi</button><button class="btn ghost" type="button" data-fix="answer|tiangolo/fastapi">tiangolo/fastapi</button></div>'
+      : '<p class="fx-note">An Operator answers this.</p>';
+    return `<p class="fx-say">${FIX.back}</p>${fixCrew()}<dl class="qa"><div><dt>Why I stopped</dt><dd>A round made no progress.</dd></div><div><dt>What I tried</dt><dd><ul class="fx-rows"><li>Round 1: 0 of 3 scenarios passed.</li><li>Round 2: 0 of 3 scenarios passed, no better than before.</li></ul></dd></div></dl><p><b>GitHub</b> Which repository should “Read release” read?</p>${ask}<p>Open the workflow and change it yourself, or report this to support.</p><div class="c-act"><button class="btn ghost sm" type="button" data-open="wf:fastapi">Open the workflow</button></div>`;
+  }
+  const say = { ready: 'A fix is ready. Nothing changes until an Approver says yes.', approved: FIX.approved, testing: FIX.testing, on: FIX.on, failed: FIX.failed, declined: FIX.declined }[f];
+  let act = '';
+  if (f === 'ready') act = `<button class="btn ${W.user === 'bob' ? '' : 'ghost'} sm" type="button" data-open="fixappr">${W.user === 'bob' ? 'Review the fix' : 'Open the approval'}</button>`;
+  if (f === 'declined') act = canEdit() ? '<button class="btn" type="button" data-fix="again">Fix it for me</button>' : '';
+  if (f === 'approved') act = canEdit() ? '<button class="btn" type="button" data-fix="on">Turn back on</button>' : '<span class="c-left">An Operator turns it back on.</span>';
+  const tone = f === 'on' ? 'okline' : f === 'failed' || f === 'declined' ? 'fx-say' : 'fx-say';
+  return `<p class="${tone}"${['testing', 'ready'].includes(f) ? ' role="status"' : ''}>${f === 'on' ? ICON.check : ''}${say}</p>${f === 'ready' || f === 'testing' ? fixCrew() : ''}${act ? `<div class="c-act">${act}</div>` : ''}`;
+}
+function fixLogRows() {
+  const f = W.fix;
+  if (f === 'none') return [];
+  const l = [...FIX_CRUMBS];
+  if (f === 'back') l.push(['8:03:02', 'Round 1: 0 of 3 scenarios passed.'], ['8:03:40', 'Round 2: 0 of 3 scenarios passed, no better than before.'], ['8:03:41', 'I couldn’t fix this. A round made no progress. Nothing was changed.', 'bad']);
+  if (['ready', 'approved', 'testing', 'on', 'failed', 'declined'].includes(f)) l.push(['8:02:48', 'I ran 3 scenarios in the simulation, and 3 passed.'], ['8:02:49', 'The platform checked the fixed version, and it passed.'], ['8:02:50', 'A fix is ready as version 4. Nothing changes until an Approver says yes.', 'now']);
+  if (f === 'declined') l.push(['8:09:00', 'Bob said no to the fix: not what I wanted. The workflow stays as it was.', 'bad']);
+  if (['approved', 'testing', 'on', 'failed'].includes(f)) l.push(['8:09:00', 'Bob said yes to the fix.']);
+  if (f === 'on') l.push(['8:10:30', 'The fix passed its test run, so the workflow is back on with it. Bob said yes to it.']);
+  if (f === 'failed') l.push(['8:10:30', 'The fix’s test run didn’t pass, so the workflow stays as it was. Bob said yes to it.', 'bad']);
+  return l;
+}
+const fixPill = () => ({ none: null, drafting: ['Drafting a fix', 'run'], ready: [W.user === 'bob' ? 'Needs your yes' : 'Waiting for a yes', 'wait'], back: ['Handed back', 'err'], approved: ['Approved', 'ok'], testing: ['Testing', 'run'], on: ['Back on', 'ok'], failed: ['Test failed', 'err'], declined: ['Declined', 'idle'] })[W.fix];
+function patchFix(el) {
+  const html = fixHTML();
+  el.hidden = !html;
+  el.innerHTML = html;
+  const stage = el.closest('[data-stage]');
+  if (stage) fitFix(stage);
+}
+/* The stage has a set height, so it grows to hold the card, and the key stays below it. */
+function fitFix(stage) {
+  const card = $('.fix', stage);
+  const key = $('.key', stage);
+  if (!card || !key || card.hidden) { stage.style.removeProperty('height'); return; }
+  stage.style.height = `${Math.max(card.offsetTop + card.offsetHeight + key.offsetHeight + 28, stage.classList.contains('tall') ? 740 : 580)}px`;
+  if (!card._ro && typeof ResizeObserver === 'function') {
+    card._ro = new ResizeObserver(() => { if (card.isConnected) fitFix(stage); });
+    card._ro.observe(card);
+  }
+}
+/* The approval page: the change, the cause, each scenario with code’s verdict, and code’s checks. The AI’s summary is help, never the check. */
+function fixApprView() {
+  const decided = ['approved', 'testing', 'on', 'failed', 'declined'].includes(W.fix);
+  let foot = '';
+  if (W.fix === 'ready') {
+    foot = W.user === 'bob'
+      ? '<button class="btn ghost" type="button" data-fix="no">Decline</button><span class="c-act"><button class="btn" type="button" data-fix="ok">Approve</button></span>'
+      : '<span class="c-left">You can’t approve your own work. You asked for this fix.</span>';
+  } else if (decided) {
+    foot = `<span class="c-left ${W.fix === 'declined' ? '' : 'okline'}">${W.fix === 'declined' ? 'Declined by Bob: not what I wanted. The fix stays off.' : `${ICON.check}Approved by Bob.`}</span>`;
+  }
+  return `<div class="pv" data-live="fixappr">
+    <div class="pv-head"><div><p class="pv-kind">Set-up approval, from Alice’s request for a fix</p><h3>FastAPI release check</h3></div><span class="pill lg" data-live="fix-pill"></span></div>
+    <p class="pv-sent">A fix for a run that stopped. Nothing changes until an Approver says yes.</p>
+    <div class="pv-sec"><h4>The cause</h4><p>GitHub answered, but the “Read release” block couldn’t find the field “tag”.</p></div>
+    <div class="pv-sec"><h4>What it changes</h4>${W.fixAns ? `<p class="ba"><b>Read release</b><span class="muted">Repository</span><span class="was">tiangolo/fastapi-old</span><span class="arr" aria-hidden="true">→</span><b>${W.fixAns}</b></p><p>Alice answered the question, and the platform made the change from the answer.</p><p>Once it is turned back on, ${W.fixAns} joins the team’s list of repositories any workflow may read.</p>` : '<p class="ba"><b>Read release</b><span class="muted">Field it reads</span><span class="was">tag</span><span class="arr" aria-hidden="true">→</span><b>tag_name</b></p>'}</div>
+    <div class="pv-sec"><h4>Scenarios, on practice systems</h4><ul class="fx-sc"><li><span>Replay the stop</span><span class="v ok">Passed</span></li><li><span>A newer release</span><span class="v ok">Passed</span></li><li><span>No newer release</span><span class="v ok">Passed</span></li></ul></div>
+    <div class="pv-sec"><h4>What the platform checked</h4><ul class="fx-sc"><li><span class="v ok">Passed</span><span>The change stays inside the blocks where the run stopped.</span></li><li><span class="v ok">Passed</span><span>Every scenario passed on practice systems.</span></li><li><span class="v ok">Passed</span><span>It passes the safety check.</span></li><li><span class="v ok">Passed</span><span>No setting a person filled changed.</span></li></ul></div>
+    <p class="fx-note">These come from the platform’s own checks, never from the AI’s summary.</p>
+    <div class="pv-foot">${foot}</div>
+  </div>`;
+}
+function patchFixAppr(el) {
+  const p = fixPill();
+  $$('[data-live="fix-pill"]', el).forEach((x) => { if (p) { x.textContent = p[0]; x.dataset.s = p[1]; } });
+  const foot = $('.pv-foot', el);
+  if (foot) foot.innerHTML = $('.pv-foot', document.createRange().createContextualFragment(fixApprView()))?.innerHTML ?? '';
+}
+async function fixAsk() {
+  if (W.fix !== 'none') return;
+  W.fix = 'drafting';
+  refresh();
+  await wait(2200);
+  W.fix = FIXPLAN === 'back' ? 'back' : 'ready';
+  refresh();
+}
+async function fixOn() {
+  if (W.fix !== 'approved') return;
+  W.fix = 'testing';
+  refresh();
+  await wait(1800);
+  W.fix = FIXPLAN === 'fails' ? 'failed' : 'on';
+  refresh();
+}
+
 /* ---------- The stopped run, with the troubleshooter’s answers ---------- */
+const STOP_LOG = () => (moved() ? 'Read release couldn’t find the field “tag” in GitHub’s answer. Stopped before anything was written.' : 'GitHub didn’t answer in 30 seconds. Stopped before anything was written.');
 const FOUND = 'Found 0.121.0. You run 0.115.2.';
 const QA = {
   stopped: [['What happened', 'GitHub didn’t answer at 8:00.'], ['Affected', 'Nothing. No ticket was written.'], ['Safe to retry', 'Yes. GitHub is answering again.']],
@@ -1314,9 +1470,10 @@ const QA = {
   done: [['Found', FOUND], ['Result', 'MOCK-22 created after Bob’s yes.']],
   declined: [['Found', FOUND], ['Result', '']],
 };
-const TODAY = { stopped: 'GitHub didn’t answer', retrying: 'Retrying', waiting: 'Waiting for Bob’s yes', writing: 'Creating the ticket', done: 'MOCK-22 created', declined: 'Declined. Nothing was written.' };
+const TODAY = { get stopped() { return stopWhy(); }, retrying: 'Retrying', waiting: 'Waiting for Bob’s yes', writing: 'Creating the ticket', done: 'MOCK-22 created', declined: 'Declined. Nothing was written.' };
 const RUNPILL = { stopped: ['Stopped', 'err'], retrying: ['Running', 'run'], waiting: ['Waiting for a yes', 'wait'], writing: ['Running', 'run'], done: ['Done', 'ok'], declined: ['Declined', 'idle'] };
-const qaHTML = () => QA[W.stage].map(([k, v]) => `<div><dt>${k}</dt><dd>${k === 'Result' && W.stage === 'declined' ? `Bob declined${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.` : v}</dd></div>`).join('');
+const QA_MOVED = [['What happened', 'GitHub answered, but the “Read release” block couldn’t find the field “tag”.'], ['Affected', 'Nothing. No ticket was written.'], ['Safe to retry', 'No. It would stop in the same place.']];
+const qaHTML = () => (W.stage === 'stopped' && moved() ? QA_MOVED : QA[W.stage]).map(([k, v]) => `<div><dt>${k}</dt><dd>${k === 'Result' && W.stage === 'declined' ? `Bob declined${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.` : v}</dd></div>`).join('');
 const runCard = () => `<div class="card" data-live="run" data-spec="run">
   <div class="c-head"><b>FastAPI release check</b><span class="pill" data-live="run-pill"></span></div>
   ${runLine()}
@@ -1336,14 +1493,16 @@ const runView = (full = false) => (full ? `<div class="pv" data-live="run">${run
   ${runLine()}
   <dl class="qa" data-live="run-qa"></dl>
   <div class="pv-foot"><span></span><span class="c-act" data-live="run-act"></span></div>
+  <div class="fx" data-live="run-fix" hidden></div>
 </div>`);
 function logRows() {
-  const l = [['8:00:00', 'Started on schedule.'], ['8:00:01', 'Version checker asked GitHub for FastAPI’s newest release.'], ['8:00:31', 'GitHub didn’t answer in 30 seconds. Stopped before anything was written.', 'bad']];
+  const l = [['8:00:00', 'Started on schedule.'], ['8:00:01', 'Version checker asked GitHub for FastAPI’s newest release.'], ['8:00:31', STOP_LOG(), 'bad']];
   if (W.stage !== 'stopped') l.push(['9:01:10', 'Retried from Read release, after a short wait. Daily 8:00 didn’t run again.']);
   if (['waiting', 'writing', 'done', 'declined'].includes(W.stage)) l.push(['9:01:12', 'Found 0.121.0. You run 0.115.2.'], ['9:01:13', 'Asked an Approver for a yes in Teams.', W.stage === 'waiting' ? 'now' : '']);
   if (['writing', 'done'].includes(W.stage)) l.push(['9:04:02', 'Bob said yes.']);
   if (W.stage === 'done') l.push(['9:04:03', 'Created MOCK-22 in Jira project MOCK.']);
   if (W.stage === 'declined') l.push(['9:04:02', `Bob declined${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.`]);
+  if (W.stage === 'stopped') l.push(...fixLogRows());
   return l.map(([t, s, c]) => `<li${c ? ` class="${c}"` : ''}><span class="t">${t}</span><span>${s}</span></li>`).join('');
 }
 const NOW = {
@@ -1371,15 +1530,15 @@ const stageHTML = () => `<div class="stage-wrap"><div class="stage" data-stage>
   <div class="hub"><span data-hub></span><p class="hub-who">Planner</p></div>
   <ol class="talk" data-talk aria-label="What the agents said"></ol>
   <ol class="stations" data-stations aria-label="Steps"></ol>
-  <p class="sysdot" data-sys hidden style="left:calc(20% - 150px);top:242px">${ICON.code}${nw('GitHub, no answer')}</p>
-  <section class="fix" data-fix hidden aria-label="AI troubleshooter" style="--dl:2.4s">${fw('trouble', 52)}<div><p class="fix-who">AI troubleshooter</p><dl class="qa" data-live="run-qa"></dl><span class="c-act" data-live="run-act"></span></div></section>
+  <p class="sysdot" data-sys hidden style="left:calc(20% - 150px);top:242px">${ICON.code}${nw(moved() ? 'GitHub, no “tag” field' : 'GitHub, no answer')}</p>
+  <section class="fix" data-fix hidden aria-label="AI troubleshooter" style="--dl:2.4s">${fw('trouble', 52)}<div><p class="fix-who">AI troubleshooter</p><dl class="qa" data-live="run-qa"></dl><span class="c-act" data-live="run-act"></span><div class="fx" data-live="run-fix" hidden></div></div></section>
   <ul class="key" aria-label="Key"><li><i class="ok"></i>Done</li><li><i class="run"></i>${nw('At work')}</li><li><i class="wait"></i>${nw('Waits for a person')}</li><li><i class="stop"></i>Stopped</li><li><i class="todo"></i>${nw('Not reached yet')}</li></ul>
 </div></div>`;
 function stNow(id, st) {
   const tm = `<span class="tm" data-since="${W.since}" data-p="Working, ">Working…</span>`;
   if (st === 'now') return id === 'read' && W.rewound ? '<span class="tag-b">Picks up here</span>' : tm;
   if (id === 'when' && st === 'done') return nw('Started 8:00');
-  if (id === 'read' && st === 'err') return 'GitHub didn’t answer';
+  if (id === 'read' && st === 'err') return stopWhy();
   if (id === 'read' && st === 'done' && W.stage !== 'stopped') return nw('Retried 9:01');
   if (id === 'compare' && st === 'done') return nw('Found 0.121.0');
   if (id === 'yes' && st === 'wait') return `<span>Sent to Bob in Teams</span><span class="timer tmr" data-since="${W.waitSince}">0:00</span>`;
@@ -1398,7 +1557,7 @@ function stationHTML(s, i, chg) {
 function talkItems() {
   const R = W.run;
   const l = [['lead', 'Version checker', nw('Check FastAPI on GitHub for a new release.'), '']];
-  if (W.stage === 'stopped') l.push(['version', 'Planner', 'GitHub didn’t answer in 30 seconds. Stopped before anything was written.', 'bad']);
+  if (W.stage === 'stopped') l.push(['version', 'Planner', STOP_LOG(), 'bad']);
   if (R.compare === 'done') l.push(['version', 'Planner', 'Found 0.121.0. You run 0.115.2.', '']);
   if (reached(R.yes)) l.push(['lead', 'Bob, in Teams', nw('Asked for a yes to 1 Jira ticket.'), 'gate']);
   if (R.yes === 'done') l.push(['bob', 'Planner', 'Bob said yes.', 'gate']);
@@ -1826,7 +1985,7 @@ function showTab(btn) {
 
 /* ---------- Keep every live card in step with the source ---------- */
 const NODE_FACE = { now: 'working', err: 'error', done: 'success', wait: 'idle', no: 'idle', skip: 'idle', '': 'idle' };
-const TR_FACE = { stopped: 'idle', retrying: 'working', waiting: 'success', writing: 'success', done: 'success', declined: 'idle' };
+const TR_FACE = { get stopped() { return ['drafting', 'testing'].includes(W.fix) ? 'working' : W.fix === 'ready' ? 'success' : 'idle'; }, retrying: 'working', waiting: 'success', writing: 'success', done: 'success', declined: 'idle' };
 function patchRun(el) {
   $$('[data-rl]', el).forEach(patchRunLine);
   el.classList.toggle('finished', ['done', 'declined'].includes(W.stage));
@@ -1843,7 +2002,8 @@ function patchRun(el) {
   $$('[data-live="run-now"]', el).forEach((p) => { p.innerHTML = runNowHTML(); });
   $$('[data-stage]', el).forEach((s) => { patchStage(s); stageRO?.observe(s); });
   setFace(el, 'trouble', TR_FACE[W.stage]);
-  $$('[data-live="run-act"]', el).forEach((p) => { p.innerHTML = W.stage === 'stopped' && canEdit() ? '<button class="btn ghost" type="button" data-toast="Sent to support with this run attached. The reply will show here.">Report to support</button><button class="btn retry" type="button">Retry</button>' : ''; });
+  $$('[data-live="run-act"]', el).forEach((p) => { p.innerHTML = W.stage === 'stopped' && canEdit() ? `<button class="btn ghost" type="button" data-toast="Sent to support with this run attached. The reply will show here.">Report to support</button>${moved() ? '' : '<button class="btn retry" type="button">Retry</button>'}` : ''; });
+  $$('[data-live="run-fix"]', el).forEach(patchFix);
 }
 function patchAppr(el) {
   const map = { waiting: [W.user === 'bob' ? 'Needs your yes' : 'Waiting for a yes', 'wait'], approved: ['Approved', 'ok'], declined: ['Declined', 'idle'], none: ['Not sent', 'idle'] };
@@ -1890,7 +2050,7 @@ function patchWf(el) {
   const steps = stepsFor(f.then);
   const st = lastStates(id);
   const ran = lastRun(id) !== 'No runs yet';
-  const note = id === 'fastapi' && W.stage === 'stopped' ? { id: 'read', tone: 'err', text: 'Stopped today at 8:00. GitHub didn’t answer' } : id === 'fastapi' && W.stage === 'waiting' ? { id: 'yes', tone: 'wait', text: 'Waiting for Bob’s yes.' } : null;
+  const note = id === 'fastapi' && W.stage === 'stopped' ? { id: 'read', tone: 'err', text: `Stopped today at 8:00. ${stopWhy()}` } : id === 'fastapi' && W.stage === 'waiting' ? { id: 'yes', tone: 'wait', text: 'Waiting for Bob’s yes.' } : null;
   $('[data-live="wf-steps-h"]', el).innerHTML = `Steps${ran ? ` <span class="n">${nw('with today’s 8:00 run')}</span>` : ''}`;
   $('[data-live="wf-key"]', el).innerHTML = ran ? flowKey(st, steps) : '';
   $('[data-live="wf-flow"]', el).innerHTML = flowHTML(steps, ran ? st : {}, { first: short(f.sched), note, run: ran });
@@ -1925,6 +2085,7 @@ function refresh() {
     : `<span class="okline">${ICON.check}Removed from the watchlist.</span><button class="btn ghost sm" type="button" data-restore>Undo</button>`);
   set('key-act', W.key ? '<button class="btn" type="button" data-keyask>Ask the admin to renew it</button>' : `<span class="okline">${ICON.check}Asked the admin in Teams.</span>`);
   $$('[data-live="run"]').forEach(patchRun);
+  $$('[data-live="fixappr"]').forEach(patchFixAppr);
   $$('[data-live="appr"]').forEach(patchAppr);
   $$('[data-live="wf"]').forEach(patchWf);
   refreshDrafts();
@@ -2057,7 +2218,7 @@ function titleOf(spec) {
   if (v === 'wf') return W.wf[id].name;
   if (v === 'soft') return W.soft[id].name;
   if (v === 'dw') return dT(W.dw[id]).name;
-  return { needs: 'Needs you', run: 'The run', appr: 'Approval', build: 'Build', key: 'Jira key', report: 'The report', setup: 'Set-up approval', slog: 'Approval log', explain: 'Explain' }[v];
+  return { needs: 'Needs you', run: 'The run', appr: 'Approval', build: 'Build', key: 'Jira key', report: 'The report', setup: 'Set-up approval', fixappr: 'Set-up approval', slog: 'Approval log', explain: 'Explain' }[v];
 }
 /* Rail pages carry more per row than chat cards: the last run, what checks each software, urgent first. */
 const xBtn = (id) => `<button class="btn ghost sm" type="button" data-open="explain:${id}">Explain</button>`;
@@ -2122,6 +2283,7 @@ function viewHTML(spec, full = false) {
   if (v === 'soft') return softView(id, full);
   if (v === 'report') return reportView(id);
   if (v === 'setup') return setupView(id, full);
+  if (v === 'fixappr') return fixApprView();
   if (v === 'dw') return dwView(id, full);
   if (v === 'slog') return slogView(id);
   if (v === 'explain') return explainView(id, spec.split(':')[2]);
@@ -3452,11 +3614,20 @@ async function playTask(t) {
 /* ---------- Controls ---------- */
 function press(group, attr, value) { $$(`[${attr}]`, group).forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute(attr) === value))); }
 function setSpeed(k) { K = k; document.documentElement.style.setProperty('--k', String(k)); press($('#speed'), 'data-k', String(k)); }
-const whoWorld = (u) => (u === 'bob' ? { user: 'bob', ...WAITING } : { maint: u === 'maint' });
+const causeNow = () => $('#causeSeg [aria-pressed="true"]')?.dataset.cause || 'quiet';
+/* With “A field moved” on, the run stays stopped for everyone, and switching person keeps the fix where it stands. */
+const whoWorld = (u, keepFix = false) => {
+  if (causeNow() === 'moved') return { user: u === 'bob' ? 'bob' : 'alice', maint: u === 'maint', cause: 'moved', ...(keepFix ? { fix: W.fix, fixAns: W.fixAns || '' } : {}) };
+  return u === 'bob' ? { user: 'bob', ...WAITING } : { maint: u === 'maint' };
+};
 const whoNow = () => $('#whoSeg [aria-pressed="true"]')?.dataset.u || 'alice';
 $('#speed').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setSpeed(parseFloat(b.dataset.k)); });
 $('#tasks').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) playTask(b.dataset.t); });
-$('#whoSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { press($('#tasks'), 'data-t', ''); scene(whoWorld(b.dataset.u), true); } });
+$('#whoSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { press($('#tasks'), 'data-t', ''); scene(whoWorld(b.dataset.u, true), true); } });
+$('#causeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { press($('#causeSeg'), 'data-cause', b.dataset.cause); press($('#tasks'), 'data-t', ''); scene(whoWorld(whoNow()), true); } });
+$('#fixSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { FIXPLAN = b.dataset.fixplan; press($('#fixSeg'), 'data-fixplan', FIXPLAN); } });
+press($('#fixSeg'), 'data-fixplan', FIXPLAN);
+press($('#causeSeg'), 'data-cause', 'quiet');
 $('#reset').addEventListener('click', () => { press($('#tasks'), 'data-t', ''); scene(whoWorld(whoNow()), true); });
 $('#composer').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -3530,6 +3701,16 @@ app.addEventListener('click', (e) => {
   if (pick('.cv.edit [data-node]')) { selectNode(pick('.cv.edit [data-node]').dataset.node); return; }
   if (pick('[data-rollback]')) { const [id, v] = pick('[data-rollback]').dataset.rollback.split(':'); const card = pick('[data-chg]'); rollback(id, +v); if (card) settleChg(card); return; }
   if (pick('[data-fixyes]')) { const card = pick('[data-chg]'); fixYes(pick('[data-fixyes]').dataset.fixyes); if (card) settleChg(card); return; }
+  if (pick('[data-fix]')) {
+    const a = pick('[data-fix]').dataset.fix;
+    if (a === 'ask') quiet(fixAsk());
+    if (a === 'ok') { W.fix = 'approved'; refresh(); }
+    if (a.startsWith('answer|')) { W.fixAns = a.slice(7); W.fix = 'ready'; refresh(); }
+    if (a === 'again') { W.fix = 'none'; W.fixAns = ''; quiet(fixAsk()); }
+    if (a === 'no') { W.fix = 'declined'; refresh(); }
+    if (a === 'on') quiet(fixOn());
+    return;
+  }
   if (pick('[data-open]')) { quiet(openView(pick('[data-open]').dataset.open, inP)); return; }
   if (pick('.p-close')) { closePanel(); return; }
   if (pick('.retry')) { quiet(retry()); return; }
