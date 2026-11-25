@@ -87,6 +87,7 @@ from platform_api.monitoring.troubleshooter import (
     FoundCause,
     cause_words,
     explain_failure,
+    inside_the_workflow,
     stop_kind,
     what_happened,
 )
@@ -167,6 +168,7 @@ __all__ = [
     "current_failure",
     "delay_in",
     "explain_failure",
+    "inside_the_workflow",
     "fix_summary",
     "pseudonym",
     "stop_kind",

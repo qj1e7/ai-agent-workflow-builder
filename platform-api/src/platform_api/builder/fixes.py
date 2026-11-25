@@ -85,6 +85,7 @@ from platform_api.monitoring import (
     cause_words,
     current_failure,
     explain_failure,
+    inside_the_workflow,
     stop_kind,
 )
 from platform_api.monitoring import RunFailedData as StopData
@@ -134,6 +135,12 @@ CALL_COLUMNS: Final[Mapping[ModelCall, LiteralString]] = {
 OFF: Final = "Fix it for me is off here."
 NO_MODEL: Final = "Fix it for me needs an AI model, and none is connected yet."
 NOT_STOPPED: Final = "This run isn't stopped, so there's nothing to fix."
+NOT_IN_THE_WORKFLOW: Final = (
+    "The cause isn't in the workflow's own settings or wiring, so a fix can't help."
+)
+CANT_TELL_OFFER: Final = "The platform couldn't tell whether a fix can start. Try again soon."
+MODEL_CHECK_FOR: Final = timedelta(seconds=30)
+"""A read of the run asks whether a model is set at most this often, and never opens its key."""
 NOT_DRAFTED: Final = "Fix it for me works only for a workflow drafted here, as it was approved."
 CANT_TELL: Final = "The platform can't tell where the run stopped, so it can't be fixed."
 NEWER: Final = (
@@ -359,7 +366,7 @@ class _Ready:
     events: Sequence[Any]
     created: RunCreatedData
     failure: Any
-    model: ModelAccess
+    model: ModelAccess | None
     set_up: SetUpPlan
     stopped_at: list[str]
 
@@ -587,19 +594,21 @@ class Fixes:
         self.settings = settings
         self._wordings = wordings
         self._wake = asyncio.Event()
+        self._model_seen: tuple[datetime, bool] | None = None
 
     # The start
 
     async def start(self, run_id: RunId, asker: Principal) -> FixView | Refused | NotFound:
         """Starts a fix on a stopped run for an Operator, whom the route checked."""
-        ready = await self._preflight(run_id)
+        ready = await self._preflight(run_id, for_offer=False)
         if not isinstance(ready, _Ready):
             return ready
-        events, created, failure, model, set_up, stopped_at = (
+        model = ready.model
+        assert model is not None
+        events, created, failure, set_up, stopped_at = (
             ready.events,
             ready.created,
             ready.failure,
-            ready.model,
             ready.set_up,
             ready.stopped_at,
         )
@@ -643,7 +652,14 @@ class Fixes:
     async def offer(self, run_id: RunId) -> FixOffer:
         """Whether a fix could start on this stopped run now, in the words start would refuse
         with. It reads only, so it writes no event and keeps no row."""
-        ready = await self._preflight(run_id)
+        try:
+            return await self._offer(run_id)
+        except Exception:
+            log.warning("fix offer for %s: couldn't be worked out", run_id, exc_info=True)
+            return FixOffer(can=False, why_not=CANT_TELL_OFFER)
+
+    async def _offer(self, run_id: RunId) -> FixOffer:
+        ready = await self._preflight(run_id, for_offer=True)
         if isinstance(ready, NotFound):
             return FixOffer(can=False, why_not=NOT_STOPPED)
         if isinstance(ready, Refused):
@@ -658,8 +674,20 @@ class Fixes:
             can=False, why_not=NOT_STOPPED if isinstance(refused, NotFound) else refused.words
         )
 
-    async def _preflight(self, run_id: RunId) -> _Ready | Refused | NotFound:
-        """The checks a start makes before it writes anything."""
+    async def _model_is_set(self) -> bool:
+        """Whether a model is connected, asked afresh at most every half minute. The run is read
+        every few seconds, and opening the saved key each time is more than a read needs."""
+        now = self._db.clock()
+        if self._model_seen is not None and now - self._model_seen[0] < MODEL_CHECK_FOR:
+            return self._model_seen[1]
+        is_set = await self._models.access() is not None
+        # Only a yes is kept, so connecting a model shows at once.
+        self._model_seen = (now, True) if is_set else None
+        return is_set
+
+    async def _preflight(self, run_id: RunId, *, for_offer: bool) -> _Ready | Refused | NotFound:
+        """The checks a start makes before it writes anything. A read of the offer makes the
+        same ones, and never opens the model's key."""
         if not self.settings.on:
             return Refused(OFF)
         events = await self._log.read_after(run_id, 0)
@@ -669,9 +697,16 @@ class Fixes:
         failure = current_failure(events)
         if failure is None:
             return Refused(NOT_STOPPED)
-        model = await self._models.access()
-        if model is None:
-            return Refused(NO_MODEL)
+        if not inside_the_workflow(failure.data):
+            return Refused(NOT_IN_THE_WORKFLOW)
+        if for_offer:
+            if not await self._model_is_set():
+                return Refused(NO_MODEL)
+            model = None
+        else:
+            model = await self._models.access()
+            if model is None:
+                return Refused(NO_MODEL)
         set_up = await self._drafted.set_up_plan(created.use_case_id)
         if set_up is None:
             return Refused(NOT_DRAFTED)

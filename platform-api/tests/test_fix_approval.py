@@ -32,8 +32,8 @@ from platform_api.builder.fixes import (
     DECLINED,
     HANDED_BACK,
     NEVER_PROPOSED,
-    ON_PAUSED,
     NOT_IN_THE_WORKFLOW,
+    ON_PAUSED,
     SETTING,
     STALE,
     Fixes,
@@ -1088,14 +1088,16 @@ async def test_the_offer_says_why_when_the_workflow_is_held_in_n8n_or_wasn_t_dra
     use_case_id = await fix_lab.set_up_and_stop()
     async with fix_lab.db.transaction("builder") as uow:
         await uow.conn.execute(
-            "UPDATE builder.use_cases SET held_by = 'alice' WHERE use_case_id = %s",
+            "UPDATE builder.use_cases SET held_by = 'alice', held_since = now()"
+            " WHERE use_case_id = %s",
             (use_case_id,),
         )
     held = await fix_lab.fixes.offer(RUN)
     assert (held.can, held.why_not) == (False, "It's open in n8n, so it can't be fixed now.")
     async with fix_lab.db.transaction("builder") as uow:
         await uow.conn.execute(
-            "UPDATE builder.use_cases SET held_by = NULL WHERE use_case_id = %s", (use_case_id,)
+            "UPDATE builder.use_cases SET held_by = NULL, held_since = NULL WHERE use_case_id = %s",
+            (use_case_id,),
         )
         await uow.conn.execute(
             "UPDATE builder.use_case_versions SET document = document || '{\"edited\": true}'"
@@ -1130,6 +1132,20 @@ async def test_the_offer_doesn_t_open_the_saved_model_key_on_every_read(fix_lab:
     fix_lab.clock.later(minutes=1)
     assert (await fix_lab.fixes.offer(RUN)).can is True
     assert fix_lab.models.opened - opened <= 2
+
+
+async def test_a_fix_that_waits_for_a_yes_is_in_the_approver_s_needs_you_and_not_the_asker_s(
+    fix_lab: FixLab,
+):
+    """Home lists a set-up approval for each Approver who may decide it, so a fix waiting for a
+    yes is a row in Bob's Needs you, named as a fix, and none in Alice's."""
+    from tests.support import ALICE, BOB
+
+    await fix_lab.set_up_and_stop()
+    await fix_lab.handed_in()
+    waiting = await fix_lab.lab.approvals.waiting_for(BOB)
+    assert [state.request.name for state in waiting] == ["a fix for Release check"]
+    assert await fix_lab.lab.approvals.waiting_for(ALICE) == []
 
 
 async def test_the_offer_says_so_when_the_run_isn_t_stopped(fix_lab: FixLab):

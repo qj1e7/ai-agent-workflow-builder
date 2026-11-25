@@ -11,6 +11,8 @@ from platform_api.orchestration.http import FailedView, run_view_adapter, with_f
 from platform_api.shared import RunId
 from platform_api.wire import FixOffer
 
+pytestmark = pytest.mark.anyio
+
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "views"
 RUN = RunId("run_01JB9")
 
@@ -41,7 +43,9 @@ async def test_a_failed_run_carries_the_offer():
 
 async def test_a_reason_a_fix_can_t_start_is_carried_in_the_platform_s_words():
     why = "It's open in n8n, so it can't be fixed now."
-    shown = await with_fix_offer(view("failure.final"), Fixes(FixOffer(can=False, why_not=why)), RUN)
+    shown = await with_fix_offer(
+        view("failure.final"), Fixes(FixOffer(can=False, why_not=why)), RUN
+    )
     assert isinstance(shown, FailedView)
     assert (shown.fix_offer.can, shown.fix_offer.why_not) == (False, why)  # type: ignore[union-attr]
 

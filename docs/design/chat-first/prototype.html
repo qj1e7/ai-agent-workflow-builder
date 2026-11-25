@@ -975,7 +975,7 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
       <li>“Handed back” shows the sentence the team lead chose, why it stopped, each round it tried, and what the person can do next.</li>
       <li>View as Bob and open the approval: the cause, the change, each scenario with the platform’s verdict, and the platform’s four checks. Alice sees why she can’t approve it. After Bob’s yes, Alice presses “Turn back on”, and the card shows the test run, then the result. “Test fails” plays the failed result.</li>
       <li>“Handed back” asks which repository “Read release” should read, because a fix never changes a setting itself. Alice picks one and the fix waits for a yes again. The approval then says Alice answered, and the read-list sentence says which repository joins the team’s list. Bob reads “An Operator answers this.” instead of buttons.</li>
-      <li>To reach every outcome: set “A field moved”, press “Fix it for me” as Alice, switch “View as” to Bob (the fix stays), press “Review the fix” and Approve or Decline, then switch back to Alice for “Turn back on”. A no offers “Fix it for me” again. Choose Ready, Test fails or Handed back before pressing.</li>
+      <li>To reach every outcome: set “A field moved”, press “Fix it for me” as Alice, switch “View as” to Bob (the fix stays, and shows in his Needs you as “Check it”, as a set-up approval does), press “Review the fix” or “Check it” and Approve or Decline, then switch back to Alice for “Turn back on”. A no offers “Fix it for me” again. Choose Ready, Test fails or Handed back before pressing.</li>
       <li>The AI troubleshooter, Fix drafter and Scenario writer have cards on the Agents page in the app, which this sketch has no page for.</li>
     </ul>
   </section>
@@ -1225,8 +1225,10 @@ function softState(k) {
   if (!s.run) return ['Watching', 'idle'];
   return s.run === s.latest ? ['Up to date', 'ok'] : ['Newer out', 'wait'];
 }
+/* A fix that waits for a yes is a row in an Approver’s Needs you, as any set-up approval is. The person who asked has no row. */
+const fixNeeds = () => (W.user === 'bob' && moved() && W.fix === 'ready' ? [{ g: 'now', t: '<b>Alice</b> asks for a check of a fix for <b>FastAPI release check</b>', s: '<b>FastAPI fix</b> needs your yes', sub: 'The cause, the change and the platform’s checks are on the approval.', go: 'Check it', open: 'fixappr', tone: 'wait' }] : []);
 function needs() {
-  if (W.user === 'bob') return [...(W.appr === 'waiting' ? [{ g: 'now', t: '<b>FastAPI upgrade ticket</b> needs your yes', s: '<b>FastAPI ticket</b> needs your yes', sub: 'Upgrade FastAPI from 0.115.2 to 0.121.0', go: 'Review and decide', open: 'appr', tone: 'wait' }] : []), ...setupNeeds()];
+  if (W.user === 'bob') return [...fixNeeds(), ...(W.appr === 'waiting' ? [{ g: 'now', t: '<b>FastAPI upgrade ticket</b> needs your yes', s: '<b>FastAPI ticket</b> needs your yes', sub: 'Upgrade FastAPI from 0.115.2 to 0.121.0', go: 'Review and decide', open: 'appr', tone: 'wait' }] : []), ...setupNeeds()];
   const l = W.order.filter(flagged).map((id) => ({ g: 'now', t: `<b>${W.wf[id].name}</b> can’t write without a yes`, s: `<b>${W.soft[id].name} check</b> can’t write`, open: `wf:${id}`, tone: 'err' }));
   if (!flagged('fastapi') && W.stage === 'stopped' && !W.paused.fastapi) l.push({ g: 'now', t: '<b>FastAPI release check</b> stopped at 8:00', s: '<b>FastAPI check</b> stopped', sub: stopWhy(), go: 'Open the run', open: 'run', tone: 'err' });
   if (W.langserve) l.push({ g: 'set', t: '<b>LangServe</b> can’t be found on GitHub', s: '<b>LangServe</b> not found', open: 'soft:langserve', tone: 'wait' });
@@ -1240,7 +1242,7 @@ function needsHTML(l) {
 }
 const needsHead = () => {
   const n = needs().length;
-  if (W.user === 'bob') return !n ? 'Nothing waits for your yes' : n > 1 ? `${n} things wait for your yes` : W.appr === 'waiting' ? '1 change waits for your yes' : '1 workflow waits for your yes';
+  if (W.user === 'bob') return !n ? 'Nothing waits for your yes' : n > 1 ? `${n} things wait for your yes` : fixNeeds().length ? '1 fix waits for your yes' : W.appr === 'waiting' ? '1 change waits for your yes' : '1 workflow waits for your yes';
   return n ? `${n} ${n === 1 ? 'thing needs' : 'things need'} you` : 'Nothing needs you';
 };
 
