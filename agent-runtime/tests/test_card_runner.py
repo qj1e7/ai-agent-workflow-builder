@@ -866,3 +866,44 @@ def test_the_read_of_releases_leaves_the_day_out_when_github_gives_none():
         if e.kind == "agent_step_finished" and e.data.step == "github_read_releases"
     ]
     assert "newest_published_at" not in read.data.result
+
+
+def _read_result(result):
+    [read] = [
+        e
+        for e in result.events
+        if e.kind == "agent_step_finished" and e.data.step == "github_read_releases"
+    ]
+    return read.data.result
+
+
+def test_the_read_counts_only_stable_releases_the_tag_rule_accepts_and_dates_the_newest_of_them():
+    source = FakeSource(["1.3.0", "nightly", "1.2.16", "1.2.15"])
+    source.releases[0] = Release(tag="1.3.0", prerelease=True, published_at="2026-11-20T08:00:00Z")
+    source.releases[2] = Release(tag="1.2.16", published_at="2026-11-18T08:00:00Z")
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    result = Room(ScriptedChat(script=script), source=source).run()
+    assert isinstance(result, TaskFinished)
+    read = _read_result(result)
+    assert read["tags"] == ["1.2.16", "1.2.15"]
+    assert read["newest_published_at"] == "2026-11-18T08:00:00Z"
+
+
+def test_the_read_names_where_it_read_and_which_repository():
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    result = Room(ScriptedChat(script=script)).run()
+    assert isinstance(result, TaskFinished)
+    read = _read_result(result)
+    assert read["source"] == "GitHub"
+    assert read["repo"] == REPO
+
+
+def test_a_read_that_failed_says_so_with_its_source_repository_and_problem():
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    source = FakeSource(langgraph_tags(), failures=[404])
+    result = Room(ScriptedChat(script=script), source=source).run()
+    read = _read_result(result)
+    assert read["source"] == "GitHub"
+    assert read["repo"] == REPO
+    assert "problem" in read
+    assert "tags" not in read

@@ -216,3 +216,15 @@ def test_codes_own_wording_in_each_platform_request_keeps_to_its_facts(path: Pat
     body = {**json.loads(path.read_text()), "model": answer_request().model.model_dump()}
     request = ExplainWordingRequest.model_validate(body)
     assert fact_check(request.wording, request) is None
+
+
+def test_the_card_run_fixture_records_when_the_newest_release_came_out_and_where_it_was_read():
+    finished = json.loads((FIXTURES / "card-task-finished.json").read_text())
+    [read] = [
+        e
+        for e in finished["events"]
+        if e["kind"] == "agent_step_finished" and e["data"]["step"] == "github_read_releases"
+    ]
+    assert read["data"]["result"]["newest_published_at"] == "2026-11-12T08:00:00Z"
+    assert read["data"]["result"]["source"] == "GitHub"
+    assert read["data"]["result"]["repo"] == "langchain-ai/langgraph"
