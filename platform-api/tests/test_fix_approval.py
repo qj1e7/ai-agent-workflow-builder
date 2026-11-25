@@ -33,6 +33,7 @@ from platform_api.builder.fixes import (
     HANDED_BACK,
     NEVER_PROPOSED,
     ON_PAUSED,
+    NOT_IN_THE_WORKFLOW,
     SETTING,
     STALE,
     Fixes,
@@ -156,7 +157,11 @@ class Models:
         )
     )
 
+    opened: int = 0
+    """How many times the saved key was opened."""
+
     async def access(self) -> ModelAccess | None:
+        self.opened += 1
         return self.access_now
 
 
@@ -240,7 +245,7 @@ class FixLab:
             f"/internal/v1/runs/{RUN}/fixes/{fix_id}{path}", json=body, headers=headers
         )
 
-    async def set_up_and_stop(self) -> str:
+    async def set_up_and_stop(self, **stop: Any) -> str:
         """A drafted workflow Alice described and Carol sent, that Bob approved, set up and
         turned on, whose run stopped."""
         lab = self.lab
@@ -262,19 +267,22 @@ class FixLab:
                 "UPDATE builder.use_cases SET draft = false WHERE use_case_id = %s",
                 (use_case["use_case_id"],),
             )
-        await self.stop(use_case["use_case_id"])
+        await self.stop(use_case["use_case_id"], **stop)
         return str(use_case["use_case_id"])
 
-    async def stop(self, use_case_id: str) -> None:
+    async def stop(
+        self,
+        use_case_id: str,
+        reason: Any = "WorkflowNodeError",
+        message: str = "The ticket's title read a field that isn't there: tag",
+        retryable: bool = False,
+    ) -> None:
         async with self.db.transaction("monitoring") as uow:
             created = RunCreatedData(
                 use_case_id=use_case_id, use_case_version=1, started_by=UserId("alice")
             )
             failed = RunFailedData(
-                stage="working",
-                reason="WorkflowNodeError",
-                retryable=False,
-                message="The ticket's title read a field that isn't there: tag",
+                stage="working", reason=reason, retryable=retryable, message=message
             )
             await self.log.append(
                 uow,
@@ -1042,6 +1050,86 @@ async def test_the_offer_says_why_not_in_the_words_the_start_would_refuse_with(f
     newer = await fix_lab.fixes.offer(RUN)
     assert newer.can is False
     assert newer.why_not is not None and "newer version" in newer.why_not
+
+
+@pytest.mark.parametrize(
+    ("reason", "message", "retryable"),
+    [
+        ("AgentError", "JiraNotConnected: Jira is not connected.", False),
+        ("AgentError", "JiraRefused: Jira refused the key.", False),
+        ("AgentError", "UnknownError: something else.", False),
+        ("DispatchFailed", "n8n was unreachable.", False),
+        ("UnboundIntent", "No binding.", False),
+        ("OutOfOrderStep", "Out of order.", False),
+        ("StoppedByUpdate", "Updated.", False),
+        ("SafetyDenied", "Denied.", False),
+        ("WriteFailed", "Jira said no.", False),
+        ("TimedOut", "Waited too long.", True),
+        ("WorkflowNodeError", "GitHub returned 503 three times.", True),
+    ],
+)
+async def test_a_stop_outside_the_workflow_is_offered_no_fix_and_a_start_is_refused(
+    fix_lab: FixLab, reason: str, message: str, retryable: bool
+):
+    """ADR 0055, section 1: only a stop whose cause is inside the workflow gets a fix. It is an
+    allow-list: a key, n8n, the platform's own code, an outage and a write that failed get none."""
+    await fix_lab.set_up_and_stop(reason=reason, message=message, retryable=retryable)
+    offer = await fix_lab.fixes.offer(RUN)
+    assert (offer.can, offer.why_not) == (False, NOT_IN_THE_WORKFLOW)
+    refused = await fix_lab.ask(status=409)
+    assert refused["detail"] == NOT_IN_THE_WORKFLOW
+    assert fix_lab.runtime.started == []
+    assert await fix_lab.fix_events() == []
+
+
+async def test_the_offer_says_why_when_the_workflow_is_held_in_n8n_or_wasn_t_drafted_here(
+    fix_lab: FixLab,
+):
+    use_case_id = await fix_lab.set_up_and_stop()
+    async with fix_lab.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.use_cases SET held_by = 'alice' WHERE use_case_id = %s",
+            (use_case_id,),
+        )
+    held = await fix_lab.fixes.offer(RUN)
+    assert (held.can, held.why_not) == (False, "It's open in n8n, so it can't be fixed now.")
+    async with fix_lab.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.use_cases SET held_by = NULL WHERE use_case_id = %s", (use_case_id,)
+        )
+        await uow.conn.execute(
+            "UPDATE builder.use_case_versions SET document = document || '{\"edited\": true}'"
+            " WHERE use_case_id = %s",
+            (use_case_id,),
+        )
+    edited = await fix_lab.fixes.offer(RUN)
+    assert (edited.can, edited.why_not) == (
+        False,
+        "Fix it for me works only for a workflow drafted here, as it was approved.",
+    )
+
+
+async def test_an_offer_that_breaks_says_it_can_t_tell_and_never_raises(fix_lab: FixLab):
+    await fix_lab.set_up_and_stop()
+
+    async def broken(_: Any) -> Any:
+        raise RuntimeError("the log is down")
+
+    fix_lab.fixes._log.read_after = broken  # type: ignore[method-assign]
+    offer = await fix_lab.fixes.offer(RUN)
+    assert offer.can is False
+    assert offer.why_not == "The platform couldn't tell whether a fix can start. Try again soon."
+
+
+async def test_the_offer_doesn_t_open_the_saved_model_key_on_every_read(fix_lab: FixLab):
+    await fix_lab.set_up_and_stop()
+    opened = fix_lab.models.opened
+    for _ in range(5):
+        assert (await fix_lab.fixes.offer(RUN)).can is True
+    assert fix_lab.models.opened - opened <= 1
+    fix_lab.clock.later(minutes=1)
+    assert (await fix_lab.fixes.offer(RUN)).can is True
+    assert fix_lab.models.opened - opened <= 2
 
 
 async def test_the_offer_says_so_when_the_run_isn_t_stopped(fix_lab: FixLab):
