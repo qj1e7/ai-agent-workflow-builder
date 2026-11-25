@@ -907,8 +907,8 @@ def _as_a_release_check(read: TaskRead, request: str) -> TaskRead:
     """The reading of a release check: no ticket search, as it finds releases, and the schedule,
     ticket and Jira project its own words ask for, whether or not the model read them. The
     ticket stands on all its words, "if there's a new one" too, so its row quotes them. The
-    project is read from its words only where its ticket names one by its key, as "create a
-    Jira ticket in the MOCK project" (`TICKET_IN_A_PROJECT`)."""
+    project is read from its words only where its ticket names one by its key and the word
+    project, as "create a Jira ticket in the MOCK project" (`TICKET_IN_A_PROJECT`)."""
     own = WATCHLISTS_OWN_TICKET.search(request)
     ticket = read.ticket
     if own is not None:
@@ -1316,12 +1316,13 @@ WATCHLISTS_OWN_TICKET: Final = re.compile(rf"{_A_TICKET}(?:\s+{_WHEN_A_NEW_ONE})
 or in another project, keeps those words, which come back as parts it can't do."""
 TICKET_IN_A_PROJECT: Final = re.compile(
     rf"(?i:{_A_TICKET})\s+(?P<place>(?i:in(?:to)?\s+(?:the\s+)?(?:jira\s+)?)(?!JIRA\b)"
-    rf"(?P<key>[A-Z][A-Z0-9]{{1,9}})(?i:\s+(?:jira\s+)?project)?)(?:\s+(?P<new>(?i:"
+    rf"(?P<key>[A-Z][A-Z0-9]{{1,9}})(?i:\s+(?:jira\s+)?project))(?:\s+(?P<new>(?i:"
     rf"{_WHEN_A_NEW_ONE})))?\b"
 )
-"""The same ticket in a Jira project its words name by its key in capitals, as "create a Jira
-ticket in the MOCK project when there is a new one". Only so is a release check's project read
-from its words. "When there is a new one" is still the ticket's own, never a part it can't do."""
+"""The same ticket in a Jira project its words name by its key in capitals and the word project,
+as "create a Jira ticket in the MOCK project when there is a new one", never "in CSV format".
+Only so is a release check's project read from its words. "When there is a new one" is still the
+ticket's own, never a part it can't do."""
 
 
 def _stretches(pattern: re.Pattern[str], text: str) -> list[tuple[int, int]]:

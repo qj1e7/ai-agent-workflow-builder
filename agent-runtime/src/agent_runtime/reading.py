@@ -1284,10 +1284,11 @@ def _schedule_span(text: str, shown: str) -> tuple[int, int] | None:
     """Where the request's schedule stands: the model's schedule words as the request writes
     them, else the request's first run of schedule words, which is the person's own phrase
     for it ("Each week" read as "Every Monday"). A first run that names no schedule, as "on" in
-    "on GitHub", is no phrase for it: then the schedule stands where a later run names the day
-    or the time the model read, written another way, as "every weekday at 9am" for "Weekdays at
-    9am". A day word anywhere else, as in "finished by this Friday", is not the schedule's, and
-    comes back if nothing else explains it."""
+    "on GitHub", is no phrase for it: then the schedule stands where a later run says it repeats
+    and names the day or the time the model read, written another way, as "every weekday at
+    9am" for "Weekdays at 9am", and the whole request names them too. A day word anywhere else,
+    as in "finished by this Friday" or "due Friday at 5pm", is not the schedule's, and comes
+    back if nothing else explains it."""
     found = _find(text, shown)
     if found is not None:
         return found
@@ -1297,11 +1298,19 @@ def _schedule_span(text: str, shown: str) -> tuple[int, int] | None:
     if _run_named(text, runs[0]):
         return runs[0][0][0], runs[0][-1][1]
     read = said_schedule(shown)
+    if not _same_schedule(read, said_schedule(text)):
+        return None
     for run in runs[1:]:
         start, end = run[0][0], run[-1][1]
-        if _same_schedule(read, said_schedule(text[start:end])):
+        said = text[start:end]
+        if REPEATS.search(said) and _same_schedule(read, said_schedule(said)):
             return start, end
     return None
+
+
+REPEATS: Final = re.compile(rf"\b(?:every|each|daily|weekdays|(?:{DAY_NAMES})s)\b", re.IGNORECASE)
+"""Words that say a schedule repeats, as "every", "daily" or "Fridays". A day or a time with
+none, as "Friday at 5pm", may be a date, so a schedule is never taken from it alone."""
 
 
 def _schedule_runs(text: str) -> list[list[tuple[int, int]]]:

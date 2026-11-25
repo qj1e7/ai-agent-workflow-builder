@@ -38,7 +38,7 @@ def facts(*watched: str) -> PlannerFacts:
     return PlannerFacts(watchlist=held, watchlist_schedule=MONDAY_9, watchlist_project="MOCK")
 
 
-def rows(answer: SetupCardAnswer) -> dict[str, tuple[str, str, str | None]]:
+def rows(answer: SetupCardAnswer | PartAnswer) -> dict[str, tuple[str, str, str | None]]:
     return {row.kind: (row.text, row.state, row.note) for row in answer.rows}
 
 

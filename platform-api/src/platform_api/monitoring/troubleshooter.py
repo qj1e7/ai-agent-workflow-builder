@@ -481,15 +481,25 @@ def what_happened(failure: RunFailedData, at: datetime | None = None) -> str:
 
 
 def answers(failure: RunFailedData, at: datetime | None = None) -> Answers:
-    """The three answers to a stop. `at` is when it stopped, in the team's time zone."""
+    """The three answers to a stop. `at` is when it stopped, in the team's time zone. A place the
+    source doesn't have stops a retry the same way, so the answers say no, as its advice does."""
     at_the_write = failure.stage == "acting"
-    retry = RetryAnswer(
-        possible=failure.retryable, asks_again=failure.retryable and not at_the_write
-    )
+    stop = _source_stop(failure)
+    if stop is not None and stop.delay == "not_found":
+        retry = RetryAnswer(possible=False, asks_again=False)
+        safe = f"{SAME_ON_A_RETRY} {explain_failure(failure).suggestion}"
+    else:
+        retry = RetryAnswer(
+            possible=failure.retryable, asks_again=failure.retryable and not at_the_write
+        )
+        safe = _safe_to_retry(failure, retry)
     return Answers(
         what_happened=what_happened(failure, at),
         what_affected=MAYBE_WRITTEN if at_the_write else NOTHING_WRITTEN,
-        safe_to_retry=_safe_to_retry(failure, retry),
+        safe_to_retry=safe,
         retry=retry,
         next="retry" if retry.possible else "report",
     )
+
+
+SAME_ON_A_RETRY: Final = "No. A retry reads the same name and stops the same way."

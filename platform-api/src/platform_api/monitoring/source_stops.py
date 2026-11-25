@@ -109,7 +109,12 @@ def not_found_words(source: str, place: str) -> str:
     return f"{source} can't find {place}."
 
 
-_NOT_FOUND: Final = re.compile(r"(?P<source>\S.*?) can't find (?P<place>\S+?)\.")
+NOT_FOUND_SOURCES: Final = ("GitHub",)
+"""The sources our platform reads for a Read block and says it can't find a place at. Only these
+are read back as a stop, so other words that say "can't find" stay n8n's words for the block."""
+_NOT_FOUND: Final = re.compile(
+    rf"(?P<source>{'|'.join(map(re.escape, NOT_FOUND_SOURCES))}) can't find (?P<place>\S+?)\."
+)
 
 
 def not_found_in(message: str | None) -> tuple[str, str] | None:
@@ -151,6 +156,8 @@ def read_stop(message: str) -> SourceStop | None:
     if not message.endswith(CAUSES[delay]):
         return None
     source = found.group("source")
+    if delay == "not_found" and source not in NOT_FOUND_SOURCES:
+        return None
     count, unit = found.group("count"), found.group("unit")
     per = {"second": 1000, **dict(_UNITS)}
     limit = None if count is None else round(float(count) * per[unit])
