@@ -219,3 +219,59 @@ def test_words_beside_the_software_the_card_doesnt_hold_come_back_crossed(words:
     assert [row.text for row in answer.cant] == [crossed]
     held = [p.text for p in parts_of(fields, task, answer) if p.mark == "will_do"]
     assert not any(crossed in text for text in held), held
+
+
+ON_GITHUB = (
+    "Check FastAPI on GitHub for new releases every weekday at 9am, and create a Jira ticket "
+    "when there's a new one."
+)
+"""The 25 Nov walk-through's request, typed on Home with the local stack's model."""
+DAILY_ON_GITHUB = ON_GITHUB.replace("every weekday at 9am", "every day at 9:00")
+IN_MOCK = (
+    "Check FastAPI on GitHub for new releases every weekday at 9am, and create a Jira ticket "
+    "in the MOCK project when there is a new one."
+)
+FASTAPI_TICKET = TicketRead(creates=True, says="list", said="create a Jira ticket")
+
+
+def fastapi(**fields: Any) -> TaskRead:
+    return read(software="FastAPI", ticket=FASTAPI_TICKET, **fields)
+
+
+@pytest.mark.parametrize(
+    ("task", "schedule", "shown"),
+    [
+        (ON_GITHUB, "Weekdays at 9am", "Every weekday at 9am"),
+        (ON_GITHUB, "Every weekday at 9:00", "Every weekday at 9am"),
+        (ON_GITHUB, "every weekday 9am", "Every weekday at 9am"),
+        (DAILY_ON_GITHUB, "Daily at 9:00", "Every day at 9:00"),
+        (DAILY_ON_GITHUB, "Every day at 9am", "Every day at 9:00"),
+    ],
+)
+def test_a_schedule_the_model_wrote_another_way_is_read_and_never_also_crossed(
+    task: str, schedule: str, shown: str
+):
+    """25 Nov walk-through: "on" in "on GitHub" stood before the schedule, so its words were never
+    found when the model wrote them another way. The card held the schedule, and the same words
+    came back crossed: "Can't do: Weekday at 9am. I couldn't read this as a schedule."."""
+    fields = fastapi(schedule=schedule)
+    answer = answer_of(fields, task, facts())
+    assert isinstance(answer, SetupCardAnswer), answer
+    assert rows(answer)["schedule"][:2] == (shown, "understood")
+    assert all(p.mark != "cant" for p in parts_of(fields, task, answer))
+
+
+@pytest.mark.parametrize(
+    "place",
+    [PlaceRead(project="MOCK", said="in the MOCK project"), PlaceRead(project="MOCK"), None],
+    ids=["place read", "key only", "place not read"],
+)
+def test_the_project_its_ticket_names_is_its_own_and_never_also_crossed(place: PlaceRead | None):
+    """25 Nov walk-through: with the project between the ticket and "when there is a new one", the
+    ticket's own words stopped before it, so "new" came back crossed. With no place read, "MOCK
+    project when there is a new" did, though the builder read MOCK as the ticket's project."""
+    fields = fastapi(schedule="every weekday at 9am", place=place)
+    answer = answer_of(fields, IN_MOCK, facts())
+    assert isinstance(answer, SetupCardAnswer), answer
+    assert rows(answer)["where"][:2] == ("Jira project MOCK", "understood")
+    assert all(p.mark != "cant" for p in parts_of(fields, IN_MOCK, answer))
