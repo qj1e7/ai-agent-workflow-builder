@@ -1,5 +1,6 @@
 import json
-from typing import Any
+import threading
+from typing import Any, cast
 
 import httpx
 
@@ -176,6 +177,42 @@ def test_each_check_has_its_own_cap_and_budget_but_the_pace_is_shared():
     second.look("maven", LOG4J, "2.14.1")
     assert (first.lookups, second.lookups) == (3, 1)
     assert clock.slept == [NvdPace.for_key(None).wait_seconds] * 3
+
+
+def test_a_check_never_waits_on_another_checks_nvd_call():
+    """The pace lock only books a turn. A check whose NVD call hangs keeps no other check from
+    taking the next turn, so each ends inside its own deadline."""
+    stuck = threading.Event()
+    release = threading.Event()
+
+    class SlowNvd:
+        pace = NvdPace.for_key(None)
+
+        def score(self, cve: str) -> None:
+            if cve == "CVE-STUCK":
+                stuck.set()
+                release.wait(10)
+
+    clock = FakeClock()
+    osv = Osv("https://osv.test", client=many(0).client)
+    reader = AdvisoryReader(
+        osv, cast(Nvd, SlowNvd()), sleep=clock.sleep, clock=lambda: clock.now.timestamp()
+    )
+    first = threading.Thread(target=reader.score, args=("CVE-STUCK", reader.start_check()))
+    first.start()
+    try:
+        assert stuck.wait(5)
+        second: list[object] = []
+        other = threading.Thread(
+            target=lambda: second.append(reader.score("CVE-OTHER", reader.start_check()))
+        )
+        other.start()
+        other.join(5)
+        assert not other.is_alive(), "the second check waited on the first one's call"
+        assert clock.slept == [NvdPace.for_key(None).wait_seconds], "the pace is still kept"
+    finally:
+        release.set()
+        first.join(5)
 
 
 def test_a_new_check_starts_its_count_and_clock_again():

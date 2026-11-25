@@ -329,6 +329,8 @@ class AdvisoryReader:
         nvd = self._nvd
         if nvd is None or check.lookups >= nvd.pace.max_lookups:
             return None
+        # The lock only books the next free turn. The wait and the call happen outside it, so a
+        # check never waits on another check's NVD call, and its own deadline bounds both.
         with self._pace:
             now = self._clock()
             wait = 0.0
@@ -339,11 +341,11 @@ class AdvisoryReader:
             left = time_left()
             if left is not None and left <= wait:
                 return None
-            if wait:
-                self._sleep(wait)
+            self._last_asked = now + wait
             check.lookups += 1
-            self._last_asked = self._clock()
-            return nvd.score(cve)
+        if wait:
+            self._sleep(wait)
+        return nvd.score(cve)
 
 
 class AdvisoryCheck:
