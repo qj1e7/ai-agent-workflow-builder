@@ -221,7 +221,7 @@ test('the run card moves in place from the stream: stopped, retrying, waiting fo
   })
 
   await card.getByRole('button', { name: 'Retry', exact: true }).click()
-  await expect(pill, 'the same card waits for a yes after the retry').toHaveText('Waiting for a yes', { timeout: 90_000 })
+  await expect(pill, 'the same card waits for approval after the retry').toHaveText('Waiting for approval', { timeout: 90_000 })
   const approvalId = await backend.approvalIdOf(runId)
   const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
   await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'approve', digest }, undefined, [201])
@@ -236,7 +236,7 @@ test('the run card moves in place from the stream: stopped, retrying, waiting fo
   const STAGES: readonly (readonly [string, RegExp])[] = [
     ['stopped', /^Stopped/],
     ['retrying', /Retrying after a short wait/],
-    ['waiting', /^Waiting for a yes/],
+    ['waiting', /^Waiting for approval/],
     ['writing', /said yes\. Creating the ticket/],
     ['done', /^Done/],
   ]

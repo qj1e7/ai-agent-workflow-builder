@@ -25,6 +25,13 @@ One step of an agent card's plan. A block uses at most one tool.
 One thing an agent can do in another system, such as reading GitHub releases or creating a Jira ticket. The team builds and tests every tool, and an agent can use only the tools on its card.
 _Avoid_: Plugin, skill, integration
 
+**Agent messages**:
+What the agents said to each other during a run, in their own words, such as the Planner asking the Version checker to run its plan. They are for support. A run's page keeps them behind Show agent messages, under What happened, and never uses them as a summary or as the check.
+_Avoid_: Summary by AI (retired from the run page), agent chatter
+
+**What happened**:
+A run page's folded history: plain steps built by code from the run's events, each with its time, such as Checked GitHub: found 0.165.0, Drafted 1 Jira ticket, Asked an Approver in Teams, Bob approved and Created MOCK-1. It replaces Step by step.
+
 **Agent library**:
 The agent cards a team has saved. The Planner chooses from it. It lives under How it works, in Settings (ADR 0043).
 _Avoid_: Agent hub (NCS's agent hub is a separate thing)

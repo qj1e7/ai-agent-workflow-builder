@@ -409,7 +409,7 @@ describe('questions on a request', () => {
   })
 
   it('confirms a kept question or answer in the prototype’s words', () => {
-    expect(sentWords('Carol')).toBe('Sent to Carol. The request is still waiting for a yes.')
+    expect(sentWords('Carol')).toBe('Sent to Carol. The request is still waiting for approval.')
   })
 
   it('puts a sent question or answer in its place before the next read, once', () => {

@@ -91,7 +91,7 @@ for (const user of USERS) {
       const page = await context.newPage()
       await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
       const found: string[] = []
-      const runPage: Screen = { name: 'A run waiting for a yes', path: `/runs/${runId}`, heading: ANY_HEADING, shows: 'Not checked' }
+      const runPage: Screen = { name: 'A run waiting for approval', path: `/runs/${runId}`, heading: ANY_HEADING, shows: 'Show full text' }
       const pages: Screen[] = [
         { name: 'A workflow', path: `/workflows/${quiet.id}`, heading: quiet.name },
         ...softwarePages.map((softwarePath, index): Screen => ({ name: `Software ${String(index + 1)}`, path: softwarePath, heading: ANY_HEADING })),
