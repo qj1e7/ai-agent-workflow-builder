@@ -1283,22 +1283,54 @@ def _no_time_said(schedule: str, text: str) -> str:
 def _schedule_span(text: str, shown: str) -> tuple[int, int] | None:
     """Where the request's schedule stands: the model's schedule words as the request writes
     them, else the request's first run of schedule words, which is the person's own phrase
-    for it ("Each week" read as "Every Monday"). A day word anywhere else, as in "finished by
-    this Friday", is not the schedule's, and comes back if nothing else explains it."""
+    for it ("Each week" read as "Every Monday"). A first run that names no schedule, as "on" in
+    "on GitHub", is no phrase for it: then the schedule stands where a later run names the day
+    or the time the model read, written another way, as "every weekday at 9am" for "Weekdays at
+    9am". A day word anywhere else, as in "finished by this Friday", is not the schedule's, and
+    comes back if nothing else explains it."""
     found = _find(text, shown)
     if found is not None:
         return found
+    runs = _schedule_runs(text)
+    if not runs:
+        return None
+    if _run_named(text, runs[0]):
+        return runs[0][0][0], runs[0][-1][1]
+    read = said_schedule(shown)
+    for run in runs[1:]:
+        start, end = run[0][0], run[-1][1]
+        if _same_schedule(read, said_schedule(text[start:end])):
+            return start, end
+    return None
+
+
+def _schedule_runs(text: str) -> list[list[tuple[int, int]]]:
+    """Each run of the request's schedule tokens, in order, as the tokens' spans."""
+    runs: list[list[tuple[int, int]]] = []
     run: list[tuple[int, int]] = []
-    for _, start, end, scheduled in _schedule_tokens(text):
+    for _, start, end, scheduled in [*_schedule_tokens(text), ("", 0, 0, False)]:
         if scheduled:
             run.append((start, end))
         elif run:
-            break
-    named = run and (
+            runs.append(run)
+            run = []
+    return runs
+
+
+def _run_named(text: str, run: list[tuple[int, int]]) -> bool:
+    return (
         any(_a_schedule_word(text[a:b]) for a, b in run)
         or DAY_RANGE.search(text, run[0][0], run[-1][1]) is not None
     )
-    return (run[0][0], run[-1][1]) if named else None
+
+
+def _same_schedule(
+    read: tuple[str | None, str | None], said: tuple[str | None, str | None]
+) -> bool:
+    """Whether the words name each of the day and the time the model read, and it read one. They
+    may name a time it left out, never only the time of a day it guessed."""
+    named = [(a, b) for a, b in zip(read, said, strict=True) if a is not None]
+    return bool(named) and all(a == b for a, b in named)
 
 
 def _schedule_explained(text: str) -> frozenset[str]:
