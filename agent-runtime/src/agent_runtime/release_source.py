@@ -48,6 +48,19 @@ class SourceUnavailable(Exception):
         self.status = status
 
 
+class SourceUnreadable(Exception):
+    """The source answered, but with more than a check reads or in a shape we don't read.
+    Asking again gets the same answer, so it is never tried again (ADR 0025)."""
+
+    def __init__(self, what: str) -> None:
+        super().__init__(what)
+        self.what = what
+
+
+TOO_LARGE = "answered with more than a check reads"
+NOT_READ = "answered in a shape we don't read"
+
+
 class SourceRejected(Exception):
     def __init__(self, status: int, limited: bool = False) -> None:
         super().__init__(status)
@@ -101,6 +114,12 @@ def read_releases(
                 type="UpstreamUnavailable",
                 message=f"The check ran out of time before {source_name} answered",
                 retryable=True,
+            )
+        except SourceUnreadable as unreadable:
+            return TaskError(
+                type="UpstreamRejected",
+                message=f"{source_name} {unreadable.what}",
+                retryable=False,
             )
         except SourceRejected as refused:
             if refused.limited:

@@ -1,9 +1,9 @@
 """Readers for the package registries a team installs from (ADR 0025).
 
 Each reader answers the same way as the GitHub one: the versions as releases, a SourceRejected
-for an answer that will not change if asked again (a 4xx), and a SourceUnavailable for one that
-might (a 5xx, no answer, or an answer in a shape we do not know). Both only read, so neither
-needs an approval.
+for a refusal that will not change if asked again (a 4xx), a SourceUnreadable for an answer too
+large or in a shape we do not read, which will not change either, and a SourceUnavailable for
+one that might (a 5xx or no answer). All of them only read, so none needs an approval.
 """
 
 import json
@@ -16,7 +16,14 @@ from xml.etree import ElementTree
 import httpx
 
 from agent_runtime.capped import MEGABYTE, TooLarge, read_capped
-from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import (
+    NOT_READ,
+    TOO_LARGE,
+    Release,
+    SourceRejected,
+    SourceUnavailable,
+    SourceUnreadable,
+)
 
 DEFAULT_MAVEN_BASE = "https://repo1.maven.org/maven2"
 DEFAULT_NPM_BASE = "https://registry.npmjs.org"
@@ -47,7 +54,7 @@ def _get(client: httpx.Client, url: str, headers: Mapping[str, str]) -> bytes:
     except httpx.TransportError as error:
         raise SourceUnavailable(None) from error
     except TooLarge as error:
-        raise SourceUnavailable(None) from error
+        raise SourceUnreadable(TOO_LARGE) from error
     if status >= 500:
         raise SourceUnavailable(status)
     if status == LIMITED_STATUS:
@@ -79,11 +86,14 @@ def build_of(version: str) -> str | None:
 
 def package_candidates(releases: list[Release], our_version: str | None) -> list[str]:
     """The versions a package check compares: final versions of the build the team runs, or of
-    the first build in BUILDS the package has when no version was given."""
+    the first build in BUILDS the package has when no version was given. A version typed in a
+    build the package never publishes, as Guava's 33.3.1 with no -jre, is compared with that
+    first build too, so the check can still say what is newer."""
     builds = {r.tag: build_of(r.tag) for r in releases if not r.prerelease}
     ours = None if our_version is None else build_of(our_version)
     present = set(builds.values())
-    wanted = ours if ours is not None else next((b for b in BUILDS if b in present), "")
+    default = next((b for b in BUILDS if b in present), "")
+    wanted = ours if ours is not None and ours in present else default
     return [tag for tag, build in builds.items() if build == wanted]
 
 
@@ -123,11 +133,11 @@ def _maven_versions(body: bytes) -> list[str]:
     # A document type could declare entities. The registry never sends one, so one means the
     # answer is not the registry's, and nothing in it is read.
     if b"<!DOCTYPE" in body or b"<!ENTITY" in body:
-        raise SourceUnavailable(None)
+        raise SourceUnreadable(NOT_READ)
     try:
         root = ElementTree.fromstring(body)
     except ElementTree.ParseError as error:
-        raise SourceUnavailable(None) from error
+        raise SourceUnreadable(NOT_READ) from error
     found = [(v.text or "").strip() for v in root.iterfind("./versioning/versions/version")]
     return [version for version in found if version]
 
@@ -152,10 +162,10 @@ def _npm_versions(body: bytes) -> list[str]:
     try:
         document: object = json.loads(body)
     except ValueError as error:
-        raise SourceUnavailable(None) from error
+        raise SourceUnreadable(NOT_READ) from error
     if not isinstance(document, dict):
-        raise SourceUnavailable(None)
+        raise SourceUnreadable(NOT_READ)
     versions = cast(dict[str, object], document).get("versions")
     if not isinstance(versions, dict):
-        raise SourceUnavailable(None)
+        raise SourceUnreadable(NOT_READ)
     return [str(version) for version in cast(dict[object, object], versions)]

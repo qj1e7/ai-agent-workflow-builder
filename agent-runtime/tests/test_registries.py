@@ -9,7 +9,16 @@ from agent_runtime.registries import (
     maven_path,
     package_candidates,
 )
-from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import (
+    DEFAULT_RETRY,
+    NOT_READ,
+    TOO_LARGE,
+    Release,
+    SourceRejected,
+    SourceUnavailable,
+    SourceUnreadable,
+    read_releases,
+)
 from agent_runtime.tags import highest, newer_than
 
 LOG4J = "org.apache.logging.log4j:log4j-core"
@@ -60,8 +69,9 @@ def test_a_coordinate_that_would_leave_its_folder_is_refused(coordinate: str):
 def test_a_metadata_file_with_a_document_type_is_not_read():
     body = b'<?xml version="1.0"?><!DOCTYPE m [<!ENTITY x "y">]><metadata/>'
     source = MavenCentralSource(client=answering(200, body))
-    with pytest.raises(SourceUnavailable):
+    with pytest.raises(SourceUnreadable) as unread:
         source.fetch(LOG4J)
+    assert unread.value.what == NOT_READ
 
 
 def test_an_unknown_package_is_a_refusal_and_an_outage_can_be_retried():
@@ -95,8 +105,9 @@ def test_npm_saying_slow_down_is_marked_as_limited():
 
 @pytest.mark.parametrize("body", [b"not json", b"[]", b'{"versions": []}'])
 def test_npm_answering_in_another_shape_is_not_trusted(body: bytes):
-    with pytest.raises(SourceUnavailable):
+    with pytest.raises(SourceUnreadable) as unread:
         NpmRegistrySource(client=answering(200, body)).fetch("express")
+    assert unread.value.what == NOT_READ
 
 
 @pytest.mark.parametrize(
@@ -140,10 +151,17 @@ GUAVA = [Release(tag=v) for v in ("33.2.0-jre", "33.2.0-android", "33.3.1-jre", 
         ("33.2.0-jre", ["33.2.0-jre", "33.3.1-jre"]),
         ("33.2.0-android", ["33.2.0-android", "33.3.1-android"]),
         (None, ["33.2.0-jre", "33.3.1-jre"]),
+        # Typed without -jre, a build Guava never publishes: compared with its first build.
+        ("33.2.0", ["33.2.0-jre", "33.3.1-jre"]),
     ],
 )
 def test_a_guava_check_compares_only_the_build_the_team_runs(ours: str | None, counted: list[str]):
     assert package_candidates(GUAVA, ours) == counted
+
+
+def test_guava_typed_without_its_build_still_finds_what_is_newer():
+    counted = package_candidates(GUAVA, "33.2.0")
+    assert newer_than("33.2.0", counted, any_family=True) == ["33.3.1-jre"]
 
 
 def test_a_final_marker_compares_as_its_numbers():
@@ -159,8 +177,32 @@ def test_a_final_marker_compares_as_its_numbers():
 
 def test_a_registry_answer_past_the_size_limit_is_not_read():
     huge = b"{" + b" " * MAX_BODY_BYTES + b"}"
-    with pytest.raises(SourceUnavailable):
+    with pytest.raises(SourceUnreadable) as unread:
         NpmRegistrySource(client=answering(200, huge)).fetch("express")
+    assert unread.value.what == TOO_LARGE
+
+
+def test_an_answer_we_dont_read_is_said_as_such_and_never_asked_again():
+    """An unpublished npm package's document has no versions. Asking again gets the same
+    answer, so the check stops at once and does not say npm was unreachable."""
+    asked: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        asked.append(request)
+        return httpx.Response(200, json={"name": "left-pad", "time": {"unpublished": {}}})
+
+    source = NpmRegistrySource(client=httpx.Client(transport=httpx.MockTransport(handle)))
+    slept: list[float] = []
+    result = read_releases(
+        source, "left-pad", DEFAULT_RETRY, slept.append, lambda draft: None, source_name="npm"
+    )
+    assert len(asked) == 1 and slept == []
+    assert not isinstance(result, list)
+    assert (result.type, result.message, result.retryable) == (
+        "UpstreamRejected",
+        "npm answered in a shape we don't read",
+        False,
+    )
 
 
 def test_a_registry_redirect_is_refused_not_followed():
