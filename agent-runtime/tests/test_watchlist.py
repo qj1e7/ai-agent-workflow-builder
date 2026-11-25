@@ -553,3 +553,18 @@ def test_the_tasks_route_runs_a_watchlist():
     result = task_result_adapter.validate_python(response.json())
     assert isinstance(result, TaskFinished)
     assert [f.state for f in result.output.findings] == ["behind", "up_to_date", "cant_check"]
+
+
+def test_a_read_that_worked_but_cannot_be_checked_gives_a_reason_and_no_problem():
+    result = finished(
+        Room(RepoSource(TAGS)).run(request_for(redis("8.2.1"), langgraph("not-a-version")))
+    )
+    steps = [
+        e.data.result
+        for e in result.events
+        if isinstance(e, AgentStepFinishedEvent) and e.data.step == "read_source"
+    ]
+    step = steps[1]
+    assert step["state"] == "cant_check"
+    assert "problem" not in step
+    assert step["reason"] == "Our version not-a-version is not a version number."

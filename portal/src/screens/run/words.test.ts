@@ -319,11 +319,15 @@ describe('a schedule in few words', () => {
 
 describe('a read in the plain steps', () => {
   const at = Date.parse('2026-11-25T02:00:00Z') as ChatItem['at']
-  const read = (seq: number, over: Partial<Extract<ChatItem, { kind: 'checked' }>>): ChatItem => ({ kind: 'checked', seq, at, newest: null, problem: null, source: 'GitHub', software: null, ...over })
+  const read = (seq: number, over: Partial<Extract<ChatItem, { kind: 'checked' }>>): ChatItem => ({ kind: 'checked', seq, at, newest: null, problem: null, reason: null, source: 'GitHub', software: null, ...over })
   const texts = (items: ChatItem[]) => logRowsOf(items, named, QUICK).map((row) => row.text)
 
   it('says a read that failed was not read, and why, and never that no release was found', () => {
     expect(texts([read(1, { software: 'fastapi/fastapi', problem: 'GitHub answered 404 Not Found.' })])).toEqual(['Couldn’t read fastapi/fastapi on GitHub: GitHub answered 404 Not Found.'])
+  })
+
+  it('says a read that worked but could not be checked was not checked, with its reason, never not read', () => {
+    expect(texts([read(1, { software: 'FastAPI', reason: 'Our version x is not a version number.' })])).toEqual(['Couldn’t check FastAPI: Our version x is not a version number.'])
   })
 
   it('names the right source: npm, Maven Central or GitHub', () => {

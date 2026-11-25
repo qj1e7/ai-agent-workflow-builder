@@ -479,6 +479,12 @@ describe('a read that failed, and where each read came from', () => {
     expect(model.chat).toMatchObject([{ kind: 'checked', newest: null, problem: 'npm answered 404 Not Found.', source: 'npm', software: 'Express' }])
   })
 
+  it('keeps a read that worked but could not be checked apart from a read that failed', () => {
+    const model = fold({ software_id: 'sw_1', state: 'cant_check', newest: '1.2.16', software: 'FastAPI', source: 'GitHub', reason: 'Our version x is not a version number.' }, 'read_source')
+    expect(model.chat).toMatchObject([{ kind: 'checked', problem: null, reason: 'Our version x is not a version number.', software: 'FastAPI' }])
+    expect(model.release).toBeNull()
+  })
+
   it('keeps a failed read apart from a read that found no release', () => {
     const none = fold({ releases: 0, tags: [], source: 'GitHub', repo: 'fastapi/fastapi' })
     expect(none.chat).toMatchObject([{ kind: 'checked', newest: null, problem: null }])
