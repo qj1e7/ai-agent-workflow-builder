@@ -949,6 +949,34 @@ def found_software() -> FoundSoftware:
     )
 
 
+def found_software_by_search() -> FoundSoftware:
+    """httpx is not on the reviewed list, so GitHub's search found it. Each match is only a choice
+    for the person, even when it is the only one."""
+    why = "Found by searching GitHub, so make sure it's the one you mean."
+    return FoundSoftware(
+        matches=[
+            SoftwareMatch(
+                repo="encode/httpx",
+                what="A next generation HTTP client for Python",
+                why=f"{why} It has 15,854 stars.",
+                releases="published",
+                newest="0.28.1",
+                found_by="github_search",
+                stars=15854,
+            ),
+            SoftwareMatch(
+                repo="projectdiscovery/httpx",
+                what="httpx is a fast and multi-purpose HTTP toolkit",
+                why=f"{why} It has 10,658 stars.",
+                releases="published",
+                newest="v1.6.10",
+                found_by="github_search",
+                stars=10658,
+            ),
+        ]
+    )
+
+
 def read_releases_request() -> ReadReleasesRequest:
     return ReadReleasesRequest(repo="langchain-ai/langgraph", tag_pattern=RELEASE_TAG_PATTERN)
 
@@ -1443,6 +1471,7 @@ def fixtures() -> dict[str, WireModel]:
         "planner-chosen.json": chosen(),
         "software-find-request.json": find_software_request(),
         "software-found.json": found_software(),
+        "software-found-by-search.json": found_software_by_search(),
         "releases-read-request.json": read_releases_request(),
         "releases-read.json": releases_read(),
         "planner-answer-request.json": traced_answer_request(),

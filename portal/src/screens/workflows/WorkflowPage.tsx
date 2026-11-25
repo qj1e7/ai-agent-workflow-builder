@@ -18,7 +18,6 @@ import { openedFromList } from '../../ui/fromList'
 import { IconChevronLeft, IconPause, IconPlay, IconTrash } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useView, ViewTabs } from '../../ui/ViewTabs'
-import { ExplainButton } from '../explain/ExplainButton'
 import { RunLine } from '../run/RunLine'
 import { SoftwareRoute } from '../software/SoftwarePage'
 import { leadsThePage, StatusBanner } from './Banner'
@@ -276,8 +275,6 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
     }
   })
 
-  // The banner's Explain is the one on the page while a version needs a fix.
-  const explainHere = banner.action?.kind !== 'explain'
   const say = (text: string) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))
   // The Software watchlist is a workflow like the rest. Its list, and each software's page, are drawn inside it.
   const listed = isWatchlist(useCase)
@@ -357,14 +354,9 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           )}
           {useCase.state === 'draft' ? <UseCaseSimulation useCaseId={id} /> : null}
           <DraftActions useCase={useCase} viewer={viewer} />
-          {explainHere || useCase.version >= 2 ? (
+          {useCase.version >= 2 ? (
             <details className={styles['more']}>
               <summary>Details</summary>
-              {explainHere ? (
-                <p>
-                  <ExplainButton useCaseId={id} name={useCase.name} />
-                </p>
-              ) : null}
               <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
             </details>
           ) : null}

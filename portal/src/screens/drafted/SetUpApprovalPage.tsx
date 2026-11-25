@@ -6,7 +6,7 @@ import { pressOnce, useLatch } from '../../api/latch'
 import type { SetUpApprovalView, SetUpDeclineReason, SetUpDecisionIn } from '../../api/types'
 import { ApiError } from '../../api/client'
 import { Button, ButtonLink } from '../../ui/Button'
-import { Flag, Report, Touches, Words } from '../explain/Report'
+import { Checks, Flag, Settings, Touches, WhoApproves, Words } from '../explain/Report'
 import { approvalPill, YOUR_YES } from '../run/approvalWords'
 import { DraftPill } from '../home/Building'
 import { NotFoundPage } from '../../shell/NotFoundPage'
@@ -117,8 +117,9 @@ function Decide({ view }: { view: SetUpApprovalView }) {
 }
 
 /**
- * What an Approver decides on for a draft: In short, what it reads, writes and posts, and the rest of the report under More details.
- * Approve and Decline show only to someone who may decide. Everyone else reads why not, in its place (principle 9).
+ * What an Approver decides on for a draft, all in view: In short, the flags, what it reads, writes and posts, who approves each write,
+ * each setting with the key for each write block and every guess marked, and code's checks (ADR 0051). Approve and Decline show only to
+ * someone who may decide. Everyone else reads why not, in its place (principle 9).
  */
 export function SetUpApproval({ view }: { view: SetUpApprovalView }) {
   const { report } = view
@@ -151,10 +152,18 @@ export function SetUpApproval({ view }: { view: SetUpApprovalView }) {
         <h2 className={styles['kind']}>What it reads, writes and posts</h2>
         <Touches touches={report.touches} />
       </section>
-      <details className={styles['more']}>
-        <summary>More details</summary>
-        <Report report={report} rest />
-      </details>
+      <section className={styles['more']} aria-label="Who approves each write">
+        <h2 className={styles['kind']}>Who approves each write</h2>
+        <WhoApproves approves={report.approves} />
+      </section>
+      <section className={styles['more']} aria-label="Settings">
+        <h2 className={styles['kind']}>Settings</h2>
+        <Settings settings={report.settings} />
+      </section>
+      <section className={styles['more']} aria-label="Safety checks">
+        <h2 className={styles['kind']}>Safety checks</h2>
+        <Checks report={report} />
+      </section>
       {waiting ? (
         view.you_can_decide ? (
           <Decide view={view} />

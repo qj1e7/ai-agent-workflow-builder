@@ -7,7 +7,7 @@ import explainIt from '../../../../contracts/fixtures/planner/answer.explain.it.
 import type { ExplainReply, PlannerReply, WorkflowExplained } from '../../api/types'
 import missingOne from '../../../../contracts/fixtures/planner/answer.explain.missing.json'
 import { ApiError } from '../../api/client'
-import { approvesGist, approvalGist, explainAnswerOf, explainAsk, explainStateOf, explainPath, explainTitle, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist, workflowInFocus } from './explain'
+import { approvesGist, approvalGist, explainAnswerOf, explainAsk, explainStateOf, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist, workflowInFocus } from './explain'
 
 const REPORT = current as WorkflowExplained
 const OLDER = older as WorkflowExplained
@@ -45,10 +45,10 @@ describe('the gist of each section', () => {
     expect(flagsGist({ ...REPORT, fixed: [], passed: [] })).toBe('No flags')
   })
 
-  it('counts the writes that wait for a yes, and the ones that cannot run', () => {
-    expect(approvesGist(REPORT.approves)).toBe('1 waits for a yes on each run')
+  it('counts the writes that wait for approval, and the ones that cannot run', () => {
+    expect(approvesGist(REPORT.approves)).toBe('1 waits for approval on each run')
     const write = REPORT.approves[0]!
-    expect(approvesGist([write, write])).toBe('2 wait for a yes on each run')
+    expect(approvesGist([write, write])).toBe('2 wait for approval on each run')
     expect(approvesGist([{ ...write, decides: 'set_up', approvers: null }])).toBe('1 on the set-up approval')
     expect(approvesGist([{ ...write, decides: 'refused', approvers: null }])).toBe('1 refused')
     expect(approvesGist([{ ...write, decides: 'cant_run_yet', approvers: null }])).toBe('1 can’t run yet')
@@ -68,19 +68,6 @@ describe('the gist of each section', () => {
   })
 })
 
-describe('where Explain goes', () => {
-  it('has a page for the workflow, and for one version of it', () => {
-    expect(explainPath('uc_1', null)).toBe('/workflows/uc_1/explain')
-    expect(explainPath('uc_1', 3)).toBe('/workflows/uc_1/explain?version=3')
-    expect(explainPath('uc a', null)).toBe('/workflows/uc%20a/explain')
-  })
-
-  it('titles the panel Explain, or Explain, version N', () => {
-    expect(explainTitle(null)).toBe('Explain')
-    expect(explainTitle(2)).toBe('Explain, version 2')
-  })
-})
-
 const reply = (answer: PlannerReply['answer'], extra: object = {}): PlannerReply => ({ parts: [], trace_id: null, answer, ...extra }) as PlannerReply
 
 describe('the workflow in focus', () => {
@@ -89,10 +76,6 @@ describe('the workflow in focus', () => {
 
   it('is the workflow open in the side panel', () => {
     expect(workflowInFocus({ kind: 'workflow', id: 'uc_panel' }, [edit])).toBe('uc_panel')
-  })
-
-  it('is the workflow an Explain item in the side panel is about, whatever its version', () => {
-    expect(workflowInFocus({ kind: 'explain', id: 'uc_panel', version: 2 }, [edit])).toBe('uc_panel')
   })
 
   it('is the newest answer that names exactly one workflow when the panel shows none', () => {

@@ -1,5 +1,5 @@
 """The workflow report: the plain-words account that code builds of one version of any workflow
-(ADR 0051, section 6). The draft card, the approval page and Explain all show it.
+(ADR 0051, section 6). The draft card, the set-up approval and the chat's Explain answer show it.
 
 Code writes every word of it, never a model. Each string from the plan or the document, such as
 a block's name, a place or a notice's words, is a Quoted value kept apart from code's own words,
@@ -187,12 +187,12 @@ class EachRun:
 
 @dataclass(frozen=True)
 class AtSetUp:
-    """It runs on the set-up approval, with no yes on each run."""
+    """It runs on the set-up approval, with no approval on each run."""
 
 
 @dataclass(frozen=True)
 class Refused:
-    """No yes comes before it, so our platform refuses the write."""
+    """Nothing asks for approval before it, so our platform refuses the write."""
 
 
 @dataclass(frozen=True)
@@ -331,8 +331,8 @@ OUR_TAGS: Mapping[BlockKind, str] = {
     "error": STARTS,
     "agent": "Runs an agent",
     "propose": "Shapes the change",
-    "ask": "Waits for a yes",
-    "write": "Writes after a yes",
+    "ask": "Waits for approval",
+    "write": "Writes after approval",
     "tell": "Tells the team",
     "report": "Reports a failure",
     "branch": SHAPES,
@@ -351,15 +351,15 @@ ON_SET_UP = "Writes on the set-up approval"
 NOT_YET = "Can't run on this platform yet"
 NOT_YET_TAKES = "This can't run on this platform yet."
 WAITS = {
-    1: "Waits for a yes in Teams on each run. Nobody who started the run or made the workflow "
-    "can give it.",
-    2: "Waits for two yeses in Teams on each run, from two Approvers, one after the other. "
-    "Nobody who started the run or made the workflow can give one.",
+    1: "Waits for an Approver in Teams on each run. Nobody who started the run or made the "
+    "workflow can approve it.",
+    2: "Waits for two Approvers in Teams on each run, one after the other. Nobody who started "
+    "the run or made the workflow can approve it.",
 }
-REFUSED = "Can't write. No yes comes before it, so our platform refuses the write."
-WRITES_ON_SET_UP = "Runs on the set-up approval, with no yes on each run."
-POSTS_ON_SET_UP = "Posts on the set-up approval, with no yes on each run."
-NO_YES_EACH_RUN = ", with no yes on each run"
+REFUSED = "Can't write. Nothing asks for approval before it, so our platform refuses the write."
+WRITES_ON_SET_UP = "Runs on the set-up approval, with no approval on each run."
+POSTS_ON_SET_UP = "Posts on the set-up approval, with no approval on each run."
+NO_YES_EACH_RUN = ", with no approval on each run"
 HELD = ", but it can't run on this platform yet"
 TELL_RULE: frozenset[RuleId] = frozenset(
     {
@@ -371,7 +371,7 @@ TELL_RULE: frozenset[RuleId] = frozenset(
 )
 APPROVAL = {
     "planner": "None needed. The Planner laid it out, and each write through our blocks waits "
-    "for a yes.",
+    "for approval.",
     "n8n": "None needed. An Operator with n8n access set it up.",
     "drafter": "It is set up only after an Approver approves it.",
 }
@@ -487,7 +487,7 @@ class _Version:
     order: Sequence[str]
     cards: Mapping[str, CardView]
     refused: frozenset[str]
-    """Writes with no yes before them."""
+    """Writes with nothing asking for approval before them."""
     told: frozenset[str]
     """n8n's notices that break the Tell rule."""
     changes: frozenset[str]
@@ -708,8 +708,12 @@ def _writes(version: _Version, name: str) -> list[Touch]:
 def _write_phrase(verb: str, at: Quoted | None, refused: bool) -> Words:
     where: Words = () if at is None else (" in ", at)
     if refused:
-        return (f"would {verb}", *where, ", but our platform refuses it with no yes before it")
-    return (f"can {verb}", *where, ", each after a yes")
+        return (
+            f"would {verb}",
+            *where,
+            ", but our platform refuses it, as nothing asks for approval before it",
+        )
+    return (f"can {verb}", *where, ", each after approval")
 
 
 def _verb(rule: ToolRule) -> str:
@@ -732,7 +736,8 @@ def _before(flow: Flow, name: str) -> set[str]:
 
 def _n8n_touches(flow: Flow, name: str, told: bool, held: bool) -> list[Touch]:
     """What one of n8n's blocks for a system reads or posts, as its class row says. A notice that
-    breaks the Tell rule posts with no yes on each run, or can't run at all while it is held."""
+    breaks the Tell rule posts with no approval on each run, or can't run at all while it is
+    held."""
     block = flow.blocks[name]
     row = _n8n_row(block)
     if row is None:

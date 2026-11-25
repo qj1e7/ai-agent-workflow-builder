@@ -17,7 +17,7 @@ import { needsTotal } from '../screens/home/home'
 import { focusMovedOutside } from './PersonChip'
 import { TEAMS_TITLE } from './TeamsPanel'
 import { TEST_NOTE } from './TestControls'
-import { oldAgentsDestination, PAGES, railCountFor, railCurrent, RAIL_PAGE_IDS, softwareDestination } from './routes'
+import { oldAgentsDestination, oldExplainDestination, PAGES, railCountFor, railCurrent, RAIL_PAGE_IDS, softwareDestination } from './routes'
 
 const ORIGIN = 'http://portal.test'
 const MORNING = new Date('2026-10-29T03:00:00Z')
@@ -114,6 +114,11 @@ describe('the rail', () => {
       expect(html, path).toContain('<main')
       expect(text(mainOf(html)), path).not.toContain('Page not found')
     }
+  })
+
+  it('sends an old Explain address to the workflow’s page, which EXPLAIN-gone follows in the browser', () => {
+    expect(oldExplainDestination('uc_1')).toBe('/workflows/uc_1')
+    expect(oldExplainDestination('uc a')).toBe('/workflows/uc%20a')
   })
 
   it('sends the old Agent library address to How it works for an Operator, keeping the agent and the tab, and Home for anyone else', () => {

@@ -23,6 +23,32 @@ interface Slot<T> {
   readonly keep: (kept: T) => void
 }
 
+/** A value that can be watched: the card sets it as it changes, and the lead above it follows. */
+export interface Watched<T> {
+  readonly get: () => T | undefined
+  readonly set: (next: T) => void
+  readonly subscribe: (listen: () => void) => () => void
+}
+
+function watched<T>(): Watched<T> {
+  let value: T | undefined
+  const listeners = new Set<() => void>()
+  return {
+    get: () => value,
+    set: (next) => {
+      if (next === value) return
+      value = next
+      for (const listen of [...listeners]) listen()
+    },
+    subscribe: (listen) => {
+      listeners.add(listen)
+      return () => listeners.delete(listen)
+    },
+  }
+}
+
+const unwatched = <T,>(): Watched<T> => ({ get: () => undefined, set: () => undefined, subscribe: () => () => undefined })
+
 function slot<T>(): Slot<T> {
   let kept: T | undefined
   return {
@@ -54,6 +80,8 @@ export interface CardMemory extends Slot<CardKept> {
   readonly wording: Slot<boolean>
   /** The workflow “explain it” meant when the answer arrived, or null for none, so the card doesn't change as the side panel does. */
   readonly focus: Slot<string | null>
+  /** How many parts of the set-up card are open, which the lead above the card reads, so the line and the footer never disagree. */
+  readonly open: Watched<number>
 }
 
 /** One request a card follows: the run it opens as, and its approval, or null until the run names it. */
@@ -63,11 +91,11 @@ export interface RequestRef {
 }
 
 export function newCardMemory(): CardMemory {
-  return { ...slot<CardKept>(), edit: slot<EditKept>(), beside: slot<true>(), run: slot<string>(), approvals: slot<readonly RequestRef[]>(), changed: slot<ChangedPhase>(), removals: slot<Readonly<Record<string, ChangeFeedback['notice']>>>(), wording: slot<boolean>(), focus: slot<string | null>() }
+  return { ...slot<CardKept>(), edit: slot<EditKept>(), beside: slot<true>(), run: slot<string>(), approvals: slot<readonly RequestRef[]>(), changed: slot<ChangedPhase>(), removals: slot<Readonly<Record<string, ChangeFeedback['notice']>>>(), wording: slot<boolean>(), focus: slot<string | null>(), open: watched<number>() }
 }
 
 const forgets = <T,>(): Slot<T> => ({ kept: () => undefined, keep: () => undefined })
 
-export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), beside: forgets<true>(), run: forgets<string>(), approvals: forgets<readonly RequestRef[]>(), changed: forgets<ChangedPhase>(), removals: forgets<Readonly<Record<string, ChangeFeedback['notice']>>>(), wording: forgets<boolean>(), focus: forgets<string | null>() }
+export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), beside: forgets<true>(), run: forgets<string>(), approvals: forgets<readonly RequestRef[]>(), changed: forgets<ChangedPhase>(), removals: forgets<Readonly<Record<string, ChangeFeedback['notice']>>>(), wording: forgets<boolean>(), focus: forgets<string | null>(), open: unwatched<number>() }
 
 export const CardMemoryContext = createContext<CardMemory>(NO_MEMORY)

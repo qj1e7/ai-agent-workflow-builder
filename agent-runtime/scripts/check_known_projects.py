@@ -15,7 +15,8 @@ def main() -> int:
     )
     rows = [("On our list", "On GitHub now", "Newest the watch counts", "Verdict")]
     failed = 0
-    for project in KNOWN_PROJECTS:
+    projects = [project for project in KNOWN_PROJECTS if project.kind == "github"]
+    for project in projects:
         try:
             match = check_project(source, project, RELEASE_TAG_PATTERN)
         except (SourceRejected, SourceUnavailable) as error:
@@ -34,7 +35,7 @@ def main() -> int:
     for row in rows:
         padded = (cell.ljust(width) for cell, width in zip(row[:3], widths, strict=True))
         print("  ".join([*padded, row[3]]))
-    print(f"{len(KNOWN_PROJECTS)} projects, {failed} not ok.")
+    print(f"{len(projects)} GitHub projects, {failed} not ok. Packages are not checked here.")
     return 1 if failed else 0
 
 

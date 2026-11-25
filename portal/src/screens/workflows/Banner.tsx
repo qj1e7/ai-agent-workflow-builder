@@ -1,6 +1,5 @@
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconAlert, IconCheck, IconLock, IconPause, IconPlay, type Icon } from '../../ui/icons'
-import { explainFlagsPath } from '../explain/explain'
 import { ADD_THE_YES_BACK, SAVE_AGAIN, UNDO } from './n8nChange'
 import type { Banner } from './workflow'
 import styles from './Workflows.module.css'
@@ -69,12 +68,6 @@ function BannerButton({ action, resuming, onResume, onRepublish, republishing }:
       return (
         <ButtonLink to={`/runs/${action.runId}`} variant={variant}>
           Open the run
-        </ButtonLink>
-      )
-    case 'explain':
-      return (
-        <ButtonLink to={explainFlagsPath(action.useCaseId)} variant={variant}>
-          Explain
         </ButtonLink>
       )
   }

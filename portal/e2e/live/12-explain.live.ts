@@ -9,9 +9,10 @@ import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
 
 /**
- * Explain this workflow (ADR 0051, section 6): the report as layout B in the side panel, on its own page and in the chat, with
- * In short reworded only where the guard lets it through. The mock model smooths code's wording, except for a workflow that reads
- * facebook/react, whose smoothing drops a negation and is refused.
+ * Explain in the chat (ADR 0051, section 6): the Planner's answer to “explain the …” shows the report as layout B, with In short
+ * reworded only where the guard lets it through. The mock model smooths code's wording, except for a workflow that reads
+ * facebook/react, whose smoothing drops a negation and is refused. The Explain page is gone: no row, workflow page, version or
+ * side panel links to it, and an old Explain address opens the workflow's page.
  */
 
 const SECTIONS = ['Step by step', 'What it reads, writes and posts', 'Flags', 'Who approves each write', 'Settings', 'Approval']
@@ -22,7 +23,7 @@ interface Made {
   readonly name: string
 }
 
-/** A release check that reads one repository and creates Jira tickets in MOCK after a yes, as the Planner's version checker lays it out. */
+/** A release check that reads one repository and creates Jira tickets in MOCK after approval, as the Planner's version checker lays it out. */
 async function releaseCheck(backend: Backend, name: string, repository: string): Promise<Made> {
   const agents = [{ card_id: 'crd_version_checker', values: { 'GitHub repository': repository, 'Jira project': 'MOCK' } }]
   const made = await backend.post<{ use_case_id: string }>('alice', '/api/v1/agent-use-cases', { name, instruction: `Check ${repository} for a new release and raise a ticket in MOCK.`, agents, schedule: DAILY_8, on: true }, undefined, [201])
@@ -35,7 +36,8 @@ const panelHeading = (page: Page): Locator => page.locator('#side-panel-h')
 const inShort = (scope: Locator): Locator => scope.locator('[data-in-short]')
 
 async function expectEverySection(scope: Locator): Promise<void> {
-  for (const title of SECTIONS) await expect(scope.locator('summary', { hasText: title }), `${title} is a row`).toBeVisible()
+  // A row's text starts with its title, then its gist, so "Approval" never matches the gist "1 waits for approval on each run".
+  for (const title of SECTIONS) await expect(scope.locator('summary', { hasText: new RegExp(`^${title}`) }), `${title} is a row`).toBeVisible()
 }
 
 test.describe('Explain this workflow', () => {
@@ -56,80 +58,43 @@ test.describe('Explain this workflow', () => {
     for (const made of [fastapi, react, versioned]) await backend.delete('alice', `/api/v1/use-cases/${made.id}`, [200, 404])
   })
 
-  test('EXPLAIN-panel: the Explain button on a workflow row opens its report in the side panel, with In short and the six section rows, and More details goes to its page', async ({ browser }, info) => {
+  test('EXPLAIN-gone: no Explain on a Workflows row, the workflow page, its versions or the side panel, and an old Explain address opens the workflow’s page', async ({ browser }, info) => {
+    for (const person of ['alice', 'bob'] as const) {
+      const context = await devContext(browser, person, { reducedMotion: true })
+      const page = await context.newPage()
+      const watch = watchPage(page)
+      await page.goto('/workflows')
+      const row = page.locator(`li[data-workflow-id="${versioned.id}"]`)
+      await expect(row.getByRole('link', { name: new RegExp(`^${versioned.name}`) }), person).toBeVisible()
+      await expect(row.getByRole('link', { name: /^Explain/ }), `${person}: no Explain on the row`).toHaveCount(0)
+
+      await page.goto(`/workflows/${versioned.id}`)
+      await page.locator('summary', { hasText: 'Details' }).click()
+      await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem'), 'both versions are listed').toHaveCount(2)
+      await expect(page.getByRole('main').getByRole('link', { name: /^Explain/ }), `${person}: no Explain on the page or a version`).toHaveCount(0)
+      await expect(page.getByRole('main').getByRole('button', { name: /^Explain/ })).toHaveCount(0)
+      if (person === 'alice') await shot(page, info, 'explain-gone-workflow-page')
+
+      await page.goto(`/workflows/${fastapi.id}/explain?version=1`)
+      await expect(page, 'an old Explain address opens the workflow’s page').toHaveURL(new RegExp(`/workflows/${fastapi.id}$`))
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(fastapi.name)
+      await expect(page.getByRole('main')).not.toContainText('Step by step')
+      assertClean(watch)
+      await context.close()
+    }
+
     const context = await devContext(browser, 'alice', { reducedMotion: true })
     const page = await context.newPage()
-    const watch = watchPage(page)
     await page.goto('/')
     await askAndWait(page, 'Check my workflows')
     await page.getByRole('button', { name: 'See all workflows' }).last().click()
-    const row = panel(page).locator(`li[data-workflow-id="${fastapi.id}"]`)
-    await row.getByRole('button', { name: /^Explain/ }).click()
-
-    await expect(panelHeading(page)).toHaveText('Explain')
-    await expect(panel(page).getByRole('heading', { level: 3, name: fastapi.name })).toBeVisible()
-    await expect(inShort(panel(page)), 'In short leads, in code’s words').toContainText('it reads GitHub “fastapi/fastapi” and Jira “MOCK”', { timeout: 20_000 })
-    await expectEverySection(panel(page))
-    await expect(panel(page).getByText('Reworded', { exact: true }), 'the panel never asks for the reworded line').toHaveCount(0)
-    await expect(panel(page).locator('details[open]'), 'every row starts closed while nothing needs an answer').toHaveCount(0)
-    await panel(page).locator('summary', { hasText: 'Step by step' }).click()
-    await expect(panel(page).locator('details[open]').getByText('“Read release”')).toBeVisible()
-    await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', `/workflows/${fastapi.id}/explain`)
-    await expectAccessible(page, path.join(OUT, 'axe'), 'explain-panel')
-    await shot(page, info, 'explain-panel')
-
-    await panel(page).getByRole('button', { name: 'Workflows', exact: true }).click()
-    await expect(panelHeading(page), 'Back goes to the list it came from').toHaveText('Workflows')
-    assertClean(watch)
-    await context.close()
-  })
-
-  test('EXPLAIN-page: the Explain link on the Workflows page opens the full page, and keyboard Enter opens a row', async ({ browser }, info) => {
-    const context = await devContext(browser, 'alice', { reducedMotion: true })
-    const page = await context.newPage()
-    const watch = watchPage(page)
-    await page.goto('/workflows')
-    await page.locator(`li[data-workflow-id="${fastapi.id}"]`).getByRole('link', { name: /^Explain/ }).click()
-    await expect(page).toHaveURL(new RegExp(`/workflows/${fastapi.id}/explain$`))
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(fastapi.name)
-    await expect(page.getByRole('main')).toContainText('Explain')
-    await expectEverySection(page.getByRole('main'))
-    const flags = page.locator('summary', { hasText: 'Flags' })
-    await flags.focus()
-    await page.keyboard.press('Enter')
-    await expect(page.getByText('Fixed for you', { exact: true })).toBeVisible()
-    await shot(page, info, 'explain-page')
-    assertClean(watch)
-    await context.close()
-  })
-
-  test('EXPLAIN-version: Explain on a version under Versions says Explain, version N, and that today’s rules checked it again', async ({ browser }, info) => {
-    const context = await devContext(browser, 'alice', { reducedMotion: true })
-    const page = await context.newPage()
-    const watch = watchPage(page)
-    await page.goto(`/workflows/${versioned.id}`)
-    await page.locator('summary', { hasText: 'Details' }).click()
-    const versions = page.getByRole('list', { name: 'Versions, newest first' })
-    await versions.getByRole('listitem').last().getByRole('link', { name: /^Explain/ }).click()
-    await expect(page).toHaveURL(new RegExp(`/workflows/${versioned.id}/explain\\?version=1$`))
-    await expect(page.getByRole('main')).toContainText('Explain, version 1')
-    await expect(page.getByRole('main')).toContainText('Version 1. Checked again under today’s rules.')
-    await expect(page.getByRole('main')).toContainText('Graded Safe when it was published')
-    await shot(page, info, 'explain-version')
-    assertClean(watch)
-    await context.close()
-  })
-
-  test('EXPLAIN-roles: an Approver sees Explain on the row, on the workflow page and on each version, and it opens the same report', async ({ browser }) => {
-    const context = await devContext(browser, 'bob')
-    const page = await context.newPage()
-    await page.goto('/workflows')
-    await expect(page.locator(`li[data-workflow-id="${versioned.id}"]`).getByRole('link', { name: /^Explain/ })).toBeVisible()
-    await page.goto(`/workflows/${versioned.id}`)
-    await page.locator('summary', { hasText: 'Details' }).click()
-    await expect(page.getByRole('main').getByRole('link', { name: /^Explain/ }), 'one per version, and one in Details').toHaveCount(3)
-    await page.getByRole('main').getByRole('link', { name: /^Explain/, exact: false }).first().click()
-    await expect(page.getByRole('main')).toContainText('Step by step')
+    const listed = panel(page).locator(`li[data-workflow-id="${fastapi.id}"]`)
+    await expect(listed).toBeVisible()
+    await expect(listed.getByRole('button', { name: /^Explain/ }), 'no Explain beside a row in the panel').toHaveCount(0)
+    await listed.getByRole('button', { name: new RegExp(`^${fastapi.name}`) }).first().click()
+    await expect(panelHeading(page)).toHaveText(fastapi.name)
+    await expect(panel(page).getByRole('link', { name: /^Explain/ }), 'no Explain in the workflow’s panel').toHaveCount(0)
+    await expectAccessible(page, path.join(OUT, 'axe'), 'explain-gone-panel')
     await context.close()
   })
 

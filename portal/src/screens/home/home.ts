@@ -424,7 +424,7 @@ export function actionsOf(need: Need, modelOff = false): readonly Action[] {
     case 'address':
       return [{ kind: 'open', label: 'Show it on the watchlist', to: softwarePath(need.item.software_id), item: { kind: 'software', id: need.item.software_id } }]
     case 'fix':
-      return [{ kind: 'open', label: 'See what to fix', to: `/workflows/${need.item.use_case_id}/explain` }]
+      return [{ kind: 'open', label: 'See what to fix', to: `/workflows/${need.item.use_case_id}` }]
     case 'confirmation':
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings?tab=model' }]
     case 'stopped':

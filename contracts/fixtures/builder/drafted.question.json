@@ -125,7 +125,7 @@
         "quoted": true
       },
       {
-        "text": ", each after a yes",
+        "text": ", each after approval",
         "quoted": false
       },
       {
@@ -167,13 +167,13 @@
         "name": "Ask for a yes",
         "ours": true,
         "block_type": null,
-        "tag": "Waits for a yes"
+        "tag": "Waits for approval"
       },
       {
         "name": "Make the ticket",
         "ours": true,
         "block_type": null,
-        "tag": "Writes after a yes"
+        "tag": "Writes after approval"
       }
     ],
     "touches": [
@@ -213,7 +213,7 @@
             "quoted": true
           },
           {
-            "text": ", each after a yes",
+            "text": ", each after approval",
             "quoted": false
           }
         ],
@@ -240,7 +240,7 @@
       },
       {
         "rule": "no_yes_before_write",
-        "words": "Added a yes before each write."
+        "words": "I added an approval step. Before each change is made, an Approver must approve it in Teams."
       }
     ],
     "passed": [
@@ -346,7 +346,7 @@
         "block": "Make the ticket",
         "decides": "each_run",
         "approvers": 1,
-        "words": "Waits for a yes in Teams on each run. Nobody who started the run or made the workflow can give it."
+        "words": "Waits for an Approver in Teams on each run. Nobody who started the run or made the workflow can approve it."
       }
     ],
     "settings": [

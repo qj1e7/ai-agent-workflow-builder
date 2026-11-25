@@ -59,13 +59,13 @@ def test_the_fastapi_release_check_states_when_it_runs_what_it_reads_writes_and_
     report = report_of(fastapi())
     assert wording_of(report.in_short) == (
         "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
-        "It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else."
+        "It can create Jira tickets in “MOCK”, each after approval. It changes nothing else."
     )
     assert explain_facts(report) == [
         fact("runs", "day", "8:00"),
         fact("reads", "reads", "GitHub", "fastapi/fastapi"),
         fact("reads", "reads", "Jira", "MOCK"),
-        fact("writes", "create", "Jira", "MOCK", "yes"),
+        fact("writes", "create", "Jira", "MOCK", "approval"),
         fact("changes", "changes", "nothing", "else", negated=True),
     ]
 
@@ -91,7 +91,7 @@ def test_each_of_n8n_s_blocks_that_can_t_run_yet_is_a_negated_fact():
     ]
 
 
-def test_a_write_the_platform_refuses_says_no_yes_comes_before_it():
+def test_a_write_the_platform_refuses_says_nothing_asks_for_approval_before_it():
     document = fastapi()
     document["connections"]["Newer?"]["main"][0] = [
         {"node": "Create ticket", "type": "main", "index": 0}

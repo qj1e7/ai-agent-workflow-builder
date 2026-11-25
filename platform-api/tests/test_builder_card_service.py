@@ -30,6 +30,7 @@ from platform_api.orchestration import (
     DraftResult,
     Given,
     LibraryCard,
+    NodeOption,
     NoModel,
     RunSpec,
     RunStarted,
@@ -39,6 +40,7 @@ from platform_api.orchestration import (
     SoftwareFacts,
     Standing,
     WatchlistStanding,
+    WriteEntry,
 )
 from platform_api.orchestration.people_store import People
 from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
@@ -382,12 +384,39 @@ CARD_JSON = reader().model_dump(mode="json")
 async def test_tools_and_cards_can_be_read_by_anyone_signed_in(client: httpx.AsyncClient):
     tools = await client.get("/api/v1/tools", headers=AS_BOB)
     assert [t["id"] for t in tools.json()["tools"]][-1] == "jira.create_ticket"
+    assert tools.json()["jira_projects"] == []
     cards = await client.get("/api/v1/agent-cards", headers=AS_BOB)
     assert cards.json()["cards"][0]["card_id"] == "crd_version_checker"
     one = await client.get("/api/v1/agent-cards/crd_version_checker", headers=AS_BOB)
     assert one.json()["starter"] is True
     assert (await client.get("/api/v1/agent-cards/crd_nope", headers=AS_BOB)).status_code == 404
     assert (await client.get("/api/v1/tools")).status_code == 401
+
+
+async def test_the_tools_list_names_the_jira_projects_the_platform_may_write_in(
+    db: Database, runs: Runs, planner: Planner
+):
+    """The set-up card asks "Which Jira project should the ticket go in?" with these as buttons."""
+    jira = WriteEntry(
+        "jira.create_ticket",
+        "Create a Jira ticket",
+        "jira",
+        "create_ticket",
+        "project",
+        (NodeOption("OPS", "OPS"), NodeOption("MOCK", "MOCK")),
+    )
+    slack = WriteEntry(
+        "slack.post", "Post in Slack", "slack", "post", "channel", (NodeOption("#eng", "#eng"),)
+    )
+    known = Builder(
+        db,
+        runs,
+        Watchlist(db, NoFacts(), ScheduleBook(db)),
+        "http://localhost:8000",
+        planner,
+        writes=[jira, slack],
+    )
+    assert known.tools().jira_projects == ["MOCK", "OPS"]
 
 
 async def test_check_answers_problems_without_saving(client: httpx.AsyncClient):

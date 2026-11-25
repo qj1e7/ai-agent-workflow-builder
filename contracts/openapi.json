@@ -6760,7 +6760,7 @@
             "type": "boolean"
           },
           "tag": {
-            "description": "What it does, such as Reads Jira or Writes after a yes.",
+            "description": "What it does, such as Reads Jira or Writes after approval.",
             "title": "Tag",
             "type": "string"
           }
@@ -6886,7 +6886,7 @@
             "type": "string"
           },
           "decides": {
-            "description": "each_run: Approvers say yes on each run. set_up: it runs on the set-up approval, with no yes on each run. refused: no yes comes before it, so the platform refuses the write. cant_run_yet: no approval lets it run on this platform yet.",
+            "description": "each_run: Approvers approve it on each run. set_up: it runs on the set-up approval, with no approval on each run. refused: nothing asks for approval before it, so the platform refuses the write. cant_run_yet: no approval lets it run on this platform yet.",
             "enum": [
               "each_run",
               "set_up",
@@ -8859,6 +8859,13 @@
         "title": "FollowingUpPage",
         "type": "object"
       },
+      "FoundBy": {
+        "enum": [
+          "reviewed_list",
+          "github_search"
+        ],
+        "type": "string"
+      },
       "FoundCause": {
         "additionalProperties": false,
         "description": "The AI model's cause and failed part (ADR 0055, section 10). The model only picked fields\nfrom the run's facts, code checked each one, and code wrote the cause from them, so no words\nof the model's are shown. Each block is in the version that ran and is where the run stopped.\nThe rule table's answer stays beside it, unchanged.",
@@ -8913,7 +8920,7 @@
         "additionalProperties": false,
         "properties": {
           "matches": {
-            "description": "Every project the name could mean. More than one means the person chooses. Each is a guess from a reviewed list, never a certainty.",
+            "description": "Every project the name could mean, each checked just now. Only one match from the reviewed list may be confirmed as it is. More than one, or any match found by searching GitHub (at most 3), means the person chooses. Each is a guess, never a certainty.",
             "items": {
               "$ref": "#/components/schemas/ProjectGuess"
             },
@@ -12418,6 +12425,11 @@
             "description": "The name this project already has on the watchlist, or null.",
             "title": "Already Listed"
           },
+          "found_by": {
+            "$ref": "#/components/schemas/FoundBy",
+            "default": "reviewed_list",
+            "description": "reviewed_list when the name is on our reviewed list of known software. github_search when the list has no such name and GitHub's public repository search found this project. A search match is only ever a choice: never pick it for the person, even when it is the only match."
+          },
           "kind": {
             "$ref": "#/components/schemas/SourceKind",
             "default": "github",
@@ -12448,6 +12460,19 @@
             "description": "The software at its source, checked just now: a GitHub project as owner/name at the address GitHub gives it now, a Maven package as groupId:artifactId, or an npm package name.",
             "title": "Repo",
             "type": "string"
+          },
+          "stars": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many stars the repository has on GitHub, for a search match. Null for a match from the reviewed list.",
+            "title": "Stars"
           },
           "what": {
             "description": "What the project is, so the person can tell matches apart.",
@@ -16932,6 +16957,14 @@
       "ToolList": {
         "additionalProperties": false,
         "properties": {
+          "jira_projects": {
+            "description": "The Jira projects the platform may write in, as the Planner reads them, sorted. The set-up card shows them as buttons for \"Which Jira project should the ticket go in?\". Empty when the platform names none.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Jira Projects",
+            "type": "array"
+          },
           "tools": {
             "items": {
               "$ref": "#/components/schemas/ToolView"
@@ -16941,7 +16974,8 @@
           }
         },
         "required": [
-          "tools"
+          "tools",
+          "jira_projects"
         ],
         "title": "ToolList",
         "type": "object"
@@ -18707,7 +18741,7 @@
             "description": "The safety checker's grade under today's rules."
           },
           "in_short": {
-            "description": "One or two sentences in code's own words: when it runs, what it reads, what it changes or posts, and what waits for a yes.",
+            "description": "One or two sentences in code's own words: when it runs, what it reads, what it changes or posts, and what waits for approval.",
             "items": {
               "$ref": "#/components/schemas/Segment"
             },
@@ -28338,7 +28372,7 @@
     },
     "/api/v1/watchlist/find": {
       "post": {
-        "description": "Finds the GitHub projects a software's plain name could mean. The agent runtime looks the name up in a reviewed list, never through a model, and asks GitHub about each match with the watchlist's own tag rule before offering it. Nothing is saved: the person picks a match, then adds it with POST /watchlist/software. A match that is already watched says so.",
+        "description": "Finds where a software's plain name is published. The agent runtime looks the name up in a reviewed list, never through a model. When the list has no such name, it searches GitHub's public repositories through the platform's GitHub connection and offers at most 3 (found_by github_search, with stars). It asks GitHub about each match with the watchlist's own tag rule before offering it. Nothing is saved: the person picks a match, then adds it with POST /watchlist/software. Only a single match from the reviewed list may be confirmed as it is; a search match is always a choice. A match that is already watched says so.",
         "operationId": "find_software_api_v1_watchlist_find_post",
         "requestBody": {
           "content": {

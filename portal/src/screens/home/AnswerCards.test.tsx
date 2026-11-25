@@ -178,7 +178,7 @@ describe('a set-up card', () => {
   it('is the card itself, a Draft with Never mind and Set up, and no hand-off to another screen', () => {
     const html = draw(SETUP)
     expect(buttons(html)).toContain('Never mind')
-    expect(text(html), 'the main button waits for the answer').toMatch(/Answer \d questions? first/)
+    expect(text(html), 'the main button waits for the answer').toMatch(/Pick \d more to finish/)
     expect(buttons(html)).not.toContain('Turn it on')
     expect(buttons(html)).not.toContain('Set up')
     expect(text(cardOf(html))).toContain('Weekly summary of closed tickets Draft')
@@ -192,16 +192,17 @@ describe('a set-up card', () => {
     expect(html).toContain('You said “the tickets we closed”. I read that as MOCK, the project on your list.')
     expect(html).toContain('Will do: Then Sum them up in one new ticket')
     expect(html).toContain('In the MOCK project')
-    expect(html).toContain('After a yes')
+    expect(html).toContain('Each ticket needs an Approver’s approval in Teams.')
+    expect(html).not.toContain('After a yes')
     for (const gone of ['Filled in by me', 'Rename', 'How this workflow works', 'What needs a yes']) expect(html).not.toContain(gone)
   })
 
-  it('never guesses a time: with no time said, it asks one question, the time, with choices and Another time', () => {
+  it('never guesses a time: with no time said, the time is asked in the When row, with choices and Another time', () => {
     const html = draw(SETUP)
     expect(html.match(/data-mark="ask"/g)).toHaveLength(1)
-    expect(text(html)).toContain('Question: When Fridays, at what time?')
+    expect(text(html)).toContain('Question: When At what time?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['8:00', '9:00', '13:00', '17:00', 'Another time']))
-    expect(text(html)).toMatch(/Answer \d questions? first/)
+    expect(text(html)).toMatch(/Pick \d more to finish/)
   })
 
   it('is the already-have card when they have a workflow of that name, with Open it and a way to set up another', () => {
@@ -323,8 +324,8 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     expect(text(html)).not.toContain('What I can’t do yet')
     expect(text(html)).not.toContain('What I can do instead')
     expect(text(cardOf(html))).toContain('Can’t do: “Colour them by team” I didn’t follow this part.')
-    expect(text(html)).toMatch(/Answer \d questions? first/)
-    expect(sayOf(reply)).toBe('Here’s what I understood.')
+    expect(text(html)).toMatch(/Pick \d more to finish/)
+    expect(sayOf(reply)).toMatch(/^Here’s what I understood\.( Pick the (\d+ missing parts|missing part)\.)?$/)
     expect(draw(reply, { leftovers: true })).toBe('')
   })
 
@@ -358,10 +359,10 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     }
     const card = text(cardOf(draw(stale)))
     expect(card).toContain('“list the stale tickets in MOCK”')
-    expect(card).toMatch(/Answer \d questions? first/)
+    expect(card).toMatch(/Pick \d more to finish/)
     expect(card, 'the can’t stays on its own card').not.toContain('“email me”')
     const onCard: CantReply = { ...stale, cant: [{ ...emailRow, needs: 'new_tool' }] }
-    expect(text(cardOf(draw(onCard)))).toMatch(/Answer \d questions? first/)
+    expect(text(cardOf(draw(onCard)))).toMatch(/Pick \d more to finish/)
   })
 
   it('still names a real can’t on its own card, with the clause crossed on the card it sets up instead', () => {
@@ -538,7 +539,7 @@ describe('an answer that is partly a can’t', () => {
   it('shows the alternative under its own heading, with Ask the team first when there is no alternative', () => {
     const html = draw(cant as CantReply)
     expect(text(html)).toContain('What I can do instead')
-    expect(text(html)).toMatch(/Answer \d questions? first/)
+    expect(text(html)).toMatch(/Pick \d more to finish/)
     const bare = draw({ ...(cant as CantReply), alternative: null })
     expect(bare).not.toContain('What I can do instead')
     expect(buttons(bare)).toEqual(['Ask the team'])

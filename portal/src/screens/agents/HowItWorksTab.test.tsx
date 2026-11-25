@@ -46,7 +46,7 @@ function render({ path = HOW_AGENTS, me = ALICE, cards = CARDS, tools = TOOLS, c
   }
   queryClient.setQueryData(['me', session.cacheScope()], me)
   seed(['agent-cards', session.cacheScope()], cards)
-  seed(['tools'], tools)
+  seed(['tools'], tools instanceof Error ? tools : { tools, jira_projects: [] })
   seed(['capabilities', session.cacheScope()], capabilities)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>

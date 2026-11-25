@@ -2483,6 +2483,13 @@
       ],
       "type": "string"
     },
+    "FoundBy": {
+      "enum": [
+        "reviewed_list",
+        "github_search"
+      ],
+      "type": "string"
+    },
     "FoundModel": {
       "additionalProperties": false,
       "properties": {
@@ -2512,7 +2519,7 @@
       "additionalProperties": false,
       "properties": {
         "matches": {
-          "description": "Every project the name could mean. More than one means the person chooses. A match is a guess from a reviewed list, never a certainty.",
+          "description": "Every project the name could mean, each checked just now. Only one match from the reviewed list may be confirmed as it is. More than one, or any match found by searching GitHub (at most 3), means the person chooses. A match is a guess, never a certainty.",
           "items": {
             "$ref": "#/$defs/SoftwareMatch"
           },
@@ -4785,6 +4792,11 @@
     "SoftwareMatch": {
       "additionalProperties": false,
       "properties": {
+        "found_by": {
+          "$ref": "#/$defs/FoundBy",
+          "default": "reviewed_list",
+          "description": "reviewed_list when the name is on our reviewed list of known software. github_search when the list has no such name and GitHub's public repository search found it. A search match is only ever a choice for the person, even when it is the only one."
+        },
         "kind": {
           "$ref": "#/$defs/SourceKind",
           "default": "github",
@@ -4817,6 +4829,20 @@
           "title": "Repo",
           "type": "string"
         },
+        "stars": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many stars the repository has on GitHub, for a search match. None for a match from the reviewed list.",
+          "title": "Stars"
+        },
         "what": {
           "description": "What the project is, in plain words, so the person can tell matches apart.",
           "maxLength": 120,
@@ -4845,7 +4871,7 @@
       "additionalProperties": false,
       "properties": {
         "message": {
-          "description": "What went wrong with GitHub, in plain words. No project is offered, because nothing unchecked is shown.",
+          "description": "What went wrong with GitHub, in plain words, as its search being busy. No project is offered, because nothing unchecked is shown.",
           "maxLength": 300,
           "title": "Message",
           "type": "string"
@@ -4867,7 +4893,7 @@
       "additionalProperties": false,
       "properties": {
         "message": {
-          "description": "The list has no such name, or GitHub found none of its projects.",
+          "description": "The list has no such name and searching GitHub found no project whose releases the tag rule counts, or GitHub found none of the list's projects.",
           "maxLength": 300,
           "title": "Message",
           "type": "string"

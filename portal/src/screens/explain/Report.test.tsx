@@ -25,11 +25,11 @@ describe('the report, as layout B draws it', () => {
       ['Step by step', '8 blocks'],
       ['What it reads, writes and posts', 'Reads GitHub and Jira · Writes Jira'],
       ['Flags', `${REPORT.fixed.length} fixed for you · ${REPORT.passed.length} passed`],
-      ['Who approves each write', '1 waits for a yes on each run'],
+      ['Who approves each write', '1 waits for approval on each run'],
       ['Settings', `${REPORT.settings.length} settings`],
       ['Approval', 'None needed'],
     ])
-    expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else.')
+    expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after approval. It changes nothing else.')
   })
 
   it('draws each row as a disclosure a click or the keyboard opens, closed to begin with', () => {
@@ -83,7 +83,7 @@ describe('the report, as layout B draws it', () => {
   })
 
   it('says who decides each write, and that a workflow that writes nothing needs nobody', () => {
-    expect(text(draw(REPORT))).toContain('“Create ticket” Waits for a yes in Teams on each run.')
+    expect(text(draw(REPORT))).toContain('“Create ticket” Waits for an Approver in Teams on each run. Nobody who started the run or made the workflow can approve it.')
     expect(text(draw({ ...REPORT, approves: [] }))).toContain('It writes nothing, so nobody approves a write.')
   })
 
@@ -99,18 +99,6 @@ describe('the report, as layout B draws it', () => {
   })
 })
 
-describe('an older version', () => {
-  it('says which version it is, that today’s rules checked it again, and the grade it had then', () => {
-    const html = text(draw(OLDER))
-    expect(html).toContain('Version 1. Checked again under today’s rules.')
-    expect(html).toContain('Graded Safe when it was published, and Needs a fix today.')
-  })
-
-  it('says nothing of the sort for the version in use', () => {
-    expect(text(draw(REPORT))).not.toContain('Checked again')
-  })
-})
-
 describe('Reworded and code’s wording', () => {
   it('shows In short in code’s words, with no label and no button, when nothing was reworded', () => {
     const html = draw(REPORT, { onWording: () => undefined })
@@ -120,7 +108,7 @@ describe('Reworded and code’s wording', () => {
 
   it('shows the reworded In short with the pill Reworded and a button back to code’s wording', () => {
     const html = draw(REWORDED, { onWording: () => undefined })
-    expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after a yes, and changes nothing else.')
+    expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after approval, and changes nothing else.')
     expect(html).toMatch(/<span class="[^"]*label[^"]*">Reworded<\/span>/)
     expect(buttons(html)).toEqual(['Show code’s wording'])
   })

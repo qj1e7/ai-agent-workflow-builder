@@ -15,6 +15,7 @@ import type {
   RefusalOut,
   SaveIn,
   ScheduleSaveIn,
+  ToolList,
   WatchlistView,
 } from './types'
 
@@ -34,12 +35,13 @@ export const keys = {
   /** One per event of the run, so each new event reads the blocks' states again. */
   runInN8n: (user: string, runId: string, seq: number) => ['run', user, runId, 'n8n', seq] as const,
   /** Under the workflow's own key, so a workflow read again reads its report again. */
-  explained: (user: string, useCaseId: string, version: number | null, reworded: boolean) => ['use-case', user, useCaseId, 'explain', version, reworded] as const,
+  explained: (user: string, useCaseId: string) => ['use-case', user, useCaseId, 'explain'] as const,
   versions: (user: string, useCaseId: string, version: number) => ['versions', user, useCaseId, version] as const,
   setUp: (user: string, useCaseId: string) => ['set-up', user, useCaseId] as const,
   made: (user: string, press: string) => ['set-up-made', user, press] as const,
   templates: () => ['templates'] as const,
   tools: () => ['tools'] as const,
+  softwareFind: (user: string, name: string) => ['software-find', user, name] as const,
   agentCards: (user: string) => ['agent-cards', user] as const,
   approval: (user: string, approvalId: string) => ['approval', user, approvalId] as const,
   troubleshoot: (user: string, runId: string, attempt: number) => ['troubleshoot', user, runId, attempt] as const,
@@ -135,14 +137,20 @@ export function useTemplates() {
   })
 }
 
-export function useTools() {
+function useToolList<T>(select: (list: ToolList) => T) {
   const client = useApiClient()
   return useQuery({
     queryKey: keys.tools(),
-    queryFn: async () => unwrap(await client.GET('/api/v1/tools')).tools,
+    queryFn: async () => unwrap(await client.GET('/api/v1/tools')),
     staleTime: Infinity,
+    select,
   })
 }
+
+export const useTools = () => useToolList((list) => list.tools)
+
+/** The Jira projects the platform may write in, for the card's "Which Jira project should the ticket go in?". */
+export const useJiraProjects = () => useToolList((list) => list.jira_projects)
 
 export function useAgentCards() {
   const client = useApiClient()
@@ -457,6 +465,23 @@ export function useFindSoftware() {
   const client = useApiClient()
   return useMutation({
     mutationFn: async (name: string) => unwrap(await client.POST('/api/v1/watchlist/find', { body: { name } })),
+  })
+}
+
+/**
+ * What the software finder says a plain name could mean, so the set-up card never asks the person to look a repository up. Only an
+ * Operator may ask, and a name asked once is kept for the visit.
+ */
+export function useSoftwareFind(name: string | null, allowed: boolean) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.softwareFind(user, name ?? ''),
+    queryFn: async () => unwrap(await client.POST('/api/v1/watchlist/find', { body: { name: name ?? '' } })),
+    // Only an Operator may ask, so nobody else's card calls it.
+    enabled: allowed && name !== null && name !== '',
+    staleTime: Infinity,
+    retry: false,
   })
 }
 

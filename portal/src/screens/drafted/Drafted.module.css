@@ -118,6 +118,29 @@
   gap: 8px;
 }
 
+/* A draft's flags, closed until See them opens them. The browser's own disclosure keeps the keyboard and the screen reader's state. */
+.flags summary {
+  width: fit-content;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.flags summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.see {
+  color: var(--link);
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.flags .rows {
+  margin-top: 6px;
+}
+
 .parts {
   display: grid;
   gap: 10px;

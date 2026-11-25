@@ -117,7 +117,7 @@ test('a name the list lacks says so plainly and falls back to the GitHub address
   await page.getByLabel('Software name').fill('Zorblax')
   await page.getByRole('button', { name: 'Find it' }).click()
   await expect(page.getByRole('heading', { name: 'I couldn’t find “Zorblax”' })).toBeFocused()
-  await expect(page.getByText(/I don.t know software called Zorblax/)).toBeVisible()
+  await expect(page.getByText(/I couldn.t find Zorblax on our list or by searching GitHub/), 'a name the list lacks is searched on GitHub first').toBeVisible()
   await shot(page, info, 'n21-03-not-known')
   await page.getByLabel('GitHub repository').fill('https://github.com/fastapi/fastapi')
   await page.getByLabel(/^Version we run/).fill('0.115.0')

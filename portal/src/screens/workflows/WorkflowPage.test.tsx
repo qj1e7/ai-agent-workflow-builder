@@ -420,16 +420,16 @@ describe('a workflow page', () => {
     expect(text(render({ me: BOB, useCase: held }))).toMatch(/Carol has it open in n8n since/)
   })
 
-  it('says a version that needs a fix in one sentence, with one way forward to Explain’s flags, even while someone has it open in n8n', () => {
+  it('says what a version that needs a fix must have fixed, in the safety checker’s words, with no Explain, even while someone has it open in n8n', () => {
     const findings = ['Its failures do not go to the platform’s error workflow.', 'n8n does not keep its test runs.']
     const held = { ...(openInN8n as UseCaseView), version: 1, grade: 'needs_a_fix', findings } as UseCaseView
     for (const me of [ALICE, BOB]) {
-      const banner = /<div[^>]*data-tone="bad"[\s\S]*?<\/a><\/div>/.exec(mainOf(render({ me, useCase: held })))?.[0] ?? ''
-      expect(text(banner)).toBe('Needs a fix. Explain')
-      expect(banner).toMatch(new RegExp(`href="/workflows/${held.use_case_id}/explain#flags"`))
-      for (const finding of findings) expect(text(banner)).not.toContain(finding)
-      const explains = [...mainOf(render({ me, useCase: held })).matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].filter((m) => text(m[1] ?? '').startsWith('Explain'))
-      expect(explains, 'one Explain on the page: the banner’s').toHaveLength(1)
+      const main = mainOf(render({ me, useCase: held }))
+      const banner = /<div[^>]*data-tone="bad"[\s\S]*?<\/p><\/div>/.exec(main)?.[0] ?? ''
+      expect(text(banner), me.id).toBe(`Needs a fix: ${findings.join(' ')} Anyone with n8n access can fix it in n8n.`)
+      expect(banner, 'nothing to press: the findings say what to fix').not.toMatch(/<(?:a|button)\b/)
+      expect(main, me.id).not.toContain('/explain')
+      expect(text(main), me.id).not.toMatch(/\bExplain\b/)
     }
   })
 
@@ -460,13 +460,13 @@ describe('the Versions list', () => {
 
   it('lists each version newest first, with when, who and what changed, as the prototype says it', () => {
     expect(versionsOf(render(CHANGED))).toBe(
-      'Version 2, in use Today, 9:10. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. Explain LangGraph release check, version 2 ' +
-        'Version 1 The version it was turned on with. Explain LangGraph release check, version 1',
+      'Version 2, in use Today, 9:10. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. ' +
+        'Version 1 The version it was turned on with.',
     )
   })
 
   it('names an Undo as a new version that undid the one before', () => {
-    expect(versionsOf(render(UNDONE))).toMatch(/^Version 3, in use Today, 9:12\. Alice undid version 2, so it runs every weekday at 8:00 again\. Explain LangGraph release check, version 3 Version 2 Today, 9:10\. Alice changed .* to every Monday at 8:00\. Explain LangGraph release check, version 2 Version 1/)
+    expect(versionsOf(render(UNDONE))).toMatch(/^Version 3, in use Today, 9:12\. Alice undid version 2, so it runs every weekday at 8:00 again\. Version 2 Today, 9:10\. Alice changed .* to every Monday at 8:00\. Version 1/)
   })
 
   it('only reads, for an Operator and an Approver alike: Undo is on the chat’s edit card, as in the prototype', () => {
@@ -493,20 +493,20 @@ describe('the Versions list', () => {
 describe('Details on the workflow page', () => {
   const detailsOf = (html: string) => /<details[^>]*>\s*<summary[^>]*>Details<\/summary>[\s\S]*?<\/details>/.exec(mainOf(html))?.[0] ?? ''
 
-  it('holds Explain and Versions, and nothing the person needs in view', () => {
+  it('holds Versions, and nothing the person needs in view', () => {
     const html = render(CHANGED)
     const details = detailsOf(html)
-    expect(text(details)).toMatch(/^Details Explain LangGraph release check .*Versions Version 2/)
-    expect(details).not.toMatch(/Pause|Run now|Open in n8n|Delete/)
-    expect(mainOf(html).replace(details, '')).not.toMatch(/\/explain|>Versions</)
+    expect(text(details)).toMatch(/^Details Versions Version 2/)
+    expect(details).not.toMatch(/Pause|Run now|Open in n8n|Delete|Explain/)
+    expect(mainOf(html).replace(details, '')).not.toMatch(/>Versions</)
   })
 
   it('is closed until opened, and is there for an Approver too', () => {
     for (const me of [ALICE, BOB]) expect(detailsOf(render({ me, ...CHANGED })), me.id).not.toMatch(/<details[^>]*\bopen/)
   })
 
-  it('leaves out an empty Details: a first version has Explain only, and the banner’s Explain is the one on the page', () => {
-    expect(text(detailsOf(render()))).toBe(`Details Explain ${AGENTS.name}`)
+  it('is left out while a first version has nothing to hold', () => {
+    expect(detailsOf(render())).toBe('')
   })
 
   it('reads On · last run stopped on the page of an Operator whose work the run is not, as in the list', () => {
@@ -518,24 +518,13 @@ describe('Details on the workflow page', () => {
   })
 })
 
-describe('Explain on the workflow page', () => {
-  const explainLinks = (html: string) => [...mainOf(html).matchAll(/<a\b[^>]*href="([^"]*\/explain[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [text(m[2] ?? ''), m[1]])
-
-  it('puts Explain in the page’s actions for an Operator and for an Approver', () => {
+describe('no Explain on the workflow page', () => {
+  it('has no Explain link or button, on the page or on any version, for an Operator or an Approver', () => {
     for (const me of [ALICE, BOB]) {
-      expect(explainLinks(render({ me })), me.id).toEqual([[`Explain ${AGENTS.name}`, `/workflows/${AGENTS.use_case_id}/explain`]])
-    }
-  })
-
-  it('puts Explain on each version, with that version, for both roles', () => {
-    for (const me of [ALICE, BOB]) {
-      const id = CHANGED.useCase.use_case_id
-      const name = CHANGED.useCase.name
-      expect(explainLinks(render({ ...CHANGED, me })), me.id).toEqual([
-        [`Explain ${name}`, `/workflows/${id}/explain`],
-        [`Explain ${name}, version 2`, `/workflows/${id}/explain?version=2`],
-        [`Explain ${name}, version 1`, `/workflows/${id}/explain?version=1`],
-      ])
+      for (const shown of [render({ me }), render({ ...CHANGED, me })]) {
+        expect(mainOf(shown), me.id).not.toContain('/explain')
+        expect(text(mainOf(shown)), me.id).not.toMatch(/\bExplain\b/)
+      }
     }
   })
 })

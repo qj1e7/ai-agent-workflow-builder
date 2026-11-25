@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react'
+import { useContext, useState, useSyncExternalStore } from 'react'
 import type { PlannerReply } from '../../api/types'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { OpensInPanel, type PanelItem } from '../../ui/sidePanel'
@@ -54,7 +54,10 @@ function focusBefore(messages: readonly Message[], index: number, panel: PanelIt
 function ReplyBody({ message, now, page, say, about, focus }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say; about: string | null; focus: string | null }) {
   const { reply } = message
   const asker = useAsker()
-  const sentence = sayOf(reply, asker)
+  const memory = useContext(CardMemoryContext)
+  // The card says how many parts are open as it changes, so the line above it and its footer count the same.
+  const open = useSyncExternalStore(memory.open.subscribe, memory.open.get, () => undefined)
+  const sentence = sayOf(reply, asker, open === undefined ? undefined : { plan: null, matches: [], open })
   useSaidOnce(sentence, say)
   const words = wordsOnly(reply, asker)
   return (

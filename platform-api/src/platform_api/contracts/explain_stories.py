@@ -56,7 +56,7 @@ assert isinstance(LAID, Checked)
 FASTAPI = SetUp("planner", LAID.document, CARDS)
 REWORDED = (
     "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira "
-    "tickets in “MOCK”, each after a yes, and changes nothing else."
+    "tickets in “MOCK”, each after approval, and changes nothing else."
 )
 
 

@@ -816,6 +816,9 @@ class FindSoftwareRequest(WireModel):
     tag_pattern: TagPattern
 
 
+type FoundBy = Literal["reviewed_list", "github_search"]
+
+
 class SoftwareMatch(WireModel):
     kind: SourceKind = Field(
         default="github",
@@ -858,6 +861,19 @@ class SoftwareMatch(WireModel):
         description="The newest stable release tag that the tag rule counts. None when there is "
         "none."
     )
+    found_by: FoundBy = Field(
+        default="reviewed_list",
+        description="reviewed_list when the name is on our reviewed list of known software. "
+        "github_search when the list has no such name and GitHub's public repository search "
+        "found it. A search match is only ever a choice for the person, even when it is the only "
+        "one.",
+    )
+    stars: int | None = Field(
+        default=None,
+        ge=0,
+        description="How many stars the repository has on GitHub, for a search match. None for a "
+        "match from the reviewed list.",
+    )
 
 
 class FoundSoftware(WireModel):
@@ -865,8 +881,10 @@ class FoundSoftware(WireModel):
     matches: list[SoftwareMatch] = Field(
         min_length=1,
         max_length=5,
-        description="Every project the name could mean. More than one means the person chooses. "
-        "A match is a guess from a reviewed list, never a certainty.",
+        description="Every project the name could mean, each checked just now. Only one match "
+        "from the reviewed list may be confirmed as it is. More than one, or any match found by "
+        "searching GitHub (at most 3), means the person chooses. A match is a guess, never a "
+        "certainty.",
     )
 
 
@@ -874,7 +892,8 @@ class SoftwareNotKnown(WireModel):
     status: Literal["not_known"] = "not_known"
     message: str = Field(
         max_length=300,
-        description="The list has no such name, or GitHub found none of its projects.",
+        description="The list has no such name and searching GitHub found no project whose "
+        "releases the tag rule counts, or GitHub found none of the list's projects.",
     )
 
 
@@ -882,8 +901,8 @@ class SoftwareNotChecked(WireModel):
     status: Literal["not_checked"] = "not_checked"
     message: str = Field(
         max_length=300,
-        description="What went wrong with GitHub, in plain words. No project is offered, because "
-        "nothing unchecked is shown.",
+        description="What went wrong with GitHub, in plain words, as its search being busy. No "
+        "project is offered, because nothing unchecked is shown.",
     )
 
 

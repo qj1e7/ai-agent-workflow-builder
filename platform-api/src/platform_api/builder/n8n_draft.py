@@ -30,12 +30,15 @@ from platform_api.orchestration import (
 ADDING = "Adding blocks in n8n…"
 FIT = "The blocks fit together."
 CHECKING = "Safety checker is checking the write…"
-EVERY_WRITE = "Every write waits for a yes."
+EVERY_WRITE = "Every write waits for approval."
 SAVED = "Saved as a draft in n8n."
 WHAT_IS_WRITTEN: Mapping[str, str] = {
-    "Create ticket": "the ticket",
-    "Create tickets": "the tickets",
+    "Create ticket": "each ticket",
+    "Create tickets": "each ticket",
+    "Update page": "each page update",
 }
+"""What each write makes, in the words of the approval step's line. A write not here is "each
+change", never a quoted block name."""
 
 type LineKind = Literal["status", "check", "note"]
 """status: what the builder is doing now. check: a check that passed. note: what the safety
@@ -82,7 +85,11 @@ def notices_in(document: Mapping[str, Any]) -> list[str]:
 
 
 def added_line(write: str) -> str:
-    return f"Added a yes before {WHAT_IS_WRITTEN.get(write, f'"{write}"')}."
+    return (
+        "I added an approval step. "
+        f"Before {WHAT_IS_WRITTEN.get(write, 'each change')} is made, "
+        "an Approver must approve it in Teams."
+    )
 
 
 def check_draft(
