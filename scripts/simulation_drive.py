@@ -138,7 +138,10 @@ def sign_in() -> None:
     if status != 200:
         raise SystemExit(f"FAIL: the simulation n8n's owner could not sign in ({status})")
     cookie = headers.get("Set-Cookie", "").split(";")[0]
-    key = {"label": "simulation-drive", "expiresAt": int(time.time()) + 3600, "scopes": SCOPES}
+    # n8n 2.42.6 refuses a label its user already holds, and an earlier drive's key is still
+    # listed after it runs out, so each drive's label has an id of its own.
+    label = f"simulation-drive {secrets.token_hex(4)}"
+    key = {"label": label, "expiresAt": int(time.time()) + 3600, "scopes": SCOPES}
     status, made = rest("POST", "/api-keys", key)
     if status != 200:
         raise SystemExit(f"FAIL: the simulation n8n made no API key ({status})")

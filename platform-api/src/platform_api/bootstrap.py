@@ -26,7 +26,7 @@ from platform_api.n8n_guard import (
     python_probe,
     shown_findings,
 )
-from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, HandRun, N8nClient, N8nError
+from platform_api.orchestration.n8n import HandRun, N8nClient, N8nError
 from platform_api.orchestration.workflow_check import (
     ERROR_WORKFLOW,
     SELF_TEST,
@@ -217,8 +217,6 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
         lost = lost_workflows(client, settings.owner_database_url, recorded, say)
         if lost is not None:
             ask_for_restore(settings.owner_database_url, lost, say)
-        removed = client.remove_api_keys(PLATFORM_API_KEY_LABEL)
-        say(f"api key '{PLATFORM_API_KEY_LABEL}': {removed} removed, platform-api makes its own")
         place = Place(
             client,
             client.platform_project(),

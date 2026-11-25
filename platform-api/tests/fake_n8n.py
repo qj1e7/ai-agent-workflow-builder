@@ -1,11 +1,13 @@
 """n8n 2.42.6's answers to the calls the platform makes while it runs, as spike P7 recorded them
 (docs/evidence/prototypes/p7-n8n-engine-facts), kept in memory."""
 
+import asyncio
 import json
 import re
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -14,6 +16,8 @@ OWNER_EMAIL = "owner@example.com"
 OWNER_PASSWORD = "Aa1-owner-password"
 OWNER_ID = "ef530bdb-d627-4255-ad0a-b678b6c7c5bb"
 ACTIVATED = {"status": "published", "triggers": "activated"}
+NAME_TAKEN = {"code": 0, "message": "There is already an entry with this name"}
+"""n8n 2.42.6's HTTP 500 for a second API key with a label its user already holds."""
 
 type Hook = Callable[[str], None]
 type RunHook = Callable[[str, dict[str, Any] | None, str | None], None]
@@ -39,6 +43,15 @@ class FakeN8n:
     listed_keys: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     """The API keys n8n lists, each with its label, owner and when it was made."""
     key_requests: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    """Each API key asked for, the ones n8n refused included."""
+    key_ids: dict[str, str] = field(default_factory=dict[str, str])
+    """Each API key n8n made, by its id: a deleted key stops working."""
+    key_clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+    """When n8n says it made an API key."""
+    name_clashes: int = 0
+    """How many of the next API keys n8n refuses as a name taken, whatever their label."""
+    interleaves: bool = False
+    """Each call lets other tasks run first, as a network would, so two at once interleave."""
     logins: int = 0
     session_ends: bool = False
     """The owner's session runs out before the next /rest call."""
@@ -143,7 +156,12 @@ class FakeN8n:
         return {**{k: credential[k] for k in kept}, "shared": shared}
 
     def client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
+        async def after_others(request: httpx.Request) -> httpx.Response:
+            await asyncio.sleep(0)
+            return self.handle(request)
+
+        handler = after_others if self.interleaves else self.handle
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://n8n")
 
     def edit(self, workflow_id: str) -> None:
         """Someone saves the draft in n8n's editor."""
@@ -258,15 +276,32 @@ class FakeN8n:
                 items = self.listed_keys
                 return httpx.Response(200, json={"data": {"items": items, "count": len(items)}})
             case "POST", ["api-keys"]:
+                self.key_requests.append(body)
+                held = {k["label"] for k in self.listed_keys if k["owner"]["email"] == OWNER_EMAIL}
+                if self.name_clashes or body["label"] in held:
+                    self.name_clashes = max(self.name_clashes - 1, 0)
+                    return httpx.Response(500, json=NAME_TAKEN)
                 self.minted += 1
                 key = f"key-{self.minted}"
                 self.keys.append(key)
-                self.key_requests.append(body)
                 self.scopes[key] = set(body.get("scopes", []))
-                return httpx.Response(200, json={"data": {"rawApiKey": key}})
+                made = self.key_clock().isoformat(timespec="milliseconds").replace("+00:00", "Z")
+                listed = {
+                    "id": f"apikey{self.minted}",
+                    "label": body["label"],
+                    "createdAt": made,
+                    "owner": {"id": OWNER_ID, "email": OWNER_EMAIL},
+                }
+                self.listed_keys.append(listed)
+                self.key_ids[listed["id"]] = key
+                return httpx.Response(200, json={"data": {**listed, "rawApiKey": key}})
             case "DELETE", ["api-keys", key_id]:
+                if key_id not in {k["id"] for k in self.listed_keys}:
+                    return httpx.Response(404, json={"code": 404, "message": "API key not found"})
                 self.deleted_keys += 1
                 self.listed_keys = [k for k in self.listed_keys if k["id"] != key_id]
+                if self.key_ids.get(key_id) in self.keys:
+                    self.keys.remove(self.key_ids[key_id])
                 return httpx.Response(200, json={"data": True})
             case "GET", ["workflows", workflow_id]:
                 workflow = self.workflows[workflow_id]
