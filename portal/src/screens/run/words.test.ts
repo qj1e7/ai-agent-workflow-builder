@@ -9,7 +9,7 @@ import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { emptyModel, foldWire, type ChatItem, type RunModel } from './runModel'
 import { stageAnswers } from './stageAnswers'
-import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, messageRowsOf, runKind, runPill, scheduleShort, speakerName, stageFactsOf, stageWords, type StageFacts } from './words'
+import { announcementOf, declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, messageRowsOf, runKind, runPill, scheduleShort, speakerName, stageFactsOf, stageWords, type StageFacts } from './words'
 
 describe('the run chat', () => {
   it('names the app by its full name', () => {
@@ -161,10 +161,10 @@ describe('a run followed from its own events, in the same stage words', () => {
   it('gives the troubleshooter’s Now row in the same words, naming every Approver who said yes', () => {
     const now = (model: RunModel) => stageAnswers(model, '', named).find((answer) => answer.label === 'Now')?.text
     expect(now(replay(success, 6))).toBe('Running…')
-    expect(now(replay(success, 15))).toBe('Waiting for a yes.')
-    expect(now(replay(success, 18))).toBe('Bob said yes. Creating the ticket…')
-    expect(now(replay(pageUpdate(success), 18))).toBe('Bob said yes. Writing the changes…')
-    expect(now(replay(twoYeses(success), 19))).toBe('Carol and Bob said yes. Creating the ticket…')
+    expect(now(replay(success, 15))).toBe('Waiting for approval.')
+    expect(now(replay(success, 18))).toBe('Bob approved. Creating the ticket…')
+    expect(now(replay(pageUpdate(success), 18))).toBe('Bob approved. Writing the changes…')
+    expect(now(replay(twoYeses(success), 19))).toBe('Carol and Bob approved. Creating the ticket…')
     expect(stageAnswers(replay(success), 'Found 1.2.16.', named)).toEqual([])
   })
 
@@ -314,5 +314,50 @@ describe('a schedule in few words', () => {
     expect(scheduleShort({ day: 'every_day', at: '08:00' })).toBe('Daily 8:00')
     expect(scheduleShort({ day: 'weekdays', at: '09:30' })).toBe('Weekdays 9:30')
     expect(scheduleShort({ day: 'monday', at: '13:00' })).toBe('Mon 13:00')
+  })
+})
+
+describe('a read in the plain steps', () => {
+  const at = Date.parse('2026-11-25T02:00:00Z')
+  const read = (seq: number, over: Partial<Extract<ChatItem, { kind: 'checked' }>>): ChatItem => ({ kind: 'checked', seq, at, newest: null, problem: null, source: 'GitHub', software: null, ...over })
+  const texts = (items: ChatItem[]) => logRowsOf(items, named, QUICK).map((row) => row.text)
+
+  it('says a read that failed was not read, and why, and never that no release was found', () => {
+    expect(texts([read(1, { software: 'fastapi/fastapi', problem: 'GitHub answered 404 Not Found.' })])).toEqual(['Couldn’t read fastapi/fastapi on GitHub: GitHub answered 404 Not Found.'])
+  })
+
+  it('names the right source: npm, Maven Central or GitHub', () => {
+    expect(texts([read(1, { source: 'npm', software: 'Express', newest: '5.1.0' })])).toEqual(['Checked npm: found 5.1.0'])
+    expect(texts([read(1, { source: 'Maven Central', software: 'Guava', problem: 'Maven Central answered 503 Service Unavailable.' })])).toEqual(['Couldn’t read Guava on Maven Central: Maven Central answered 503 Service Unavailable.'])
+  })
+
+  it('names each software when the run read more than one, and says nothing of the name when it read one', () => {
+    const two = texts([read(1, { software: 'fastapi/fastapi', newest: '0.165.0' }), read(2, { software: 'langchain-ai/langgraph', newest: '1.2.16' })])
+    expect(two).toEqual(['Checked fastapi/fastapi on GitHub: found 0.165.0', 'Checked langchain-ai/langgraph on GitHub: found 1.2.16'])
+    expect(texts([read(1, { software: 'fastapi/fastapi', newest: '0.165.0' })])).toEqual(['Checked GitHub: found 0.165.0'])
+  })
+
+  it('says a read that found no stable release as that', () => {
+    expect(texts([read(1, { software: 'fastapi/fastapi' })])).toEqual(['Checked GitHub: no stable releases found'])
+  })
+})
+
+describe('what the live region speaks', () => {
+  const asOf = (model: RunModel, kind: ChatItem['kind']) => model.chat.findLast((item) => item.kind === kind)
+
+  it('never speaks an agent’s words as the app’s own, or as anyone’s', () => {
+    const said = asOf(replay(success), 'said')
+    if (!said) throw new Error('the fixture has agent messages')
+    expect(announcementOf(said, named, null)).toBeNull()
+  })
+
+  it('speaks what the platform did, with who says it', () => {
+    const asked = asOf(replay(success), 'asked')
+    if (!asked) throw new Error('the fixture asks')
+    expect(announcementOf(asked, named, null)).toBe('Approval gate: Asked for approval in Teams, in CODESparks Ops. Nothing is written until an Approver approves.')
+  })
+
+  it('has nothing to say before anything arrives', () => {
+    expect(announcementOf(undefined, named, null)).toBeNull()
   })
 })

@@ -163,10 +163,10 @@ describe('two Approvers, one after the other', () => {
     const now = draw(TWO, { decision: { ...idle, recorded: 'approve', steps: after } })
     expect(buttons(now)).toEqual([])
     expect(text(now)).toContain('Step 2 of 2. Bob approved first.')
-    expect(text(now)).toContain('Waiting for another Approver. You said yes to the step before, and no one says yes twice.')
+    expect(text(now)).toContain('Waiting for another Approver. You approved the step before, and no one approves twice.')
     const read = draw({ ...SECOND, steps: [{ ...SECOND.steps[0]!, decided_by: 'bob' }, SECOND.steps[1]!], you_can_decide: false, why_not: 'decided_earlier_step' })
     expect(buttons(read)).toEqual([])
-    expect(text(read)).toContain('You said yes to the step before')
+    expect(text(read)).toContain('You approved the step before')
   })
 })
 
@@ -194,7 +194,7 @@ describe('the record, once it is decided or over', () => {
   })
 
   it.each([
-    ['expired', 'No answer', 'No one said yes in time. Nothing was written, and it can’t be decided now.'],
+    ['expired', 'No answer', 'No one approved in time. Nothing was written, and it can’t be decided now.'],
     ['cancelled', 'Cancelled', 'The workflow was deleted before anyone decided. Nothing was written, and it can’t be decided now.'],
     ['closed', 'Closed', 'The platform was updated before anyone decided. Nothing was written, and it can’t be decided now.'],
   ] as const)('%s: says why nobody can decide, even if an old read still says Bob may', (status, label, words) => {

@@ -947,8 +947,8 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
       const said = text(html)
       if (pill(html) === 'Stopped') return 'stopped'
       if (said.includes('Now Retrying after a short wait…')) return 'retrying'
-      if (pill(html) === 'Waiting for approval' && said.includes('Now Waiting for a yes.')) return 'waiting'
-      if (said.includes('Now Bob said yes. Creating the ticket…')) return 'writing'
+      if (pill(html) === 'Waiting for approval' && said.includes('Now Waiting for approval.')) return 'waiting'
+      if (said.includes('Now Bob approved. Creating the ticket…')) return 'writing'
       if (pill(html) === 'Done' && said.includes('MOCK-142 created after Bob’s yes')) return 'done'
       return `unexpected: ${said}`
     }

@@ -89,7 +89,7 @@ describe('a run that was approved and wrote its ticket', () => {
   })
 
   it('tells the run as a chat, with no workflow plumbing in it', () => {
-    expect(model.chat.map((item) => item.kind)).toEqual(['started', 'joined', 'said', 'checked', 'said', 'said', 'drafted', 'found', 'asked', 'decided', 'written', 'finished'])
+    expect(model.chat.map((item) => item.kind)).toEqual(['started', 'joined', 'said', 'checked', 'said', 'said', 'drafted', 'asked', 'decided', 'written', 'finished'])
     const asked = model.chat.find((item) => item.kind === 'asked')
     expect(asked).toMatchObject({ channel: 'CODESparks Ops', posted: true })
     expect(model.chat.find((item) => item.kind === 'decided')).toMatchObject({ by: 'bob', verdict: 'approve', step: null })
@@ -455,5 +455,37 @@ describe('what a run found, for the page’s found line and plain steps', () => 
   it('adds a row for what the agents drafted, with how many and what they write', () => {
     const drafted = replay(success).chat.filter((item) => item.kind === 'drafted')
     expect(drafted).toMatchObject([{ kind: 'drafted', count: 1, connector: 'jira', operation: 'create_ticket' }])
+  })
+})
+
+describe('a read that failed, and where each read came from', () => {
+  const checker = { kind: 'agent', id: 'version_checker', display: 'Version checker' }
+  const fold = (data: Record<string, unknown>, step = 'github_read_releases') => foldAll(emptyModel, [event(1, 'agent_step_finished', { step, result: data }, checker)])
+
+  it('keeps what the agents reported as the model’s found text, and no longer as a log item', () => {
+    const model = replay(success)
+    expect(model.found).not.toBe('')
+    expect(model.chat.some((item) => (item.kind as string) === 'found')).toBe(false)
+  })
+
+  it('says a card’s read that failed with its problem, source and repository, and finds no release in it', () => {
+    const model = fold({ problem: 'GitHub answered 404 Not Found.', source: 'GitHub', repo: 'fastapi/fastapi' })
+    expect(model.release).toBeNull()
+    expect(model.chat).toMatchObject([{ kind: 'checked', newest: null, problem: 'GitHub answered 404 Not Found.', source: 'GitHub', software: 'fastapi/fastapi' }])
+  })
+
+  it('says a software check that could not read one as failed too, naming the software and where it looked', () => {
+    const model = fold({ software_id: 'sw_1', state: 'cant_check', newest: null, software: 'Express', source: 'npm', problem: 'npm answered 404 Not Found.' }, 'read_source')
+    expect(model.chat).toMatchObject([{ kind: 'checked', newest: null, problem: 'npm answered 404 Not Found.', source: 'npm', software: 'Express' }])
+  })
+
+  it('keeps a failed read apart from a read that found no release', () => {
+    const none = fold({ releases: 0, tags: [], source: 'GitHub', repo: 'fastapi/fastapi' })
+    expect(none.chat).toMatchObject([{ kind: 'checked', newest: null, problem: null }])
+  })
+
+  it('names where a good read came from, and which software', () => {
+    const model = fold({ releases: 2, tags: ['0.165.0', '0.164.0'], source: 'GitHub', repo: 'fastapi/fastapi' })
+    expect(model.chat).toMatchObject([{ kind: 'checked', newest: '0.165.0', problem: null, source: 'GitHub', software: 'fastapi/fastapi' }])
   })
 })

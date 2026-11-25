@@ -178,3 +178,22 @@ describe('the same structure once the request is decided', () => {
     expect(text(draw(BOB, { found: null })).startsWith('This run wants to create')).toBe(true)
   })
 })
+
+describe('a request nobody decided in time, or that the platform lost', () => {
+  it('keeps the ticket and says why nothing was written, with no yes', () => {
+    const expired: ApprovalView = { ...BOB, you_can_decide: false, why_not: 'not_open', steps: BOB.steps.map((step) => ({ ...step, status: 'expired' as const })) }
+    const html = draw(expired, { tense: 'wanted', facts: factsOf('expired') })
+    expect(text(html)).toContain('This run wanted to create 1 Jira ticket in MOCK:')
+    expect(text(html)).toContain('Upgrade LangGraph from 1.2.14 to 1.2.16')
+    expect(text(html)).toContain('No one approved in time. Nothing was written, and it can’t be decided now.')
+    expect(text(html)).not.toMatch(/\byes\b/i)
+    expect(buttons(html)).toEqual([])
+  })
+
+  it('keeps the questions on a lost run’s request', () => {
+    const lost = { ...decidedAs(BOB, 'approved'), questions: [{ question_id: 'q1', text: 'Is this urgent?', asked_by: 'bob', asked_at: AT, answer: null }] } as unknown as ApprovalView
+    const html = draw(lost, { tense: 'wanted', facts: factsOf('lost') })
+    expect(text(html)).toContain('Is this urgent?')
+    expect(text(html)).toContain('but the run stopped before it could make the change. Nothing was written.')
+  })
+})

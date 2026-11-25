@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { ApprovalActionView, ApprovalStepView } from '../../api/types'
-import { decidesLine, foundLine, previewOf, runByWords, statusOf, wantsLine } from './happened'
+import { decidesLine, foundLine, previewOf, runByWords, statusOf, tenseOf, wantsLine } from './happened'
 import { factsOf } from './words'
 
 const NOW = new Date('2026-11-25T10:00:00+08:00')
+const NOBODY = { ownsIt: false, startedIt: false, retriedIt: false, schedule: false } as const
+const STARTER = { ...NOBODY, ownsIt: true, startedIt: true }
 const named = (id: string) => ({ alice: 'Alice', bob: 'Bob', carol: 'Carol' })[id] ?? id
 
 const ticket = (fields: Record<string, unknown>, project = 'MOCK'): ApprovalActionView => ({
@@ -84,31 +86,31 @@ describe('who decides, and when they were asked', () => {
   const step = (over: Partial<ApprovalStepView> = {}): ApprovalStepView => ({ index: 0, label: 'Team approver', status: 'open', decided_by: null, decided_at: null, reason: null, post: 'sent', sent_to: [], sent_at: '2026-11-25T02:25:00Z', ...over })
 
   it('says an Approver decides in Teams, and when they were asked', () => {
-    expect(decidesLine({ steps: [step()], canDecide: true, whyNot: null, now: NOW })).toBe('An Approver decides in Teams (asked 10:25).')
+    expect(decidesLine({ steps: [step()], canDecide: true, whyNot: null, party: null, now: NOW })).toBe('An Approver decides in Teams (asked 10:25).')
   })
 
   it('names the day when they were asked on another day', () => {
-    expect(decidesLine({ steps: [step({ sent_at: '2026-11-24T02:25:00Z' })], canDecide: true, whyNot: null, now: NOW })).toBe('An Approver decides in Teams (asked Tue 24 Nov, 10:25).')
+    expect(decidesLine({ steps: [step({ sent_at: '2026-11-24T02:25:00Z' })], canDecide: true, whyNot: null, party: null, now: NOW })).toBe('An Approver decides in Teams (asked Tue 24 Nov, 10:25).')
   })
 
   it('tells the person who started the run that they cannot approve it', () => {
-    expect(decidesLine({ steps: [step()], canDecide: false, whyNot: 'own_work', now: NOW })).toBe('An Approver decides in Teams (asked 10:25). You can’t approve your own run.')
+    expect(decidesLine({ steps: [step()], canDecide: false, whyNot: 'own_work', party: STARTER, now: NOW })).toBe('An Approver decides in Teams (asked 10:25). You can’t approve your own run.')
   })
 
   it('says why someone else cannot decide', () => {
-    expect(decidesLine({ steps: [step()], canDecide: false, whyNot: 'not_an_approver', now: NOW })).toBe('An Approver decides in Teams (asked 10:25). Only an Approver can decide.')
+    expect(decidesLine({ steps: [step()], canDecide: false, whyNot: 'not_an_approver', party: null, now: NOW })).toBe('An Approver decides in Teams (asked 10:25). Only an Approver can decide.')
   })
 
   it('does not name a time before the request is in Teams', () => {
-    expect(decidesLine({ steps: [step({ post: 'waiting', sent_at: null })], canDecide: true, whyNot: null, now: NOW })).toBe('An Approver decides in Teams.')
+    expect(decidesLine({ steps: [step({ post: 'waiting', sent_at: null })], canDecide: true, whyNot: null, party: null, now: NOW })).toBe('An Approver decides in Teams.')
   })
 
   it('says an Approver can still decide on the page when Teams could not be reached', () => {
-    expect(decidesLine({ steps: [step({ post: 'failed', sent_at: null })], canDecide: true, whyNot: null, now: NOW })).toBe('An Approver decides on this page. Teams could not be reached.')
+    expect(decidesLine({ steps: [step({ post: 'failed', sent_at: null })], canDecide: true, whyNot: null, party: null, now: NOW })).toBe('An Approver decides on this page. Teams could not be reached.')
   })
 
   it('never says yes as a noun', () => {
-    const all = [step(), step({ post: 'failed' }), step({ post: 'waiting' })].map((one) => decidesLine({ steps: [one], canDecide: false, whyNot: 'decided_earlier_step', now: NOW }))
+    const all = [step(), step({ post: 'failed' }), step({ post: 'waiting' })].map((one) => decidesLine({ steps: [one], canDecide: false, whyNot: 'decided_earlier_step', party: null, now: NOW }))
     expect(all.join(' ')).not.toMatch(/\byes\b/i)
   })
 })
@@ -141,5 +143,38 @@ describe('who ran it', () => {
     expect(runByWords('person', 'carol', named)).toBe('run by Carol')
     expect(runByWords('schedule', null, named)).toBe('run on its schedule')
     expect(runByWords('person', null, named)).toBe('run')
+  })
+})
+
+describe('who may be told they cannot approve their own run', () => {
+  const step: ApprovalStepView = { index: 0, label: 'Team approver', status: 'open', decided_by: null, decided_at: null, reason: null, post: 'sent', sent_to: [], sent_at: '2026-11-25T02:25:00Z' }
+  const line = (party: Parameters<typeof decidesLine>[0]['party']) => decidesLine({ steps: [step], canDecide: false, whyNot: 'own_work', party, now: NOW })
+
+  it('tells the person who started the run, in those words', () => {
+    expect(line(STARTER)).toContain('You can’t approve your own run.')
+  })
+
+  it('gives the owner who did not start it, and someone who retried it, their own reason', () => {
+    expect(line({ ...NOBODY, ownsIt: true })).toContain('You set this workflow up, so another Approver must decide.')
+    expect(line({ ...NOBODY, ownsIt: true })).not.toContain('own run')
+    expect(line({ ...NOBODY, retriedIt: true })).toContain('You retried this run, so another Approver must decide.')
+  })
+})
+
+describe('the tense of what a run wants to do, in every state that holds a request', () => {
+  it.each([
+    ['awaiting_approval', 'wants'],
+    ['acting', 'doing'],
+    ['succeeded', 'did'],
+    ['rejected', 'wanted'],
+    ['expired', 'wanted'],
+    ['lost', 'wanted'],
+  ] as const)('%s is %s', (state, tense) => {
+    expect(tenseOf(state)).toBe(tense)
+  })
+
+  it('has none for a run with no request yet', () => {
+    expect(tenseOf('working')).toBeUndefined()
+    expect(tenseOf('failed')).toBeUndefined()
   })
 })

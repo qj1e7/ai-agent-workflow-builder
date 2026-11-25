@@ -143,7 +143,7 @@ describe('the request’s words', () => {
 
   it('tells someone who can’t decide why, in a line where the buttons would be', () => {
     expect(waitingWords('own_work')).toBe('Waiting for an Approver. You can’t approve your own work.')
-    expect(waitingWords('decided_earlier_step')).toBe('Waiting for another Approver. You said yes to the step before, and no one says yes twice.')
+    expect(waitingWords('decided_earlier_step')).toBe('Waiting for another Approver. You approved the step before, and no one approves twice.')
     expect(waitingWords('not_an_approver')).toBe('Waiting for an Approver. Only an Approver can decide.')
     expect(waitingWords(null)).toBe('Waiting for an Approver.')
     expect(waitingWords('own_work', false), 'where the page already said why').toBe('Waiting for an Approver.')
@@ -151,17 +151,17 @@ describe('the request’s words', () => {
   })
 
   it('leads the cards with the sketch’s line, naming no Approver for a request that waits for someone else', () => {
-    expect(leadWords(1, true)).toBe('This needs your yes.')
-    expect(leadWords(3, true)).toBe('These need your yes.')
-    expect(leadWords(1, false)).toBe('This waits for an Approver’s yes.')
-    expect(leadWords(2, false)).toBe('These wait for an Approver’s yes.')
+    expect(leadWords(1, true)).toBe('This needs your approval.')
+    expect(leadWords(3, true)).toBe('These need your approval.')
+    expect(leadWords(1, false)).toBe('This waits for an Approver.')
+    expect(leadWords(2, false)).toBe('These wait for an Approver.')
   })
 
   it('names who a request waits for once the platform does: one name, or several any one of whom may say yes', () => {
-    expect(leadWords(1, false, ['Bob'])).toBe('This waits for Bob’s yes.')
+    expect(leadWords(1, false, ['Bob'])).toBe('This waits for Bob.')
     expect(leadWords(1, false, ['Bob', 'Dave', 'Erin'])).toBe('This waits for a yes from Bob, Dave or Erin.')
-    expect(leadWords(2, false, ['Bob'])).toBe('These wait for an Approver’s yes.')
-    expect(leadWords(1, true, ['Bob'])).toBe('This needs your yes.')
+    expect(leadWords(2, false, ['Bob'])).toBe('These wait for an Approver.')
+    expect(leadWords(1, true, ['Bob'])).toBe('This needs your approval.')
   })
 
   describe('who it was sent to', () => {
@@ -224,7 +224,7 @@ describe('the request’s words', () => {
     })
 
     it('says why nobody can decide an expired or cancelled request', () => {
-      expect(record({ is: 'expired' })).toBe('No one said yes in time. Nothing was written, and it can’t be decided now.')
+      expect(record({ is: 'expired' })).toBe('No one approved in time. Nothing was written, and it can’t be decided now.')
       expect(record({ is: 'cancelled' })).toBe('The workflow was deleted before anyone decided. Nothing was written, and it can’t be decided now.')
       expect(record({ is: 'closed' })).toBe('The platform was updated before anyone decided. Nothing was written, and it can’t be decided now.')
     })
