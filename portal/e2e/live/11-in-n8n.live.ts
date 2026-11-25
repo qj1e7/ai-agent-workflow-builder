@@ -12,7 +12,7 @@ import { devContext, OUT, shot } from './support/ui'
 // takes it away again at the end, so no other spec meets a Carol who has it.
 
 const AGENTS = [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }]
-const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for a yes.'
+const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for approval.'
 
 const views = (page: Page): Locator => page.getByRole('main').getByRole('group', { name: 'View' })
 const canvasTitle = (page: Page): Locator => page.getByRole('main').locator('svg title').first()

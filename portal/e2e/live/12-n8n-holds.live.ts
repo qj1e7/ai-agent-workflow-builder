@@ -12,7 +12,7 @@ import { devContext, OUT, shot } from './support/ui'
 // password, as the API suite's Member does, so she can hold a workflow. She never opens the watchlist, which other specs change.
 
 const N8N_URL = process.env['N8N_URL'] ?? 'http://n8n:5678'
-const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for a yes.'
+const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for approval.'
 const HELD = /Dana has it open in n8n since \d{1,2}:\d{2}\./
 const AGENTS = [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }]
 

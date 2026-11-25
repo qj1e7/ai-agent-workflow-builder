@@ -206,7 +206,7 @@ test('while a yes waits, every row stays in the list, and the decision is in Nee
   await bobPage.goto('/workflows')
   const waiting = bobPage.getByRole('main').locator(`li[data-home-item="approval:${approvalId}"]`)
   await expect(waiting, 'this check’s one decision is one row, among any other runs waiting for bob').toHaveCount(1)
-  await expect(waiting).toHaveText(/Software watchlist\s+needs your yes/)
+  await expect(waiting).toHaveText(/Software watchlist\s+needs your approval/)
   await bob.close()
 })
 

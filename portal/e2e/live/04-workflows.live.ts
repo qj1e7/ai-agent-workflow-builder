@@ -170,7 +170,7 @@ test('bob sees who may approve and the recent runs, with no Run now, Pause or De
   await expect(heading(page)).toHaveText(workflow.name)
   await expect(page.getByRole('region', { name: 'Who approves' })).toContainText('Any Approver but Alice, in Teams.')
   await page.getByText('Who can’t approve').click()
-  await expect(page.getByRole('region', { name: 'Who approves' }), 'the whole own-work rule is one tap away').toContainText('The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
+  await expect(page.getByRole('region', { name: 'Who approves' }), 'the whole own-work rule is one tap away').toContainText('The workflow’s owner, whoever starts a run and whoever retries it can’t approve that run.')
   await expect(page.getByRole('region', { name: 'Recent runs' }).getByRole('link').first()).toBeVisible()
   for (const name of ['Run now', 'Pause', 'Resume', 'Delete', 'More actions', 'Change when it runs', 'Set when it runs']) await expect(page.getByRole('button', { name })).toHaveCount(0)
   await expectReadOnly(page, 'this workflow')
