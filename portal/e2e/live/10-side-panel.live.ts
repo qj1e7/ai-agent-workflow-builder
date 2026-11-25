@@ -221,7 +221,7 @@ test('the run card moves in place from the stream: stopped, retrying, waiting fo
   })
 
   await card.getByRole('button', { name: 'Retry', exact: true }).click()
-  await expect(pill, 'the same card waits for a yes after the retry').toHaveText('Waiting for a yes', { timeout: 90_000 })
+  await expect(pill, 'the same card waits for approval after the retry').toHaveText('Waiting for approval', { timeout: 90_000 })
   const approvalId = await backend.approvalIdOf(runId)
   const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
   await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'approve', digest }, undefined, [201])
@@ -236,8 +236,8 @@ test('the run card moves in place from the stream: stopped, retrying, waiting fo
   const STAGES: readonly (readonly [string, RegExp])[] = [
     ['stopped', /^Stopped/],
     ['retrying', /Retrying after a short wait/],
-    ['waiting', /^Waiting for a yes/],
-    ['writing', /said yes\. Creating the ticket/],
+    ['waiting', /^Waiting for approval/],
+    ['writing', /approved\. Creating the ticket/],
     ['done', /^Done/],
   ]
   const order = seen
@@ -297,7 +297,7 @@ test('APPR-panel: Alice declines in the side panel, focus goes to its heading, t
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/')
   await openRequest(page, runId)
-  await expect(panel(page), 'exactly what will be written, from the request').toContainText(/What will be written[\s\S]*Where[\s\S]*Summary/)
+  await expect(panel(page), 'exactly what will be written, from the request').toContainText(/This run wants to create 1 Jira ticket in MOCK:[\s\S]*Where[\s\S]*Summary/)
   await expect(heading(page), 'focus is on the heading once the request has loaded').toBeFocused()
   await expect(panel(page), 'the AI’s summary and Why you wait for the page').not.toContainText(/Summary by AI|Why you/)
   await expectAccessible(page, path.join(OUT, 'axe'), 'side-panel-approval-1280')
@@ -306,7 +306,7 @@ test('APPR-panel: Alice declines in the side panel, focus goes to its heading, t
   await expect(page.getByRole('status').filter({ hasText: 'Declined. Nothing was written. Reason: Not needed this time.' }), 'a message at the bottom tells Alice').toHaveCount(1)
   await expect(heading(page), 'focus is on the panel’s heading').toBeFocused()
   await expect(panel(page), 'the panel stays on the request, with its record').toContainText(/Declined by Alice (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2}: not needed this time\. Nothing was written\./, { timeout: 15_000 })
-  await expect(panel(page).locator('[data-approval-pill]'), 'its pill says Declined in words').toHaveText('Declined')
+  await expect(panel(page).locator('[data-run-pill]'), 'its pill says Declined in words').toHaveText('Declined')
   await expect(panel(page), 'a declined record never says created').not.toContainText(/created/i)
   await shot(page, info, 'r12-panel-declined-by-alice-1280')
   expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
@@ -615,7 +615,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width > 900 ? 900 : 844 })
     await page.goto('/')
     await openRequest(page, runId)
-    await expect(panel(page)).toContainText(/Approval, from [\s\S]*What will be written/, { timeout: 20_000 })
+    await expect(panel(page)).toContainText(/This run wants to create 1 Jira ticket in MOCK:/, { timeout: 20_000 })
     await expect(panel(page).getByRole('button', { name: 'Decline' })).toBeVisible()
     await shot(page, info, `c4-approval-${String(width)}`)
     await context.close()
@@ -633,17 +633,16 @@ for (const width of [1440, 390]) {
     await page.goto('/')
     await page.getByRole('group', { name: 'Suggestions' }).getByRole('button', { name: 'What waits for me?' }).click()
     await expect(newest(page)).toHaveAttribute('data-answer', 'true')
-    await expect(newest(page).locator('p').first(), 'the sketch’s lead over the cards').toHaveText(/^(This needs|These need) your yes\.$/)
+    await expect(newest(page).locator('p').first(), 'the sketch’s lead over the cards').toHaveText(/^(This needs|These need) your approval\.$/)
     const opener = newest(page).locator(`[data-opens="approval:${runId}"]`)
     await expect(opener.or(panel(page)).first(), 'on a wide screen one request shows beside the chat by itself').toBeVisible({ timeout: 20_000 })
     if (!(await panel(page).isVisible())) await opener.click()
-    const request = panel(page).locator('section', { has: page.locator('[data-approval-pill]') })
-    await expect(request).toContainText(/^Approval, from Alice’s /)
-    await expect(request.getByRole('heading', { name: 'Create 1 Jira ticket' })).toBeVisible()
-    await expect(request.locator('[data-approval-pill]')).toHaveText('Needs your yes')
-    await expect(request.getByRole('region', { name: 'What will be written', exact: true })).toContainText(/Where\s*Jira project MOCK on the practice Jira\s*Summary\s*Upgrade /)
-    await expect(request, 'the AI’s summary waits for the page, so the panel shows only what will be written').not.toContainText('Summary by AI')
-    await expect(request.getByRole('button'), 'Ask Alice, then Approve, and Decline last').toHaveText(['Ask Alice', 'Approve', 'Decline'])
+    const request = panel(page)
+    await expect(request).toContainText('This run wants to create 1 Jira ticket in MOCK:')
+    await expect(request.locator('[data-run-pill]')).toHaveText('Waiting for approval')
+    await expect(request, 'the whole ticket, as it will be written, is one click away').toContainText(/Where\s*Jira project MOCK on the practice Jira\s*Summary\s*Upgrade /)
+    await expect(request, 'the panel has the run page’s shape, with no AI summary and no Not checked').not.toContainText(/Summary by AI|Not checked/)
+    await expect(request.getByRole('button', { name: /^(Ask Alice|Approve|Decline)$/ }), 'Ask Alice, then Approve, and Decline last').toHaveText(['Ask Alice', 'Approve', 'Decline'])
     await shot(page, info, `c5-bob-request-${String(width)}`)
 
     await request.getByRole('button', { name: 'Decline', exact: true }).click()
@@ -657,7 +656,7 @@ for (const width of [1440, 390]) {
     await why.getByRole('button', { name: 'Decline', exact: true }).click()
 
     await expect(request, 'the panel keeps the request, with its record').toContainText(/Declined by Bob (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2}: not this week\. Nothing was written\./, { timeout: 15_000 })
-    await expect(request.locator('[data-approval-pill]')).toHaveText('Declined')
+    await expect(request.locator('[data-run-pill]')).toHaveText('Declined')
     await expect(request.getByRole('button', { name: /^(Approve|Decline|Ask Alice)$/ }), 'nothing is left to decide').toHaveCount(0)
     await expect(request, 'a declined record never says created').not.toContainText(/created/i)
     await shot(page, info, `c5-bob-declined-${String(width)}`)

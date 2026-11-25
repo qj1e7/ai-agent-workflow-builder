@@ -414,7 +414,7 @@ for (const phone of [false, true]) {
     await decline(bobPage)
     await expect(bobPage.locator('[data-run-pill]'), 'the run is declined').toHaveText('Declined', { timeout: 60_000 })
     await expect(bobPage.getByRole('heading', { level: 1 }), 'the page is named for the workflow').toHaveText('Software watchlist')
-    await expect(bobPage.getByRole('main'), 'its settled line says nothing was written').toContainText(/(Ended at|Ended on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · Bob declined\. Nothing was written\./)
+    await expect(bobPage.getByRole('main'), 'its decision says who declined and that nothing was written').toContainText(/Declined by Bob (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2}\. Nothing was written\./)
     await bob.close()
 
     await page.goto('/software')

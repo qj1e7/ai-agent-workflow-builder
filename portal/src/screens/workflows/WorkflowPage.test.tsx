@@ -149,7 +149,7 @@ describe('a workflow page', () => {
     const line = text(/<div[^>]*class="[^"]*large[^"]*"[\s\S]*?<\/ol>/.exec(mainOf(render()))?.[0] ?? '')
     expect(line).toContain('Run now No system access')
     expect(line).toContain('Check release Reads only')
-    expect(line).toContain('Ask for a yes Waits for a yes')
+    expect(line).toContain('Ask for approval Waits for a yes')
     expect(line).toContain('Create Jira tickets Writes after a yes')
   })
 

@@ -6,7 +6,7 @@ import { declineReasons, foundOf } from './decision'
 import type { LiveRun } from './liveRun'
 import { stationsOf, type PlanBlock, type RunModel, type Station } from './runModel'
 import { stageAnswers, type Answer } from './stageAnswers'
-import { runKind, settledOf, stageFactsOf, triggerWords, type NameOf, type Settled, type StageFacts } from './words'
+import { settledOf, stageFactsOf, triggerWords, type NameOf, type Settled, type StageFacts } from './words'
 import type { TroubleshootingProps } from './Outcome'
 
 export function approvalIdOf(run: RunView, model: RunModel): string | null {
@@ -35,12 +35,10 @@ export interface RunStory {
   readonly stations: readonly Station[]
   readonly settled: Settled | null
   readonly arrivedLive: string | null
-  readonly found: string
   readonly quick: readonly string[]
   /** The rows beside the troubleshooter's face while the run is not stopped. */
   readonly answers: readonly Answer[]
   readonly stopped: Pick<TroubleshootingProps, 'advice' | 'loading' | 'me' | 'reports' | 'nameOf' | 'modelOff'>
-  readonly kind: string
 }
 
 export interface StoryInputs {
@@ -71,7 +69,6 @@ export function storyOf({ run, live, me, nameOf, useCase, approval, advice, advi
     stations,
     settled: settledOf(shown, nameOf, now, quick),
     arrivedLive: shown.spotSeq > loadedUpTo ? (stations.findLast((station) => station.state !== 'todo')?.key ?? null) : null,
-    found,
     quick,
     answers: stageAnswers(shown, found, nameOf),
     stopped: {
@@ -82,7 +79,6 @@ export function storyOf({ run, live, me, nameOf, useCase, approval, advice, advi
       nameOf,
       modelOff,
     },
-    kind: runKind(run.started_at, now),
   }
 }
 

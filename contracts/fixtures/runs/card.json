@@ -132,7 +132,10 @@
           "1.2.11",
           "1.2.10",
           "1.2.9"
-        ]
+        ],
+        "source": "GitHub",
+        "repo": "langchain-ai/langgraph",
+        "newest_published_at": "2026-11-12T08:00:00Z"
       }
     }
   },

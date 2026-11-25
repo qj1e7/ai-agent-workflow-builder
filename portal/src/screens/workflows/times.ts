@@ -115,6 +115,14 @@ export function publishedWhen(iso: string, now: Date): string {
   return `${sameDay(moment, today) ? 'today' : dayWords(moment, today)}, ${moment.clock}`
 }
 
+/** The day a release came out, "18 Nov", with the year when it is not this year: "30 Dec 2025". */
+export function releasedOn(iso: string, now: Date): string {
+  const at = momentOf(new Date(iso))
+  const today = momentOf(now)
+  const date = `${at.day} ${at.month}`
+  return at.year === today.year ? date : `${date} ${at.year}`
+}
+
 /** When a hold began, after "since": "9:10" on the same day, else "Tue 3 Nov, 9:10". */
 export function sinceWhen(iso: string, now: Date): string {
   const moment = momentOf(new Date(iso))

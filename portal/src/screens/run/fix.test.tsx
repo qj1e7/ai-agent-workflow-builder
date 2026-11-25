@@ -120,11 +120,11 @@ describe('how a fix ends', () => {
   })
 
   it('says a ready fix waits for an Approver, and the faces are pleased', () => {
-    const model = withFix(started(), wire('fix_round', 'Round 1: 3 of 3 scenarios passed.', { fix_id: FIX, round: 1, passed: 3, scenarios: 3, progress: true }), wire('fix_proposed', 'A fix is ready as version 4. Nothing changes until an Approver says yes.', { fix_id: FIX, version: 4, digest: `sha256:${'ab'.repeat(32)}` }))
+    const model = withFix(started(), wire('fix_round', 'Round 1: 3 of 3 scenarios passed.', { fix_id: FIX, round: 1, passed: 3, scenarios: 3, progress: true }), wire('fix_proposed', 'A fix is ready as version 4. Nothing changes until an Approver approves.', { fix_id: FIX, version: 4, digest: `sha256:${'ab'.repeat(32)}` }))
     expect(model.fix?.ended).toBe('proposed')
     expect(model.phase.state).toBe('failed')
     expect(troubleFaceOf('failed', model.fix, BEFORE)).toBe('success')
-    expect(text(renderToStaticMarkup(<FixCrew fix={model.fix!} now={BEFORE} loadedUpTo={0} />))).toBe('A fix is ready. Nothing changes until an Approver says yes.')
+    expect(text(renderToStaticMarkup(<FixCrew fix={model.fix!} now={BEFORE} loadedUpTo={0} />))).toBe('A fix is ready. Nothing changes until an Approver approves.')
     expect(logRowsOf(model.chat, nameOf, []).at(-1)?.tone).toBe('wait')
   })
 

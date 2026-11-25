@@ -91,7 +91,7 @@ for (const user of USERS) {
       const page = await context.newPage()
       await page.setViewportSize({ width, height: width > 900 ? 1000 : 844 })
       const found: string[] = []
-      const runPage: Screen = { name: 'A run waiting for a yes', path: `/runs/${runId}`, heading: ANY_HEADING, shows: 'Not checked' }
+      const runPage: Screen = { name: 'A run waiting for approval', path: `/runs/${runId}`, heading: ANY_HEADING, shows: 'Show full text' }
       const pages: Screen[] = [
         { name: 'A workflow', path: `/workflows/${quiet.id}`, heading: quiet.name },
         ...softwarePages.map((softwarePath, index): Screen => ({ name: `Software ${String(index + 1)}`, path: softwarePath, heading: ANY_HEADING })),
@@ -206,7 +206,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         'approval',
         'What needs me?',
         () => newest.locator(`[data-opens="approval:${facts.request}"]`),
-        () => [panel.getByRole('button', { name: 'Decline' }), panel.getByText('The platform can’t yet check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using.')],
+        () => [panel.getByRole('button', { name: 'Decline' }), panel.getByText('This run wants to create 1 Jira ticket in MOCK:')],
       ],
       ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => [panel.getByText('Safe to retry')]],
       ['software', 'Monitor LangGraph releases on the watchlist', () => newest.getByRole('button', { name: 'Open it' }), () => [panel.getByText('Checked by')]],

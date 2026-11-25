@@ -152,6 +152,39 @@ function wroteWords(operation: string | null, connector: string, refs: readonly 
   return operation?.startsWith('create_') ? `Created ${andList(refs)} in ${where}.` : `Wrote ${andList(refs)} in ${where}.`
 }
 
+type Read = Extract<ChatItem, { kind: 'checked' }>
+
+/**
+ * The plain step for a read of releases: "Checked GitHub: found 0.165.0". A run that read more than one software names each ("Checked
+ * Express on npm: found 5.1.0"). A read that failed says so and why, and is never "no releases found": that is a read that worked
+ * and found nothing a stable release rule counts.
+ */
+export function checkedWords(read: Pick<Read, 'newest' | 'problem' | 'reason' | 'source' | 'software'>, named: boolean): string {
+  const where = read.source ?? 'the release source'
+  if (read.reason !== null) {
+    const what = read.software ?? where
+    return read.reason === '' ? `Couldn’t check ${what}.` : `Couldn’t check ${what}: ${read.reason}`
+  }
+  if (read.problem !== null) {
+    const what = read.software ? `${read.software} on ${where}` : where
+    return read.problem === '' ? `Couldn’t read ${what}.` : `Couldn’t read ${what}: ${read.problem}`
+  }
+  const head = named && read.software ? `Checked ${read.software} on ${where}` : `Checked ${where}`
+  return read.newest === null ? `${head}: no stable releases found` : `${head}: found ${read.newest}`
+}
+
+/** What the live region says for the newest log item: what the platform did, with who says it. An agent's own words are never read out. */
+export function announcementOf(item: ChatItem | undefined, nameOf: NameOf, declinedNext: string | null): string | null {
+  if (!item || item.kind === 'said') return null
+  const line = lineOf(item, nameOf, declinedNext)
+  return `${speakerName(line.speaker)}: ${line.text}`
+}
+
+/** "Drafted 1 Jira ticket", or "Drafted 2 changes" when the writes are not all tickets. */
+export function draftedWords(item: { readonly count: number; readonly allTickets: boolean }): string {
+  return `Drafted ${item.allTickets ? count(item.count, 'Jira ticket') : count(item.count, 'change')}`
+}
+
 /** A line of the run's chat. `declinedNext` is what happens after a decline, from declinedNext. */
 export function lineOf(item: ChatItem, nameOf: NameOf, declinedNext: string | null): Line {
   switch (item.kind) {
@@ -168,8 +201,8 @@ export function lineOf(item: ChatItem, nameOf: NameOf, declinedNext: string | nu
       return {
         speaker: gate,
         text: item.channel
-          ? `Asked for a yes in Teams, in ${item.channel}. Nothing is written until an Approver says yes.`
-          : 'Waiting for an Approver to say yes. Nothing is written until then.',
+          ? `Asked for approval in Teams, in ${item.channel}. Nothing is written until an Approver approves.`
+          : 'Waiting for an Approver to approve. Nothing is written until then.',
         tone: 'wait',
       }
     case 'decided': {
@@ -202,8 +235,10 @@ export function lineOf(item: ChatItem, nameOf: NameOf, declinedNext: string | nu
       }
     case 'reported':
       return { speaker: app, text: `${nameOf(item.by)} reported this run to support.`, tone: 'plain' }
-    case 'found':
-      return { speaker: app, text: item.text, tone: 'plain' }
+    case 'checked':
+      return { speaker: app, text: checkedWords(item, false), tone: item.problem === null && item.reason === null ? 'plain' : 'bad' }
+    case 'drafted':
+      return { speaker: app, text: draftedWords(item), tone: 'plain' }
     case 'told':
       return { speaker: platform, text: item.line, tone: item.bad ? 'bad' : 'plain' }
     case 'fix':
@@ -217,7 +252,7 @@ export function fixWords(fix: FixState, now: number): string {
     case null:
       return 'Drafting a fix.'
     case 'proposed':
-      return 'A fix is ready. Nothing changes until an Approver says yes.'
+      return 'A fix is ready. Nothing changes until an Approver approves.'
     case 'handed_back':
       return "I couldn't fix this."
   }
@@ -346,7 +381,7 @@ export function withCurrentNames(text: string): string {
 }
 
 /** The gate's step on the run line, whatever the plan calls its block. */
-export const GATE_STEP = 'Ask for a yes'
+export const GATE_STEP = 'Ask for approval'
 
 /** The sketch's words for the agent steps of the platform's own plans. A step the team named keeps its name. */
 const STEP_WORDS: Readonly<Record<string, string>> = {
@@ -433,14 +468,14 @@ export function settledWhen(at: number, now: Date): string {
 function afterYeses(approvedBy: readonly string[], nameOf: NameOf): string {
   const names = approvedBy.map(nameOf)
   if (names.length === 0) return ''
-  return names.length === 1 ? ` after ${names.join('')}’s yes` : ` after ${andList(names)} said yes`
+  return ` after ${andList(names)} approved`
 }
 
-/** "Bob declined: not this week. Nothing was written.", with a first yes before it when there was one. A quick reason reads on in the sentence; a typed one is kept as typed. */
+/** "Bob declined: not this week. Nothing was written.", with a first approval before it when there was one. A quick reason reads on in the sentence; a typed one is kept as typed. */
 export function declinedSentence(declined: Declined, nameOf: NameOf, quick: readonly string[]): string {
   const { reason } = declined
   const why = reason ? `: ${sentence(quick.includes(reason) ? reason.charAt(0).toLowerCase() + reason.slice(1) : reason)}` : '.'
-  const first = declined.approvedBy.length > 0 ? `${andList(declined.approvedBy.map(nameOf))} said yes, then ` : ''
+  const first = declined.approvedBy.length > 0 ? `${andList(declined.approvedBy.map(nameOf))} approved, then ` : ''
   return `${first}${nameOf(declined.by)} declined${why} Nothing was written.`
 }
 
@@ -505,13 +540,15 @@ export function logClock(at: number): string {
 }
 
 /**
- * The run's log in the sketch's words, one sentence a row. What the Step by step shows once: the run line already says who joined and
- * when it finished, so those have no row, and a decline is the one row that says who declined and that nothing was written.
+ * What happened, in plain steps built by code from the run's events, one sentence a row with the time to the second. The run's top
+ * line already says who ran it, so there is no row for the start, and the status says how it ended, so none for that. What the
+ * agents said is not here: it is under "Show agent messages", from messageRowsOf, so their report is never repeated as a step.
  */
 export function logRowsOf(items: readonly ChatItem[], nameOf: NameOf, quick: readonly string[]): LogRow[] {
   const firstDay = items[0] ? dayAndClock(items[0].at).day : ''
   const rows: LogRow[] = []
   const declinedLater = (index: number) => items.slice(index + 1).some((item) => item.kind === 'declined')
+  const reads = new Set(items.flatMap((item) => (item.kind === 'checked' ? [item.software] : [])))
   items.forEach((item, index) => {
     let text: string
     let agent: AgentRef | null = null
@@ -519,25 +556,31 @@ export function logRowsOf(items: readonly ChatItem[], nameOf: NameOf, quick: rea
     switch (item.kind) {
       case 'joined':
       case 'finished':
+      case 'started':
+      case 'said':
         return
+      case 'checked':
+        text = checkedWords(item, reads.size > 1)
+        tone = item.problem === null ? 'plain' : 'bad'
+        break
       case 'decided':
         if (item.verdict === 'decline' && declinedLater(index)) return
-        text = item.verdict === 'approve' ? `${nameOf(item.by)} said yes${item.step ? ` as ${item.step}` : ''}.` : `${nameOf(item.by)} declined.`
+        text = item.verdict === 'approve' ? `${nameOf(item.by)} approved` : `${nameOf(item.by)} declined`
         break
       case 'declined':
         text = declinedSentence(item.record, nameOf, quick)
-        break
-      case 'started':
-        text = item.trigger === 'schedule' ? 'Started on schedule.' : `${nameOf(item.by)} started the run.`
         break
       case 'asked':
         if (item.posted === false && item.channel) {
           text = `Couldn’t send to Teams, in ${item.channel}. An Approver can still decide on this page.`
           tone = 'bad'
         } else {
-          text = item.channel ? 'Asked an Approver for a yes in Teams.' : 'Waiting for an Approver to say yes. Nothing is written until then.'
+          text = item.channel ? 'Asked an Approver in Teams' : 'Asked an Approver'
           tone = 'wait'
         }
+        break
+      case 'written':
+        text = item.operation.startsWith('create_') ? `Created ${andList(item.refs)}` : `Wrote ${andList(item.refs)} in ${connectorLabel(item.connector)}`
         break
       case 'retried':
         text = item.by ? `${nameOf(item.by)} retried the run, after a short wait.` : 'The run was retried, after a short wait.'
@@ -549,20 +592,33 @@ export function logRowsOf(items: readonly ChatItem[], nameOf: NameOf, quick: rea
         if (line.speaker.kind === 'agent') agent = line.speaker.agent
       }
     }
-    const { day, clock } = { day: dayAndClock(item.at).day, clock: logClock(item.at) }
-    rows.push({
-      seq: item.seq,
-      at: item.at,
-      time: day === firstDay ? clock : `${day}, ${clock}`,
-      text,
-      agent,
-      tone,
-      gate: item.kind === 'decided',
-      keys: item.kind === 'written' && item.connector === 'jira' ? item.refs : [],
-      urls: item.kind === 'written' ? item.urls : undefined,
-    })
+    rows.push(rowOf(item, text, tone, firstDay, agent))
   })
   return rows
+}
+
+/**
+ * The agents' own words, for support: each message with its agent's name, in order. Their report at the end of the work is kept
+ * out, since the agent said the same thing as a message, and an unlabelled copy is what read as a duplicate.
+ */
+export function messageRowsOf(items: readonly ChatItem[]): LogRow[] {
+  const firstDay = items[0] ? dayAndClock(items[0].at).day : ''
+  return items.flatMap((item) => (item.kind === 'said' ? [rowOf(item, item.text, item.bad ? 'bad' : 'plain', firstDay, item.speaker)] : []))
+}
+
+function rowOf(item: ChatItem, text: string, tone: LogRow['tone'], firstDay: string, agent: AgentRef | null): LogRow {
+  const { day, clock } = { day: dayAndClock(item.at).day, clock: logClock(item.at) }
+  return {
+    seq: item.seq,
+    at: item.at,
+    time: day === firstDay ? clock : `${day}, ${clock}`,
+    text,
+    agent,
+    tone,
+    gate: item.kind === 'decided',
+    keys: item.kind === 'written' && item.connector === 'jira' ? item.refs : [],
+    urls: item.kind === 'written' ? item.urls : undefined,
+  }
 }
 
 export type RunState = RunView['state']
@@ -616,7 +672,7 @@ export function stageFactsOf(model: RunModel): StageFacts {
   }
 }
 
-const TEST_PASSED = 'Test run passed up to the yes. Nothing was written.'
+const TEST_PASSED = 'Test run passed up to the approval step. Nothing was written.'
 
 /** A test run passed when it ran to the yes, or to the end with nothing new to write. Either way it wrote nothing. */
 const testPassed = (run: StageFacts): boolean => run.state === 'succeeded' && (run.outcome === 'test_passed' || (run.test === true && run.count === 0))
@@ -631,9 +687,9 @@ export function stageWords(run: StageFacts, nameOf: NameOf): string {
     case 'failed':
       return run.whyStopped ? run.whyStopped.replace(/\.$/, '') : 'Stopped'
     case 'awaiting_approval':
-      return 'Waiting for a yes'
+      return 'Waiting for approval'
     case 'skipped':
-      return 'Skipped. An earlier run is still waiting for a yes.'
+      return 'Skipped. An earlier run is still waiting for approval.'
     case 'expired':
       return 'No answer. Nothing was written.'
     case 'lost':
@@ -658,13 +714,13 @@ export function stageWords(run: StageFacts, nameOf: NameOf): string {
 
 export type StageTone = 'ok' | 'wait' | 'bad' | 'new' | 'quiet'
 
-/** The one pill a run has: Stopped, Running, Waiting for a yes, Done, Nothing new or Declined. */
+/** The one pill a run has: Stopped, Running, Waiting for approval, Done, Nothing new or Declined. */
 export function runPill(run: StageFacts): { readonly label: string; readonly tone: StageTone } {
   switch (run.state) {
     case 'failed':
       return { label: 'Stopped', tone: 'bad' }
     case 'awaiting_approval':
-      return { label: 'Waiting for a yes', tone: 'wait' }
+      return { label: 'Waiting for approval', tone: 'wait' }
     case 'pending':
     case 'working':
     case 'proposed':

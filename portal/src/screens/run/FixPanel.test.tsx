@@ -21,7 +21,7 @@ const view = (over: Partial<FixView> = {}): FixView => ({
   use_case_id: 'uc_01JB9',
   name: 'Release check',
   state: 'waiting',
-  said: 'Waiting for a yes. Nothing changes until an Approver says yes.',
+  said: 'Waiting for a yes. Nothing changes until an Approver approves.',
   asked_by: 'alice',
   asked_by_name: 'Alice',
   ends_by: new Date(ENDS).toISOString(),
@@ -74,7 +74,7 @@ describe('the button on a stopped run', () => {
   it('shows Fix it for me to an Operator, with what it does and does not do', () => {
     const html = draw()
     expect(buttons(html)).toEqual(['Fix it for me'])
-    expect(text(html)).toContain('Nothing changes until an Approver says yes.')
+    expect(text(html)).toContain('Nothing changes until an Approver approves.')
   })
 
   it('shows an Approver why they can’t, and no button', () => {
@@ -96,10 +96,10 @@ describe('the button on a stopped run', () => {
   })
 
   it('hides the button once the press was answered, before the run’s own event arrives', () => {
-    const started = view({ state: 'drafting', said: 'Drafting a fix. Nothing changes until an Approver says yes.', approval_id: null })
+    const started = view({ state: 'drafting', said: 'Drafting a fix. Nothing changes until an Approver approves.', approval_id: null })
     const html = draw({ started })
     expect(buttons(html)).toEqual([])
-    expect(text(html)).toBe('Drafting a fix. Nothing changes until an Approver says yes.')
+    expect(text(html)).toBe('Drafting a fix. Nothing changes until an Approver approves.')
   })
 })
 
@@ -112,7 +112,7 @@ describe('progress under the stop', () => {
 
   it('says a ready fix waits for a yes in the platform’s words, with a way to the approval', () => {
     const html = draw({ fix: fix({ ended: 'proposed' }), view: view() })
-    expect(text(html)).toContain('Waiting for a yes. Nothing changes until an Approver says yes.')
+    expect(text(html)).toContain('Waiting for a yes. Nothing changes until an Approver approves.')
     expect(links(html)).toEqual([['/setup-approvals/apr_01A', 'Open the approval']])
     expect(buttons(html)).toEqual([])
   })

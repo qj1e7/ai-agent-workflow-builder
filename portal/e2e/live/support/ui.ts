@@ -72,6 +72,18 @@ export async function expectReadOnly(page: Page, what: string): Promise<void> {
   await expect(main.locator(':is(button, input, select, textarea):disabled, [aria-disabled="true"]')).toHaveCount(0)
 }
 
+/** "Run history (3 steps)", the run's history, folded once the run needs the person or is over. */
+const HISTORY = /Run history \(\d+ steps?\)/
+
+/** Opens Run history when it is folded, so its steps, its run line and its agent messages can be read. Shut or open, it leaves it open. */
+export async function showHistory(scope: Page | Locator): Promise<void> {
+  const details = scope.locator('details').filter({ hasText: HISTORY }).first()
+  const summary = details.locator('summary').first()
+  await summary.waitFor()
+  if (!(await details.evaluate((element) => (element as HTMLDetailsElement).open))) await summary.click()
+  await expect(details).toHaveJSProperty('open', true)
+}
+
 /** The reasons Decline opens, before anything is declined (spec 10.4). */
 export const declineReasons = (scope: Page | Locator): Locator => scope.getByRole('group', { name: /^Why\? Optional\./ })
 

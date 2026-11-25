@@ -30,7 +30,7 @@ export function stageAnswers(model: RunModel, found: string, nameOf: NameOf): re
     case 'awaiting_approval':
       return [...foundRow, now(sentence(words))]
     case 'acting': {
-      const yes = facts.approvedBy.length > 0 ? `${andList(facts.approvedBy.map(nameOf))} said yes` : 'It was approved'
+      const yes = facts.approvedBy.length > 0 ? `${andList(facts.approvedBy.map(nameOf))} approved` : 'It was approved'
       return [...foundRow, now(`${yes}. ${words}…`)]
     }
     case 'skipped':

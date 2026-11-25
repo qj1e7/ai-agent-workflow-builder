@@ -467,10 +467,31 @@ def test_each_software_reports_its_state_in_a_read_source_step_in_input_order():
         for e in result.events
         if isinstance(e, AgentStepFinishedEvent) and e.data.step == "read_source"
     ]
+    # Each read names the software and the source it came from, and a read that could not be made
+    # says why, so the run page never calls a failed read "no releases found".
     assert steps == [
-        {"software_id": FASTAPI_ID, "state": "cant_check", "newest": None},
-        {"software_id": REDIS_ID, "state": "up_to_date", "newest": "8.2.1"},
-        {"software_id": LANGGRAPH_ID, "state": "behind", "newest": "1.2.16"},
+        {
+            "software_id": FASTAPI_ID,
+            "state": "cant_check",
+            "newest": None,
+            "software": "FastAPI",
+            "source": "GitHub",
+            "problem": "GitHub answered 404 Not Found.",
+        },
+        {
+            "software_id": REDIS_ID,
+            "state": "up_to_date",
+            "newest": "8.2.1",
+            "software": "Redis",
+            "source": "GitHub",
+        },
+        {
+            "software_id": LANGGRAPH_ID,
+            "state": "behind",
+            "newest": "1.2.16",
+            "software": "LangGraph",
+            "source": "GitHub",
+        },
     ]
     assert [f.software_id for f in result.output.findings] == [FASTAPI_ID, REDIS_ID, LANGGRAPH_ID]
 
@@ -532,3 +553,18 @@ def test_the_tasks_route_runs_a_watchlist():
     result = task_result_adapter.validate_python(response.json())
     assert isinstance(result, TaskFinished)
     assert [f.state for f in result.output.findings] == ["behind", "up_to_date", "cant_check"]
+
+
+def test_a_read_that_worked_but_cannot_be_checked_gives_a_reason_and_no_problem():
+    result = finished(
+        Room(RepoSource(TAGS)).run(request_for(redis("8.2.1"), langgraph("not-a-version")))
+    )
+    steps = [
+        e.data.result
+        for e in result.events
+        if isinstance(e, AgentStepFinishedEvent) and e.data.step == "read_source"
+    ]
+    step = steps[1]
+    assert step["state"] == "cant_check"
+    assert "problem" not in step
+    assert step["reason"] == "Our version not-a-version is not a version number."

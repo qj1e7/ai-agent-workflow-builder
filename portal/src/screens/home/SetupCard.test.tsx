@@ -552,7 +552,7 @@ describe('the set-up card after Set up', () => {
   it('is Ready once the test run passed up to the yes, says nothing was written, and turns itself on', () => {
     const html = building(passed)
     expect(pill(html)).toBe('Ready')
-    expect(text(html)).toContain('Test run passed up to the yes. Nothing was written.')
+    expect(text(html)).toContain('Test run passed up to the approval step. Nothing was written.')
     expect(buttons(html), 'it turns itself on, so there is no Turn it on to press').toEqual([])
     expect(text(html), 'the write was never made').toContain('Nothing written')
   })

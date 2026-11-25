@@ -1,0 +1,84 @@
+.decision {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.decision p {
+  margin: 0;
+}
+
+.found {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.wants {
+  color: var(--muted);
+}
+
+/* The ticket as a preview: the title, a one-line gist and Show full text. The whole text opens in place. */
+.ticket {
+  min-width: 0;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.ticket > summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px 14px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.ticket > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ticket > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: var(--r-card);
+}
+
+.preview {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.preview b {
+  overflow-wrap: anywhere;
+}
+
+/* The gist is cut by code to one sentence's worth, so it fits one line on a wide window and wraps on a narrow one, never cut off. */
+.gist {
+  color: var(--muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.more {
+  flex: none;
+  padding-top: 1px;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.full {
+  padding: 0 14px 14px;
+}
+
+.who {
+  display: grid;
+  gap: 8px;
+}
