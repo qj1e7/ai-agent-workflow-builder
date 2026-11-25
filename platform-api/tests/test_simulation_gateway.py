@@ -48,9 +48,11 @@ from platform_api.orchestration.simulated_calls import (
 )
 from platform_api.orchestration.simulation_gateway import (
     GatewaySettings,
+    SampleIn,
     control_signature,
     gateway_app,
     gateway_settings_from_env,
+    scrubbed_samples,
 )
 from platform_api.orchestration.simulations import Simulations
 from platform_api.settings import N8nOwner
@@ -653,6 +655,53 @@ async def test_the_gateway_keeps_only_its_newest_runs() -> None:
     assert calls.run(first.nonce) is None
     assert calls.run(second.nonce) is not None
     assert calls.run(third.nonce) is not None
+
+
+@pytest.mark.anyio
+async def test_the_gateway_forgets_its_oldest_runs_past_what_it_may_hold_in_all() -> None:
+    """Each run's scenario counts, so runs under the count limit can't fill the gateway's memory
+    with large scenarios."""
+    calls = SimulatedCalls(FakeN8n(), FakeWaker(), None, sleep=no_wait, held_limit=11_000)
+    items = [{**RELEASE, "id": f"1.2.{n}", "name": "x" * 100} for n in range(30)]
+    large = Scenario.model_validate(
+        scenario({"Read releases": {"serve": "recorded", "items": items}})
+    )
+    assert 4500 < len(large.model_dump_json()) < 5500
+    first, second, third = (calls.start(WORKFLOW, large) for _ in range(3))
+    assert calls.run(first.nonce) is None
+    assert calls.run(second.nonce) is not None
+    assert calls.run(third.nonce) is not None
+
+
+@pytest.mark.anyio
+async def test_what_a_run_records_counts_too_but_never_forgets_the_run_it_records() -> None:
+    n8n = FakeN8n()
+    calls = SimulatedCalls(n8n, FakeWaker(), None, sleep=no_wait, held_limit=6000)
+    older = calls.start(WORKFLOW, Scenario.model_validate(scenario()))
+    newer = calls.start(WORKFLOW, Scenario.model_validate(scenario()))
+    n8n.started("41", newer.nonce)
+    for n in range(3):
+        change = ProposeCall("jira.create_ticket", "MOCK", "Upgrade", "x" * 1200, None)
+        await calls.call(NodeCall(N8nExecutionId("41"), f"Propose {n}", change))
+    assert calls.run(older.nonce) is None
+    record = calls.run(newer.nonce)
+    assert record is not None and len(record.calls) == 3
+    assert len(record.model_dump_json()) > 6000, "alone past the limit, and still kept"
+
+
+def test_a_sample_sent_to_the_gateway_keeps_the_origin_it_was_sent_with() -> None:
+    items = [RELEASE]
+    sent = [
+        SampleIn.model_validate(
+            {"id": "from-mock", "answer": "read.release", "origin": "mock", "items": items}
+        ),
+        SampleIn.model_validate({"id": "from-a-run", "answer": "read.release", "items": items}),
+    ]
+    samples = scrubbed_samples(sent)
+    assert [getattr(samples.get(s), "origin", None) for s in ("from-mock", "from-a-run")] == [
+        "mock",
+        "real_run",
+    ]
 
 
 # Mock GitHub

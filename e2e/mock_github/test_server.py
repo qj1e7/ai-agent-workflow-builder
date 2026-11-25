@@ -47,7 +47,32 @@ def call_with(
         connection.close()
 
 
+def post_with_length(base: str, path: str, length: str) -> int:
+    """A POST that says it sends `length` bytes, and sends two."""
+    connection = http.client.HTTPConnection(base.removeprefix("http://"), timeout=5)
+    try:
+        connection.putrequest("POST", path)
+        connection.putheader("Content-Type", "application/json")
+        connection.putheader("Content-Length", length)
+        connection.endheaders(b"{}")
+        return connection.getresponse().status
+    finally:
+        connection.close()
+
+
 class MockGithubTest(unittest.TestCase):
+    def test_an_admin_body_longer_than_it_takes_is_refused_unread(self) -> None:
+        with running() as base:
+            for path in ("/_admin/mode", "/_admin/releases"):
+                self.assertEqual(post_with_length(base, path, str(10**9)), 413, path)
+            self.assertEqual(call(base, "/_admin/mode"), (200, {"mode": "ok"}))
+
+    def test_an_admin_body_with_a_length_that_is_not_a_count_is_refused(self) -> None:
+        with running() as base:
+            for path in ("/_admin/mode", "/_admin/releases"):
+                for length in ("-1", "many"):
+                    self.assertEqual(post_with_length(base, path, length), 400, (path, length))
+
     def test_serves_thirty_releases_newest_first(self) -> None:
         with running() as base:
             status, releases = call(base, RELEASES_URL)

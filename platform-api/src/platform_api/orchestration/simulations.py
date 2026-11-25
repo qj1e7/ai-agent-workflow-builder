@@ -6,11 +6,14 @@ For each scenario, in turn:
 
 1. the mock setup makes a copy of the version with the scenario's pins (mock_setup.py);
 2. mock GitHub is set for the scenario, when a block reads it;
-3. the gateway issues a start for the scenario, and n8n runs the copy by hand from it;
+3. the gateway issues a start for the scenario, and n8n runs the copy by hand from it. When n8n
+   doesn't, the gateway forgets the start;
 4. code waits for the run to end, reads the gateway's record and n8n's, and grades them
    (scenario_grades.py);
-5. the copy is deleted, and mock GitHub set back, whatever happened, since nothing else removes
-   either.
+5. a run still going or waiting is stopped, then the copy is deleted, and mock GitHub set back,
+   whatever happened, since nothing else removes either. n8n 2.42.6 deletes a workflow's
+   executions with it but stops none of them, so a run past the wait would go on calling the
+   gateway.
 
 A scenario that no block can play is not run, and shows as not tried. One simulation runs at a
 time, since mock GitHub serves one scenario at a time.
@@ -64,6 +67,8 @@ class RunsByHand(Protocol):
     async def run_draft(self, workflow_id: str, item: Mapping[str, Any]) -> str: ...
 
     async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None: ...
+
+    async def stop(self, execution_id: str) -> None: ...
 
     async def delete(self, workflow_id: str) -> None: ...
 
@@ -169,12 +174,18 @@ class Simulations:
         if isinstance(copied, SetupRefused):
             raise AssertionError(f"the mock setup refused the pins of {staged.name}")
         github = None if staged.github is None else self._github
+        execution: str | None = None
+        ended: ExecutionRecord | None = None
         try:
             if github is not None:
                 await github.play(staged.github)
             run = self._calls.start(copied.workflow_id, staged.gateway)
             item = {"nonce": run.nonce, "kind": "test", "workflow_id": copied.workflow_id}
-            execution = await self._n8n.run_draft(copied.workflow_id, item)
+            try:
+                execution = await self._n8n.run_draft(copied.workflow_id, item)
+            except BaseException:
+                self._calls.forget(run.nonce)
+                raise
             ended = await self._ended(execution)
             record = self._calls.run(run.nonce)
             graded = grade(plan, staged, record, ended)
@@ -182,6 +193,8 @@ class Simulations:
             return replace(graded, reached=reached(plan, record, ended, failing))
         finally:
             try:
+                if execution is not None and (ended is None or ended.status not in ENDED):
+                    await self._stop(execution)
                 await self._remove(copied.workflow_id)
             finally:
                 if github is not None:
@@ -196,6 +209,12 @@ class Simulations:
                 break
             await self._sleep(POLL_GAP)
         return await self._n8n.execution(execution, data=True)
+
+    async def _stop(self, execution: str) -> None:
+        try:
+            await self._n8n.stop(execution)
+        except N8nError, httpx.HTTPError:
+            log.warning("could not stop the simulation's run %s", execution)
 
     async def _remove(self, workflow_id: str) -> None:
         try:

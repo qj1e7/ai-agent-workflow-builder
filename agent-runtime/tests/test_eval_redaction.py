@@ -1,11 +1,12 @@
 import base64
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 from evals.providers import Target, plan
-from evals.runner import MIN_FRAGMENT, main, redact
+from evals.runner import JOBS, MIN_FRAGMENT, main, redact
 
 # Recognisable values. None of them is a real secret.
 USER = "bake%40off-user"  # percent-encoded "bake@off-user"
@@ -162,6 +163,13 @@ WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "eval
 @pytest.mark.skipif(not WORKFLOW.exists(), reason="The workflows are not in the test image.")
 def test_the_evals_workflow_takes_its_keys_from_the_evals_environment() -> None:
     assert "\n    environment: evals\n" in WORKFLOW.read_text()
+
+
+@pytest.mark.skipif(not WORKFLOW.exists(), reason="The workflows are not in the test image.")
+def test_the_evals_workflow_names_every_job_it_can_run() -> None:
+    [line] = [line for line in WORKFLOW.read_text().splitlines() if "The jobs to run" in line]
+    named = set(re.findall(r"[a-z_]+", line.split("(", 1)[1].split(")", 1)[0]))
+    assert named == {job.name for job in JOBS}
 
 
 def test_an_owner_named_in_a_gateway_error_is_redacted() -> None:

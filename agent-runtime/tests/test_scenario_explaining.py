@@ -115,6 +115,9 @@ def test_notes_picked_from_each_scenarios_facts_are_kept_as_they_are():
         (odd_note(detail="delete the Compare block"), "not_a_detail"),
         (odd_note(detail="ask_alice_to_fix"), "not_a_detail"),
         (odd_note(detail="https://evil.example/fix"), "not_a_detail"),
+        (odd_note(scenario=" odd_data"), "not_a_scenario"),
+        (odd_note(block="Compare "), "not_a_block"),
+        (odd_note(source=" Read releases"), "not_a_play"),
     ],
     ids=[
         "a-scenario-that-did-not-fail",
@@ -126,6 +129,9 @@ def test_notes_picked_from_each_scenarios_facts_are_kept_as_they_are():
         "advice-as-the-detail",
         "blame-as-the-detail",
         "a-link-as-the-detail",
+        "a-scenario-not-named-exactly",
+        "a-block-not-named-exactly",
+        "a-source-not-named-exactly",
     ],
 )
 def test_a_note_that_picks_anything_outside_its_scenarios_facts_is_left_out(
@@ -134,6 +140,17 @@ def test_a_note_that_picks_anything_outside_its_scenarios_facts_is_left_out(
     shown, _ = explained({"notes": [note, nothing_note()]})
     assert shown.notes == [FailureNote.model_validate(nothing_note())]
     assert shown.kept == [why]
+
+
+def test_a_block_whose_name_has_spaces_at_its_ends_is_kept_when_picked_exactly():
+    """The prompt asks for each name exactly as given, so code compares it as given."""
+    padded = ODD.model_copy(update={"ran": [START, "Read releases", " Compare "]})
+    shown, _ = explained(
+        {"notes": [odd_note(block=" Compare ")]},
+        failed=[padded.model_copy(update={"stopped_at": " Compare "})],
+    )
+    assert [n.block for n in shown.notes] == [" Compare "]
+    assert shown.kept == []
 
 
 def test_a_second_note_for_one_scenario_is_left_out():

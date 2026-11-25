@@ -11,6 +11,8 @@ import pytest
 from platform_api.bootstrap import LoadedWorkflow, record_status
 from platform_api.db import Database
 from platform_api.orchestration.n8n import (
+    PLATFORM_API_SCOPES,
+    SIMULATION_API_SCOPES,
     ChangedInN8n,
     N8nApi,
     N8nError,
@@ -468,6 +470,30 @@ async def test_n8n_s_retry_is_taken_when_it_stops_or_is_still_running_and_refuse
     refused = await api.retry("47")
     assert isinstance(refused, RetryRefused) and "succeeded" in refused.detail
     assert n8n.retries == ["45", "46", "47"]
+
+
+async def test_the_simulations_key_stops_a_run_and_leaves_one_that_ended_or_is_gone() -> None:
+    """n8n 2.42.6's public stop (POST /executions/{id}/stop) needs execution:stop. The
+    simulation gateway's key has it, and the platform's has not."""
+    n8n = FakeN8n()
+    sleeps = Sleeps()
+    api = N8nApi(
+        "http://n8n",
+        N8nOwner(OWNER_EMAIL, OWNER_PASSWORD),
+        n8n.client(),
+        sleep=sleeps.sleep,
+        clock=sleeps.clock,
+        wall=sleeps.wall_clock,
+        scopes=SIMULATION_API_SCOPES,
+    )
+    n8n.execution("45", "running")
+    n8n.execution("46", "success")
+    for execution in ("45", "46", "47"):
+        await api.stop(execution)
+    assert n8n.stops == ["45", "46", "47"]
+    assert [n8n.executions[e]["status"] for e in ("45", "46")] == ["canceled", "success"]
+    [asked] = n8n.key_requests
+    assert set(asked["scopes"]) == {*PLATFORM_API_SCOPES, "execution:stop"}
 
 
 async def test_unpublish_takes_the_workflow_off_and_is_nothing_when_it_is_off() -> None:

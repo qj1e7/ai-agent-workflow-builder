@@ -55,11 +55,14 @@ async function send(
 ): Promise<IDataObject> {
   let response: FullResponse;
   try {
+    // Our API never redirects, so a redirect is an answer like any other here (ADR 0056). n8n's
+    // httpRequest would follow one, and a 303 sends a POST that may have landed on as a GET.
     response = (await helpers.httpRequest({
       ...request,
       json: true,
       returnFullResponse: true,
       ignoreHttpStatusErrors: true,
+      disableFollowRedirect: true,
     })) as FullResponse;
   } catch (error) {
     // Only the code: the message names hosts and addresses that anyone who opens the editor would see.

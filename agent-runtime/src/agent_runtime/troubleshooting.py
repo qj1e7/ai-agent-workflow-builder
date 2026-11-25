@@ -7,9 +7,10 @@ the stop names and the run's activity. It writes no words. It fills one closed s
 from a fixed list, and at most one detail copied from the stop. Code checks each field and
 refuses anything else, and platform-api writes the sentence people see from the fields. So no
 words the model writes reach anyone. The one name copied from the stop must have the shape its
-kind takes, as a repository, a project's key, a field or a version, of at most two joined words,
-so it can't carry a sentence. A kind the stop shows no sign of is shown as unknown. A failed call
-or a failed check keeps the rule table's answer, which the platform gives."""
+kind takes, as a repository, a project's key, a field or a version, of at most two joined words a
+part and three in all, so it can't carry a sentence. A kind the stop shows no sign of is shown as
+unknown. A failed call or a failed check keeps the rule table's answer, which the platform
+gives."""
 
 import logging
 import re
@@ -69,6 +70,10 @@ TAKES: Final[Mapping[FailureKind, frozenset[Shape]]] = {
 }
 """The shapes each kind's words take, so the detail always fills the slot it is meant for."""
 MOST_JOINED_WORDS: Final = 2
+"""In one part of a name, between slashes."""
+MOST_WORDS_IN_A_NAME: Final = 3
+"""In the whole name, so owner/name passes, as langchain-ai/langgraph, and two two-word parts that
+read as an order, as delete-this/workflow-now, don't."""
 SHOWN_BY: Final[Mapping[FailureKind, re.Pattern[str]]] = {
     "not_found": re.compile(
         r"\b404\b|not found|no \w+(?: \w+)? could be found|(?:could|can)(?:not|n't) be found"
@@ -80,7 +85,7 @@ SHOWN_BY: Final[Mapping[FailureKind, re.Pattern[str]]] = {
         re.IGNORECASE,
     ),
     "limit": re.compile(r"\b429\b|rate.?limit|too many requests", re.IGNORECASE),
-    "refused": re.compile(r"refus|reject", re.IGNORECASE),
+    "refused": re.compile(r"\b(?:refus|reject)|ECONNREFUSED", re.IGNORECASE),
     "no_answer": re.compile(
         r"time[ds]?\s?out|timeout|did(?:n't| not) answer|no answer|no response|\b50[234]\b"
         r"|unavailable|unreachable|could not be reached|closed the connection",
@@ -93,7 +98,8 @@ SHOWN_BY: Final[Mapping[FailureKind, re.Pattern[str]]] = {
 """What the stop must say for the words to state each kind as a fact. A kind with no entry, as
 wrong_value, says nothing the stop must show. platform-api's words for a source that gave no
 usable answer (ADR 0056) count: didn't answer, could not be reached and closed the connection for
-no_answer, and refused the connection for refused."""
+no_answer, and refused the connection for refused. A word must start with refus or reject, so a
+name such as UpstreamRejected is no sign, but n8n's ECONNREFUSED is."""
 
 
 class ModelCause(BaseModel):
@@ -150,24 +156,25 @@ def shown_kind(kind: FailureKind, request: CauseRequest) -> FailureKind:
     return "unknown"
 
 
-def _joined_words(name: str) -> int:
-    """The most words joined into one part of a name between slashes, as approve_your_own_request
-    has four. Numbers don't count, so a version has none."""
-    return max(len(re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+", part)) for part in name.split("/"))
+def _joined_words(part: str) -> int:
+    """The words joined into one part of a name, as approve_your_own_request has four. Numbers
+    don't count, so a version has none."""
+    return len(re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+", part))
 
 
 def named_in(detail: str, words: str, shapes: Iterable[Shape]) -> bool:
     """One name of at most 64 characters copied whole and exactly from the words, in one of the
-    shapes, of at most two joined words, and no plain word or link. The length and the words are
-    checked before any shape. The explainer of a simulation's failures holds its detail to the
-    same rule (scenario_explaining.py)."""
+    shapes, of at most two joined words a part and three in all, and no plain word or link. The
+    length and the words are checked before any shape. The explainer of a simulation's failures
+    holds its detail to the same rule (scenario_explaining.py)."""
     if len(detail) > DETAIL_LIMIT:
         return False
     if detail not in {name.rstrip("./-") for name in DETAIL.findall(words)}:
         return False
     if not any(SHAPES[shape].fullmatch(detail) for shape in shapes):
         return False
-    if _joined_words(detail) > MOST_JOINED_WORDS:
+    joined = [_joined_words(part) for part in detail.split("/")]
+    if max(joined) > MOST_JOINED_WORDS or sum(joined) > MOST_WORDS_IN_A_NAME:
         return False
     return detail.casefold() not in ENGLISH and LINK.search(detail) is None
 

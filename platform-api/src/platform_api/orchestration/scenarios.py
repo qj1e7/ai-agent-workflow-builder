@@ -193,7 +193,8 @@ class SimulationPlan:
     blocks: tuple[PlanBlock, ...]
     after_write: frozenset[str]
     """Blocks after Make the approved changes. The gateway refuses every write, and the refusal
-    ends the run, so they never run in a simulation (ADR 0054, PR 3)."""
+    ends the run, so they never run in a simulation (ADR 0054, PR 3). A write set to go on after a
+    failure is the exception (`_after_writes`)."""
 
     def having(self, role: Role) -> tuple[PlanBlock, ...]:
         return tuple(block for block in self.blocks if block.role == role)
@@ -247,25 +248,53 @@ def plan_of(version: Mapping[str, Any], modes: Sequence[BlockMode]) -> Simulatio
         )
     if not any(b.node_type == START_TYPE and b.name == START_NAME for b in blocks):
         return NO_START
-    writes = [b.name for b in blocks if b.role == "write"]
+    writes = [nodes[b.name] for b in blocks if b.role == "write"]
     connections = cast(Mapping[str, Any], version.get("connections") or {})
-    return SimulationPlan(tuple(blocks), _after(writes, connections))
+    return SimulationPlan(tuple(blocks), _after_writes(writes, connections))
 
 
-def _after(starts: Sequence[str], connections: Mapping[str, Any]) -> frozenset[str]:
-    """Every block reached from these blocks' exits, not counting them."""
-    seen: set[str] = set()
+def _after_writes(
+    writes: Sequence[Mapping[str, Any]], connections: Mapping[str, Any]
+) -> frozenset[str]:
+    """The blocks a refused write keeps from running, as n8n 2.42.6 reads a block's settings. A
+    write set to continue (onError continueRegularOutput, or the older continueOnFail) passes the
+    refusal on, so it keeps none from running. One that sends a failure to its error exit
+    (continueErrorOutput) runs that exit, the one after Make the approved changes' only exit. Any
+    other stops the run."""
+    names = {str(write.get("name")) for write in writes}
+    first: list[str] = []
+    for write in writes:
+        on_error = write.get("onError")
+        if on_error == "continueRegularOutput" or (
+            on_error is None and write.get("continueOnFail") is True
+        ):
+            continue
+        exits = _exits(str(write.get("name")), connections)
+        dead = exits[:1] if on_error == "continueErrorOutput" else exits
+        first += [name for targets in dead for name in targets]
+    return frozenset(_reached(first, connections) - names)
+
+
+def _exits(name: str, connections: Mapping[str, Any]) -> list[list[str]]:
+    """The blocks each of a block's exits leads to, in exit order."""
+    outputs: object = cast(Mapping[str, Any], connections.get(name) or {}).get("main")
+    return [
+        [str(cast(Mapping[str, Any], link).get("node")) for link in cast(list[Any], links or [])]
+        for links in cast(list[Any], outputs or [])
+    ]
+
+
+def _reached(starts: Sequence[str], connections: Mapping[str, Any]) -> set[str]:
+    """These blocks, and every block reached from them."""
+    seen = set(starts)
     queue = deque(starts)
     while queue:
-        name = queue.popleft()
-        outputs: object = cast(Mapping[str, Any], connections.get(name) or {}).get("main")
-        for links in cast(list[Any], outputs or []):
-            for link in cast(list[Any], links or []):
-                target = str(cast(Mapping[str, Any], link).get("node"))
+        for targets in _exits(queue.popleft(), connections):
+            for target in targets:
                 if target not in seen:
                     seen.add(target)
                     queue.append(target)
-    return frozenset(seen - set(starts))
+    return seen
 
 
 def kinds_that_apply(plan: SimulationPlan) -> tuple[ScenarioKind, ...]:

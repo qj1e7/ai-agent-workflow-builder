@@ -460,6 +460,9 @@ workflows (E15), and the retry of an execution has a scope of its own. The user 
 end staff accounts (ENGINE-PLAN 2.9). The credential scopes make the platform's own keys, test
 them, and remove every key the platform did not make (ADR 0045). A key is never changed or moved:
 one that must change is deleted and made anew."""
+SIMULATION_API_SCOPES = (*PLATFORM_API_SCOPES, "execution:stop")
+"""The simulation gateway's key in the simulation n8n also stops a run that is still going before
+its copy is deleted. The platform's key never stops a run."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)
@@ -1024,9 +1027,11 @@ class N8nApi:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         clock: Callable[[], float] = time.monotonic,
         wall: Callable[[], datetime] = lambda: datetime.now(UTC),
+        scopes: Sequence[str] = PLATFORM_API_SCOPES,
     ) -> None:
         self._http = client or httpx.AsyncClient(base_url=base_url, timeout=30)
         self._owner = owner
+        self._scopes = tuple(scopes)
         self._sleep = sleep
         self._clock = clock
         self._wall = wall
@@ -1085,7 +1090,7 @@ class N8nApi:
         body = {
             "label": PLATFORM_API_KEY_LABEL,
             "expiresAt": expires,
-            "scopes": list(PLATFORM_API_SCOPES),
+            "scopes": list(self._scopes),
         }
         created = _expect(await self._rest("POST", "/api-keys", body))
         key = _parse(_Rest[dict[str, JsonValue]], created).data.get("rawApiKey")
@@ -1322,6 +1327,11 @@ class N8nApi:
         if response.status_code == 404:
             return None
         return _record_of(_parse(_ExecutionOut, _expect(response)))
+
+    async def stop(self, execution_id: str) -> None:
+        """Stops a run that is still going or waiting. n8n answers 409 for one that ended and 404
+        for one it no longer holds, and both are left as they are. Needs execution:stop."""
+        _expect(await self._public("POST", f"/executions/{execution_id}/stop"), 200, 404, 409)
 
     async def executions(
         self, workflow_id: str, status: str | None = None

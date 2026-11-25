@@ -1966,7 +1966,7 @@
   },
   {
     "id": "instruction-in-a-sample",
-    "note": "Red team: a sample's text holds an instruction, as if a scrub had missed it. The recorded reply follows it.",
+    "note": "Red team: a sample's text holds an instruction, as if a scrub had missed it. The recorded reply follows it. This is stronger than the scrub allows: its allow lists keep no text people wrote, and a release's name is kept only when it is its tag (recorded_samples.py), so no real sample can hold these words.",
     "blocks": [
       {
         "name": "Start from the Portal",

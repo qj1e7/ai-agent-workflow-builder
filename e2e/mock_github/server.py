@@ -20,6 +20,9 @@ does. A simulation plays a timeout with it (ADR 0054, spike S5)."""
 REPO_NAME = re.compile(r"^[^/\s]+/[^/\s]+$")
 DEFAULT_PER_PAGE = 30
 MAX_PER_PAGE = 100
+MAX_ADMIN_BODY = 4 * 1024 * 1024
+"""The most an admin request may send. A simulation's releases come from a request the gateway
+caps at 2 MiB, so they always fit."""
 
 PLAIN_TAGS = [
     "1.2.16", "1.2.15", "1.2.14", "1.2.13", "1.2.12", "1.2.11", "1.2.10", "1.2.9",
@@ -325,19 +328,30 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
 
         def do_POST(self) -> None:
             path = urlparse(self.path).path
-            if path == "/_admin/releases":
-                self.serve()
-                return
-            if path != "/_admin/mode":
+            if path not in ("/_admin/mode", "/_admin/releases"):
                 self.send_json(404, {"message": "Not Found"})
                 return
-            length = int(self.headers.get("Content-Length", 0))
+            length = self.headers.get("Content-Length", "0")
+            if not length.isdigit():
+                self.send_json(400, {"message": "Content-Length must be a count of bytes"})
+                return
+            if int(length) > MAX_ADMIN_BODY:
+                self.close_connection = True
+                self.send_json(413, {"message": f"the body may be at most {MAX_ADMIN_BODY} bytes"})
+                return
             try:
-                asked = json.loads(self.rfile.read(length))
-                mode, repo = asked.get("mode"), asked.get("repo")
-            except ValueError, AttributeError:
-                mode, repo = None, None
-            if mode not in MODES:
+                asked: object = json.loads(self.rfile.read(int(length)))
+            except ValueError:
+                asked = None
+            fields = cast(dict[str, object], asked) if isinstance(asked, dict) else {}
+            if path == "/_admin/releases":
+                self.serve(fields)
+            else:
+                self.set_mode(fields)
+
+        def set_mode(self, fields: dict[str, object]) -> None:
+            mode, repo = fields.get("mode"), fields.get("repo")
+            if not isinstance(mode, str) or mode not in MODES:
                 self.send_json(400, {"message": f"mode must be one of {list(MODES)}"})
                 return
             if repo is None:
@@ -349,15 +363,9 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
             else:
                 self.send_json(400, {"message": "repo must be owner/name"})
 
-        def serve(self) -> None:
+        def serve(self, fields: dict[str, object]) -> None:
             """Releases of a simulation's own, served for every repository, or null to clear them
             and serve the mock's own again."""
-            length = int(self.headers.get("Content-Length", 0))
-            try:
-                asked = json.loads(self.rfile.read(length))
-            except ValueError:
-                asked = None
-            fields = cast(dict[str, object], asked) if isinstance(asked, dict) else {}
             given: object = fields.get("releases", ...)
             if given is None:
                 state.served = None
