@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test'
 import { showHistory } from './ui'
 
 /**
- * Each link of the run line, in order: the state it draws, with "+" when it marches. The line sits in What happened, which is folded
+ * Each link of the run line, in order: the state it draws, with "+" when it marches. The line sits in Run history, which is folded
  * once the run needs the person or is over, so this opens it first.
  */
 export async function runLinks(scope: Page | Locator): Promise<string[]> {

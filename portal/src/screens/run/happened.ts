@@ -3,7 +3,7 @@ import type { ApprovalActionView, ApprovalStepView, Refusal, WriteActionView } f
 import { releasedOn, sinceWhen } from '../workflows/times'
 import { approvalTitle } from './approvalWords'
 import type { Release } from './runModel'
-import { andList, count, runPill, type NameOf, type StageFacts, type StageTone } from './words'
+import { andList, count, lockWords, runPill, type NameOf, type Party, type RunState, type StageFacts, type StageTone } from './words'
 
 /**
  * What the run page says first, each line built by code from the run's own facts. Nothing here is the agents' words: those wait
@@ -30,6 +30,13 @@ export function foundLine(release: Release | null, useCaseName: string, template
 
 /** Where the run is with its writes: it wants to, is doing it, did it, or wanted to and was declined. */
 export type Tense = 'wants' | 'doing' | 'did' | 'wanted'
+
+const TENSES: Readonly<Partial<Record<RunState, Tense>>> = { awaiting_approval: 'wants', acting: 'doing', succeeded: 'did', rejected: 'wanted', expired: 'wanted', lost: 'wanted' }
+
+/** The tense of what a run wants to do, in each state that holds a request, so an expired or lost run keeps its ticket and questions. Undefined before there is a request. */
+export function tenseOf(state: RunState): Tense | undefined {
+  return TENSES[state]
+}
 
 const isTicket = (action: Pick<WriteActionView, 'connector' | 'operation'>) => action.connector === 'jira' && action.operation === 'create_ticket'
 
@@ -75,13 +82,19 @@ const WHY_NOT: Partial<Record<Refusal, string>> = {
   not_eligible: 'You aren’t one of the people who can decide this step.',
 }
 
+/** Only the person who started the run reads "You can’t approve your own run." An owner or someone who retried it gets their own reason. */
+function whyOf(whyNot: Refusal, party: Party | null): string | undefined {
+  if (whyNot === 'own_work') return party?.startedIt ? WHY_NOT.own_work : lockWords(whyNot, party)
+  return WHY_NOT[whyNot]
+}
+
 const stepAt = (steps: readonly ApprovalStepView[]) => steps.find((step) => step.status === 'open' || step.status === 'waiting')
 
 /**
  * "An Approver decides in Teams (asked 9:01)." and, for someone who may not decide, why not them: the person who started the run
  * reads "You can’t approve your own run." The time is when the platform put it in Teams, and is left out until it has.
  */
-export function decidesLine({ steps, canDecide, whyNot, now }: { steps: readonly ApprovalStepView[]; canDecide: boolean; whyNot: Refusal | null; now: Date }): string {
+export function decidesLine({ steps, canDecide, whyNot, party, now }: { steps: readonly ApprovalStepView[]; canDecide: boolean; whyNot: Refusal | null; party: Party | null; now: Date }): string {
   const open = stepAt(steps)
   const where =
     open?.post === 'failed'
@@ -89,7 +102,7 @@ export function decidesLine({ steps, canDecide, whyNot, now }: { steps: readonly
       : open?.post === 'sent' && open.sent_at
         ? `An Approver decides in Teams (asked ${sinceWhen(open.sent_at, now)}).`
         : 'An Approver decides in Teams.'
-  const why = !canDecide && whyNot !== null ? WHY_NOT[whyNot] : undefined
+  const why = !canDecide && whyNot !== null ? whyOf(whyNot, party) : undefined
   return why ? `${where} ${why}` : where
 }
 

@@ -57,7 +57,7 @@ export interface RunDecisionProps {
  * is the page's top line, so it is not said again here, and the AI's words and what the run did not check are not on this page.
  * The platform checks the digest and the deciding person again at the write, so nothing here is the check.
  */
-export function RunDecision({ approval, found, tense, decision, facts, reasons, requester, questions, me, nameOf, next, now }: RunDecisionProps) {
+export function RunDecision({ approval, found, tense, decision, facts, reasons, requester, questions, me, party, nameOf, next, now }: RunDecisionProps) {
   const steps = decision.steps ?? approval.steps
   const standing = standingOf(steps)
   const canDecide = canDecideNow(approval, decision)
@@ -80,7 +80,7 @@ export function RunDecision({ approval, found, tense, decision, facts, reasons, 
           <Record standing={standing} words={record} facts={facts} next={next} />
         ) : (
           <>
-            <p>{decidesLine({ steps, canDecide, whyNot, now })}</p>
+            <p>{decidesLine({ steps, canDecide, whyNot, party, now })}</p>
             {canDecide ? (
               <div className={panels['apprFoot']}>
                 <DecideActions decision={decision} reasons={reasons} requester={requester} questions={questions} thread={thread} />

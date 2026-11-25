@@ -72,10 +72,10 @@ export async function expectReadOnly(page: Page, what: string): Promise<void> {
   await expect(main.locator(':is(button, input, select, textarea):disabled, [aria-disabled="true"]')).toHaveCount(0)
 }
 
-/** "What happened (3 steps)", the run's history, folded once the run needs the person or is over. */
-const HISTORY = /What happened \(\d+ steps?\)/
+/** "Run history (3 steps)", the run's history, folded once the run needs the person or is over. */
+const HISTORY = /Run history \(\d+ steps?\)/
 
-/** Opens What happened when it is folded, so its steps, its run line and its agent messages can be read. Shut or open, it leaves it open. */
+/** Opens Run history when it is folded, so its steps, its run line and its agent messages can be read. Shut or open, it leaves it open. */
 export async function showHistory(scope: Page | Locator): Promise<void> {
   const details = scope.locator('details').filter({ hasText: HISTORY }).first()
   const summary = details.locator('summary').first()

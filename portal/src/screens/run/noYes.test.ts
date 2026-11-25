@@ -4,13 +4,11 @@ import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { describe, expect, it } from 'vitest'
 import type { ApprovalStepView, Refusal } from '../../api/types'
-import { runId } from '../../stream/brand'
-import { parseEvent } from '../../stream/parse'
 import { leadWords, recordWords, turnWords, waitingWords } from './approvalWords'
 import { standingOf, type Standing } from './decision'
 import { decidesLine, statusOf, workingLine } from './happened'
 import { STATE_WORDS } from './RunLine'
-import { emptyModel, foldAll, type RunModel } from './runModel'
+import { emptyModel, foldWire, type RunModel } from './runModel'
 import { stageAnswers } from './stageAnswers'
 import { announcementOf, factsOf, fixWords, GATE_STEP, lineOf, lockWords, logRowsOf, runPill, stageWords, type RunState } from './words'
 
@@ -25,14 +23,8 @@ const QUICK = ['Not this week', 'Wrong version']
 const NOW = new Date('2026-11-03T10:00:00+08:00')
 
 function replay(raw: readonly { run_id: string; seq: number }[], upTo = Infinity): RunModel {
-  const events = raw
-    .filter((item) => item.seq <= upTo)
-    .map((item) => {
-      const parsed = parseEvent(item, runId(item.run_id))
-      if (!parsed.ok) throw new Error(parsed.problem)
-      return parsed.event
-    })
-  return foldAll(emptyModel, events)
+  const kept = raw.filter((item) => item.seq <= upTo)
+  return foldWire(emptyModel, kept, kept[0]?.run_id ?? '')
 }
 
 const STATES: readonly RunState[] = ['pending', 'working', 'proposed', 'awaiting_approval', 'acting', 'succeeded', 'rejected', 'failed', 'skipped', 'expired', 'lost']

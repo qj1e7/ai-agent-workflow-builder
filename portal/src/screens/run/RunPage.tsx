@@ -16,7 +16,7 @@ import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { DECISION_ID, DecisionArea } from './Chat'
 import { FixSection, useFixLeads } from './FixPanel'
-import { foundLine, runByWords, statusOf, workingLine, type Tense } from './happened'
+import { foundLine, runByWords, statusOf, tenseOf, workingLine } from './happened'
 import { History } from './History'
 import { RunInN8n } from './InN8n'
 import { partyOf, useDecision } from './decision'
@@ -33,7 +33,7 @@ import { troubleFaceOf } from './troubleFace'
 import { landingOf, scrollsToDecision } from './landing'
 import { useRunStory } from './useRunStory'
 import { testAgainOf } from './testAgain'
-import { declinedNext, declinedNowWords, feedTroubleOf, lineOf, logRowsOf, messageRowsOf, RUN_MISSING, RUN_PROBLEM, speakerName, stageWords } from './words'
+import { announcementOf, declinedNext, declinedNowWords, feedTroubleOf, logRowsOf, messageRowsOf, RUN_MISSING, RUN_PROBLEM, stageWords } from './words'
 import styles from './RunPage.module.css'
 
 function notFound(error: unknown): boolean {
@@ -179,8 +179,6 @@ function TroubleshooterBlock({ face, children }: { face: FaceState; children: Re
   )
 }
 
-const TENSE: Partial<Record<RunModel['phase']['state'], Tense>> = { awaiting_approval: 'wants', acting: 'doing', succeeded: 'did', rejected: 'wanted' }
-
 function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const { shown, loadedUpTo } = live
   const story = useRunStory(run, live)
@@ -227,7 +225,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
 
   const newest = shown.chat.at(-1)
   const next = declinedNext({ test: run.test, watchlist: useCase?.template === 'software_watchlist' }, nextRunOf(useCase), new Date())
-  const announce = newest && newest.seq > loadedUpTo ? lineOf(newest, nameOf, next) : null
+  const announce = newest && newest.seq > loadedUpTo ? announcementOf(newest, nameOf, next) : null
   const status = statusOf(facts, nameOf)
 
   const title = `${run.use_case_name}: ${status.label}`
@@ -253,7 +251,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const failure = shown.phase.state === 'failed' ? shown.phase : null
   const safeId = `${run.run_id}-safe`
   const troubleFace = troubleFaceOf(facts.state, shown.fix, now)
-  const tense = TENSE[shown.phase.state]
+  const tense = tenseOf(shown.phase.state)
   const requested = story.approvalId !== null && tense !== undefined
   const main = failure ? (
     <DecisionArea label="Why it stopped">
@@ -336,7 +334,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         </RunPlaceContext.Provider>
       ) : null}
       <div className="visually-hidden" aria-live="polite">
-        {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}
+        {announce ?? ''}
       </div>
       <Toast message={said} onDismiss={() => setSaid(null)} />
     </div>

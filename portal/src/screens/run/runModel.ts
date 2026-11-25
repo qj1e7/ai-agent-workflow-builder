@@ -111,9 +111,12 @@ export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
   | { readonly kind: 'declined'; readonly record: Declined }
   | { readonly kind: 'stopped'; readonly stage: FailureStage }
   | { readonly kind: 'reported'; readonly by: string; readonly requestId: string }
-  | { readonly kind: 'found'; readonly text: string }
-  /** An agent read a release source: the newest release it found, or null when there was none. */
-  | { readonly kind: 'checked'; readonly newest: string | null }
+  /**
+   * An agent read a release source. The newest release it found, or null when there was none. A read that failed carries why
+   * (an empty string when the platform gave no reason), and is never the same as a read that found nothing. `source` is where it
+   * read, such as npm, Maven Central or GitHub, and `software` which software or repository.
+   */
+  | { readonly kind: 'checked'; readonly newest: string | null; readonly problem: string | null; readonly source: string | null; readonly software: string | null }
   /** The agents drafted these writes for approval. */
   | { readonly kind: 'drafted'; readonly count: number; readonly connector: string | null; readonly operation: string | null; readonly allTickets: boolean }
   /** What a Tell block did, in the platform's own words: sent, not confirmed, what a test run would have sent, or nothing to report. */
@@ -171,14 +174,28 @@ export interface Release {
 }
 
 /** What a read of releases found, from the two shapes agents report it in: a card's tags, or the software check's newest. */
-function releaseOf(data: { readonly step: string; readonly result: Readonly<Record<string, unknown>> }): { readonly read: boolean; readonly release: Release | null } {
+interface ReadOf {
+  readonly read: boolean
+  readonly release: Release | null
+  readonly problem: string | null
+  readonly source: string | null
+  readonly software: string | null
+}
+
+const NOT_A_READ: ReadOf = { read: false, release: null, problem: null, source: null, software: null }
+
+function readOf(data: { readonly step: string; readonly result: Readonly<Record<string, unknown>> }): ReadOf {
   const { step, result } = data
-  if (step !== 'github_read_releases' && step !== 'read_source') return { read: false, release: null }
+  if (step !== 'github_read_releases' && step !== 'read_source') return NOT_A_READ
+  const text = (key: string) => (typeof result[key] === 'string' && result[key] !== '' ? result[key] : null)
+  const source = text('source') ?? (step === 'github_read_releases' ? 'GitHub' : null)
+  const software = text('software') ?? text('repo')
+  const problem = typeof result['problem'] === 'string' ? result['problem'] : result['state'] === 'cant_check' ? '' : null
   const tags = Array.isArray(result['tags']) ? result['tags'] : []
   const newest = typeof result['newest'] === 'string' ? result['newest'] : tags.find((tag): tag is string => typeof tag === 'string')
-  if (newest === undefined || newest === '') return { read: true, release: null }
+  if (problem !== null || newest === undefined || newest === '') return { read: true, release: null, problem, source, software }
   const day = result['newest_published_at']
-  return { read: true, release: { version: newest, at: typeof day === 'string' && day !== '' ? day : null } }
+  return { read: true, release: { version: newest, at: typeof day === 'string' && day !== '' ? day : null }, problem: null, source, software }
 }
 
 export const emptyModel: RunModel = {
@@ -439,9 +456,9 @@ function apply(model: RunModel, event: RunEvent): RunModel {
       return touch(model, actorRef(event), event)
     case 'agent_step_finished': {
       const touched = touch(model, actorRef(event), event)
-      const { read, release } = releaseOf(event.data)
+      const { read, release, problem, source, software } = readOf(event.data)
       if (!read) return touched
-      return say({ ...touched, release: release ?? touched.release }, { kind: 'checked', seq: event.seq, at: event.at, newest: release?.version ?? null })
+      return say({ ...touched, release: release ?? touched.release }, { kind: 'checked', seq: event.seq, at: event.at, newest: release?.version ?? null, problem, source, software })
     }
     case 'agent_failed': {
       const touched = touch(model, actorRef(event), event)
@@ -499,7 +516,8 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'step_finished': {
       const { step, outcome, detail } = event.data
       if (step !== 'run_agents' || !FOUND_OUTCOMES.has(outcome) || !detail) return model
-      return say({ ...model, found: detail }, { kind: 'found', seq: event.seq, at: event.at, text: detail })
+      // The agents' report is kept for the troubleshooter's rows, and is not a log item: it only repeats what they said.
+      return { ...model, found: detail }
     }
     case 'support_reported':
       return reported(model, event)

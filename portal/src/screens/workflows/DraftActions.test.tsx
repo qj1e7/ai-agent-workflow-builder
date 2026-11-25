@@ -37,7 +37,7 @@ describe('a draft on its page and in the panel', () => {
   it('offers Turn it on once a test run passed, as the set-up card does', () => {
     const html = draw({ ...DRAFT, last_run: PASSED })
     expect(buttons(html)).toEqual(['Test run', 'Turn it on'])
-    expect(text(html)).toContain('Test run passed up to the yes. Nothing was written.')
+    expect(text(html)).toContain('Test run passed up to the approval step. Nothing was written.')
   })
 
   it('is nothing for a workflow that is on, and nothing for someone who isn’t an Operator', () => {

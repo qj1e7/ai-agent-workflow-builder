@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import { useCacheScope, useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useCapabilities } from '../../api/plannerQueries'
 import { isConflict, refusalOf, useDecide } from '../../api/queries'
-import type { ApprovalStepView, ApprovalView, CapabilityView, DecisionIn, DecisionView, UseCaseView, Verdict } from '../../api/types'
-import { cardsOf } from '../workflows/workflow'
+import type { ApprovalStepView, ApprovalView, DecisionIn, DecisionView, Verdict } from '../../api/types'
 import type { Declined } from './runModel'
-import { andList, CONFLICT_WORDS, declinedOfSteps, lockWords, type Party } from './words'
+import { CONFLICT_WORDS, declinedOfSteps, lockWords, type Party } from './words'
 
 export function openStep(approval: ApprovalView): ApprovalStepView | null {
   return approval.steps.find((step) => step.status === 'open') ?? null
@@ -65,38 +63,6 @@ export function partyOf(approval: ApprovalView | undefined, me: string | undefin
 /** What the agents found. The activity has it for good, and the approval holds it only while the request waits. */
 export function foundOf(fromActivity: string, fromApproval: string | undefined): string {
   return fromActivity !== '' ? fromActivity : (fromApproval ?? '')
-}
-
-/**
- * What a run checks, and the registry entries that would check more of it. The first a workflow's agents use is what the run
- * checks: a release check also reads Jira, but only to find the tickets it raised.
- */
-const CHECKS: readonly { readonly reads: string; readonly more: readonly string[] }[] = [
-  { reads: 'github.releases', more: ['registries.check'] },
-  { reads: 'jira.read', more: ['jira.find_by_update', 'jira.find_by_detail', 'jira.find_older'] },
-]
-
-/**
- * Not checked (spec 10.4), only from the run and the capability registry: the software the run couldn't read, then what the
- * platform can't yet check of what the run checks. An entry the registry says is Ready is never listed.
- */
-export function notCheckedWords(unread: readonly string[], cards: readonly string[], capabilities: readonly CapabilityView[] | undefined): readonly string[] {
-  const registry = capabilities ?? []
-  const check = CHECKS.find(({ reads }) => registry.some((c) => c.id === reads && c.agents.some((card) => cards.includes(card))))
-  const cant = registry.flatMap((c) => (check?.more.includes(c.id) && c.state !== 'ready' && c.cant ? [`The platform can’t yet ${c.cant.replaceAll("'", '’')}.`] : []))
-  const read = unread.length > 0 ? [`${andList(unread)} couldn’t be read, so no ticket is proposed for ${unread.length === 1 ? 'it' : 'them'}.`] : []
-  return [...read, ...cant]
-}
-
-/**
- * Not checked for a request, waiting or decided. Null until the registry has answered, so the section never grows under the
- * Approver's pointer. If the registry can't be read, only the run's own lines are given.
- */
-export function useNotChecked(approval: ApprovalView | undefined, useCase: Pick<UseCaseView, 'template' | 'agents'> | undefined): readonly string[] | null {
-  const capabilities = useCapabilities({ enabled: approval !== undefined })
-  if (!approval) return []
-  if (capabilities.isPending) return null
-  return notCheckedWords(approval.not_checked, useCase ? cardsOf(useCase).map((card) => card.card_id) : [], capabilities.data?.capabilities)
 }
 
 /** What the person decides. Only a decline takes a reason, and it is optional (spec 10.4). */

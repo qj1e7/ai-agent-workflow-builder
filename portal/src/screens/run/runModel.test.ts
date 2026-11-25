@@ -68,18 +68,18 @@ describe('a run that was approved and wrote its ticket', () => {
 
   it('names the steps from the plan, the gate as asking for a yes, and puts the agent above its step', () => {
     const stations = line(model)
-    expect(stations.map((s) => s.label)).toEqual(['Started by Alice', 'Read every source', 'Ask for a yes', 'Create Jira tickets'])
+    expect(stations.map((s) => s.label)).toEqual(['Started by Alice', 'Read every source', 'Ask for approval', 'Create Jira tickets'])
     expect(stations.map((s) => s.icon)).toEqual(['person', 'read', 'gate', 'write'])
     expect(stations.map((s) => s.agent)).toEqual([null, { id: 'version_checker', display: 'Version checker' }, null, null])
   })
 
   it('says the version checker’s step in the sketch’s words, and the write in the plan’s', () => {
     const cardRun = replay(card)
-    expect(line(cardRun, planOf(cardUseCase.plan)).map((s) => s.label)).toEqual(['Started by Alice', 'Check release', 'Ask for a yes', 'Create Jira tickets'])
+    expect(line(cardRun, planOf(cardUseCase.plan)).map((s) => s.label)).toEqual(['Started by Alice', 'Check release', 'Ask for approval', 'Create Jira tickets'])
   })
 
   it('draws the same line without a plan, naming steps after their agents', () => {
-    expect(line(model, null).map((s) => s.label)).toEqual(['Started by Alice', 'Version checker', 'Ask for a yes', 'Write in Jira'])
+    expect(line(model, null).map((s) => s.label)).toEqual(['Started by Alice', 'Version checker', 'Ask for approval', 'Write in Jira'])
   })
 
   it('starts with the schedule’s clock when the schedule started the run', () => {
@@ -442,7 +442,7 @@ describe('what a run found, for the page’s found line and plain steps', () => 
   })
 
   it('leaves the day out when the event carries none, and reads the software check’s newest release the same way', () => {
-    expect(replay(card).release).toEqual({ version: '1.2.16', at: null })
+    expect(replay(card).release).toEqual({ version: '1.2.16', at: '2026-11-12T08:00:00Z' })
     expect(replay(success).release).toEqual({ version: '1.2.16', at: null })
   })
 

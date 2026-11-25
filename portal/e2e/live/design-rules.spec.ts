@@ -266,7 +266,7 @@ test('a declined run never claims a write, on its page, in its chat, on Workflow
     await expect(page.getByRole('heading', { level: 1 }), 'the page is named for the workflow').toHaveText('Software watchlist')
     await expect(page.locator('[data-run-pill]')).toHaveText('Declined')
     await expect(main(page), 'its decision says who declined and that nothing was written').toContainText(/Declined by Bob (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2}: wrong version\. Nothing was written\./)
-    await expect(page.locator('summary', { hasText: /^What happened \(\d+ steps?\)$/ })).toBeVisible()
+    await expect(page.locator('summary', { hasText: /^Run history \(\d+ steps?\)$/ })).toBeVisible()
     await noWriteClaimed(main(page), `the declined run’s page and chat, as ${user}`)
     await page.goto('/workflows')
     await noWriteClaimed(main(page).locator('li[data-workflow-id]').filter({ hasText: 'Declined by Bob' }), `the declined run’s Workflows row, as ${user}`)

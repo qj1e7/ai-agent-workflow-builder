@@ -24,11 +24,13 @@ The team lead chose this layout on 25 Nov 2026. A run's page and its side panel 
 - **What was found.** One line built from the run's own facts, such as "FastAPI 0.121.0 is out (18 Nov).", never the agents' words.
 - **What it wants to do.** "This run wants to create 1 Jira ticket in MOCK:", then the ticket as a small preview, its title and a one-line gist. "Show full text" opens the whole ticket exactly as it will be written.
 - **Who decides.** "An Approver decides in Teams (asked 9:01)." The person who started the run reads "You can't approve your own run." An Approver gets Approve, Decline and "Ask Alice" in the same block.
-- **What happened (n steps).** Folded. Plain steps with their times: "Checked GitHub: found 0.121.0", "Drafted 1 Jira ticket", "Asked an Approver in Teams", "Bob approved", "Created MOCK-22". "Show agent messages" opens the agents' own words, for support.
+- **Run history (n steps).** Folded. Plain steps with their times: "Checked GitHub: found 0.121.0", "Drafted 1 Jira ticket", "Asked an Approver in Teams", "Bob approved", "Created MOCK-22". "Show agent messages" opens the agents' own words, for support.
 - **Gone from this page.** "Summary by AI" and "Not checked". The AI's words live only under "Show agent messages".
-- **A stopped run** keeps "What happened", "Affected", "Safe to retry" and Retry.
+- **A stopped run** keeps "What happened", "Affected", "Safe to retry" and Retry, so the folded history is "Run history", and the page never has two "What happened" headings.
+- **A request opened from the chat** has the same shape in the side panel: the same found line, preview and decision, and no "Not checked".
+- **A read that failed** says so in the steps ("Couldn't read Express on npm: npm answered 404 Not Found."), named for its source (npm, Maven Central or GitHub) and its software. It never reads "no releases found".
 
-New words, for the team lead to confirm: "Waiting for approval", "Approved by Bob", "Show full text", "What happened (3 steps)", "Show agent messages", "Hide agent messages", "An Approver decides in Teams (asked 9:01).", "You can't approve your own run." and the found and wants lines above. Switch "New words" to Show to see them in place.
+New words, for the team lead to confirm: "Waiting for approval", "Approved by Bob", "Show full text", "Run history (3 steps)", "Show agent messages", "Hide agent messages", "An Approver decides in Teams (asked 9:01).", "You can't approve your own run." and the found and wants lines above. Switch "New words" to Show to see them in place.
 
 ## Mission control, light, 22 Nov 2026
 

@@ -144,7 +144,7 @@ describe('a run followed from its own events, in the same stage words', () => {
   it('reads where a run stands from its events, and calls a run retried after a stop Retrying', () => {
     expect(words(replay(failure)), 'the events carry no troubleshooter sentence, so a stop reads Stopped').toBe('Stopped')
     expect(words(replay(success, 6))).toBe('Running')
-    expect(words(replay(success, 15))).toBe('Waiting for a yes')
+    expect(words(replay(success, 15))).toBe('Waiting for approval')
     expect(words(replay(success, 18))).toBe('Creating the ticket')
     expect(words(replay(success))).toBe('MOCK-142 created, approved by Bob')
     expect(words(replay(rejected))).toBe('Declined by Bob. Nothing was written.')
@@ -264,7 +264,7 @@ describe('the stage words, one function for the row, the banner, the strip and R
   })
 
   it('says a run that waits needs a yes, and a run in progress is running', () => {
-    expect(stage({ state: 'awaiting_approval', count: 1 })).toBe('Waiting for a yes')
+    expect(stage({ state: 'awaiting_approval', count: 1 })).toBe('Waiting for approval')
     for (const state of ['pending', 'working', 'proposed'] as const) expect(stage({ state })).toBe('Running')
   })
 
@@ -287,7 +287,7 @@ describe('the stage words, one function for the row, the banner, the strip and R
   })
 
   it('says a test run passed and wrote nothing, never that it is done or found nothing new', () => {
-    expect(stage({ outcome: 'test_passed' })).toBe('Test run passed up to the yes. Nothing was written.')
+    expect(stage({ outcome: 'test_passed' })).toBe('Test run passed up to the approval step. Nothing was written.')
     expect(stage({ outcome: 'nothing_to_write', test: true })).toBe('Test run passed. There was nothing new to write.')
     expect(runPill({ ...base, outcome: 'test_passed' })).toEqual({ label: 'Test run passed', tone: 'ok' })
     expect(runPill({ ...base, outcome: 'nothing_to_write', test: true })).toEqual({ label: 'Test run passed', tone: 'ok' })
@@ -296,7 +296,7 @@ describe('the stage words, one function for the row, the banner, the strip and R
   it('reads a test run’s outcome from its own events', () => {
     const end = { run_id: 'run_01JB8', seq: 9, ts: '2026-11-03T02:14:06Z', actor: { kind: 'platform', id: 'platform', display: 'Platform' }, summary: '', kind: 'run_succeeded', data: { outcome: 'test_passed' } }
     const passed = foldWire(emptyModel, [...success.slice(0, 8), end], 'run_01JB8')
-    expect(stageWords(stageFactsOf(passed), (id) => id)).toBe('Test run passed up to the yes. Nothing was written.')
+    expect(stageWords(stageFactsOf(passed), (id) => id)).toBe('Test run passed up to the approval step. Nothing was written.')
   })
 
   it('has one pill for each run state, in the sketch’s words', () => {
@@ -318,7 +318,7 @@ describe('a schedule in few words', () => {
 })
 
 describe('a read in the plain steps', () => {
-  const at = Date.parse('2026-11-25T02:00:00Z')
+  const at = Date.parse('2026-11-25T02:00:00Z') as ChatItem['at']
   const read = (seq: number, over: Partial<Extract<ChatItem, { kind: 'checked' }>>): ChatItem => ({ kind: 'checked', seq, at, newest: null, problem: null, source: 'GitHub', software: null, ...over })
   const texts = (items: ChatItem[]) => logRowsOf(items, named, QUICK).map((row) => row.text)
 

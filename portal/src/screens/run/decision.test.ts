@@ -13,7 +13,6 @@ import {
   waitingFor,
   waitingWords,
   whereWords,
-  whyYouWords,
 } from './approvalWords'
 import { APPROVE, decisionFor, declineReasons, standingOf, stepsAfter, type Standing } from './decision'
 import { factsOf } from './words'
@@ -136,9 +135,6 @@ describe('the request’s words', () => {
     expect(turnWords(open, nameOf)).toBeNull()
     expect(turnWords(first, nameOf)).toBe('Step 1 of 2. It needs two Approvers, one after the other.')
     expect(turnWords(second, nameOf)).toBe('Step 2 of 2. Carol approved first.')
-    expect(whyYouWords(open)).toBe('No one can approve their own work.')
-    expect(whyYouWords(first)).toBe('No one can approve their own work. Your yes is the first of two.')
-    expect(whyYouWords(second)).toBe('No one can approve their own work. Your yes is the second of two.')
   })
 
   it('tells someone who can’t decide why, in a line where the buttons would be', () => {
@@ -159,7 +155,7 @@ describe('the request’s words', () => {
 
   it('names who a request waits for once the platform does: one name, or several any one of whom may say yes', () => {
     expect(leadWords(1, false, ['Bob'])).toBe('This waits for Bob.')
-    expect(leadWords(1, false, ['Bob', 'Dave', 'Erin'])).toBe('This waits for a yes from Bob, Dave or Erin.')
+    expect(leadWords(1, false, ['Bob', 'Dave', 'Erin'])).toBe('This waits for Bob, Dave or Erin.')
     expect(leadWords(2, false, ['Bob'])).toBe('These wait for an Approver.')
     expect(leadWords(1, true, ['Bob'])).toBe('This needs your approval.')
   })

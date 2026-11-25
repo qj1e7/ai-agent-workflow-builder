@@ -3,14 +3,14 @@ import asked from '@contracts/fixtures/approvals/apr_01JB8.alice.asked.json'
 import bob from '@contracts/fixtures/approvals/apr_01JB8.bob.json'
 import answered from '@contracts/fixtures/approvals/apr_01JB8.bob.answered.json'
 import question from '@contracts/fixtures/approvals/question.asked.json'
-import registry from '@contracts/fixtures/planner/capabilities.json'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { ApprovalStepView, ApprovalView, CapabilitiesView, CapabilityView } from '../../api/types'
+import type { ApprovalStepView, ApprovalView } from '../../api/types'
 import { MemoryRouter } from 'react-router'
-import { ApprovalGate, DeclineReasons, NotChecked, type ApprovalGateProps } from './ApprovalGate'
+import { DeclineReasons } from './ApprovalGate'
+import { RunDecision, type RunDecisionProps } from './RunDecision'
 import { withQuestion } from '../../api/queries'
-import { declineReasons, notCheckedWords, partyOf, stepsAfter } from './decision'
+import { declineReasons, partyOf, stepsAfter } from './decision'
 import type { LiveRun } from './liveRun'
 import { AskBox } from './QuestionThread'
 import { ANSWER_HELP, NO_QUESTIONS, NOT_ANSWERED, STILL_WAITING, askRefusalWords, sentWords } from './questions'
@@ -47,22 +47,22 @@ const SECOND: ApprovalView = {
 const nameOf = (id: string) => ({ alice: 'Alice', bob: 'Bob', carol: 'Carol' })[id] ?? id
 const NOBODY = { ownsIt: false, startedIt: false, retriedIt: false, schedule: false } as const
 const STARTER: Party = { ...NOBODY, ownsIt: true, startedIt: true }
-const idle: ApprovalGateProps['decision'] = { pending: null, recorded: null, steps: null, error: null, decide: () => undefined }
+const idle: RunDecisionProps['decision'] = { pending: null, recorded: null, steps: null, error: null, decide: () => undefined }
 const REASONS = declineReasons('software_watchlist')
 const TITLE = 'Upgrade LangGraph from 1.2.14 to 1.2.16'
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&amp;', '&').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
-const pill = (html: string) => text(html.match(/<span[^>]*data-approval-pill[^>]*>([\s\S]*?)<\/span>/)?.[1] ?? '')
 
-function draw(approval: ApprovalView, { me = 'bob', decision = idle, notChecked = [], facts = null, next = null }: Partial<Pick<ApprovalGateProps, 'decision' | 'notChecked' | 'facts' | 'next'>> & { me?: string } = {}): string {
+function draw(approval: ApprovalView, { me = 'bob', decision = idle, facts = null, next = null }: Partial<Pick<RunDecisionProps, 'decision' | 'facts' | 'next'>> & { me?: string } = {}): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <ApprovalGate
+      <RunDecision
         approval={approval}
+        found={null}
+        tense="wants"
         decision={decision}
         facts={facts}
-        notChecked={notChecked}
         reasons={REASONS}
         requester="Alice"
         questions={NO_QUESTIONS}
@@ -76,16 +76,10 @@ function draw(approval: ApprovalView, { me = 'bob', decision = idle, notChecked 
   )
 }
 
-describe('the approval, waiting for Bob’s yes', () => {
-  it('heads it with whose workflow asks, what it will write and a pill that says it needs their yes', () => {
-    const html = draw(BOB)
-    expect(text(html)).toMatch(/^Approval, from Alice’s Software watchlist Create 1 Jira ticket Needs your yes/)
-    expect(pill(html)).toBe('Needs your yes')
-  })
-
+describe('the decision, waiting for Bob’s approval', () => {
   it('shows exactly what will be written, from the request’s own records: where, the summary and the details', () => {
     const html = text(draw(BOB))
-    expect(html).toContain(`What will be written Where Jira project MOCK on the practice Jira Summary ${TITLE} Details LangGraph has 2 new releases`)
+    expect(html).toContain(`Where Jira project MOCK on the practice Jira Summary ${TITLE} Details LangGraph has 2 new releases`)
     expect(html).toContain('Proposed by the AI workflow builder.')
   })
 
@@ -131,13 +125,12 @@ describe('the approval, waiting for Bob’s yes', () => {
   })
 })
 
-describe('the approval, for someone who can’t say yes', () => {
+describe('the decision, for someone who can’t approve it', () => {
   it.each([
-    ['alice, whose work it is', ALICE, 'alice', 'Waiting for an Approver. You can’t approve your own work.'],
-    ['carol, who isn’t an Approver', CAROL, 'carol', 'Waiting for an Approver. Only an Approver can decide.'],
-  ])('shows %s the same change, a waiting pill, no buttons, and why', (_who, approval, me, words) => {
+    ['alice, whose work it is', ALICE, 'alice', 'You can’t approve your own run.'],
+    ['carol, who isn’t an Approver', CAROL, 'carol', 'Only an Approver can decide.'],
+  ])('shows %s the same change, no buttons, and why', (_who, approval, me, words) => {
     const html = draw(approval, { me })
-    expect(pill(html)).toBe('Waiting for a yes')
     expect(text(html)).toContain(TITLE)
     expect(buttons(html)).toEqual([])
     expect(text(html)).toContain(words)
@@ -158,12 +151,12 @@ describe('two Approvers, one after the other', () => {
     expect(buttons(draw(SECOND))).toEqual(['Ask Alice', 'Approve', 'Decline'])
   })
 
-  it('never offers the first Approver the second yes: right after it, and once the platform says so', () => {
+  it('never offers the first Approver the second approval: right after it, and once the platform says so', () => {
     const after = stepsAfter(TWO.steps, { step: 0, by: 'bob', verdict: 'approve', at: AT, reason: null })
     const now = draw(TWO, { decision: { ...idle, recorded: 'approve', steps: after } })
     expect(buttons(now)).toEqual([])
     expect(text(now)).toContain('Step 2 of 2. Bob approved first.')
-    expect(text(now)).toContain('Waiting for another Approver. You approved the step before, and no one approves twice.')
+    expect(text(now)).toContain('You approved the step before, so another Approver decides this one.')
     const read = draw({ ...SECOND, steps: [{ ...SECOND.steps[0]!, decided_by: 'bob' }, SECOND.steps[1]!], you_can_decide: false, why_not: 'decided_earlier_step' })
     expect(buttons(read)).toEqual([])
     expect(text(read)).toContain('You approved the step before')
@@ -171,10 +164,9 @@ describe('two Approvers, one after the other', () => {
 })
 
 describe('the record, once it is decided or over', () => {
-  it('right after Bob’s yes: approved, and creating the ticket, ahead of the platform’s next read', () => {
+  it('right after Bob’s approval: approved, and creating the ticket, ahead of the platform’s next read', () => {
     const steps = stepsAfter(BOB.steps, { step: 0, by: 'bob', verdict: 'approve', at: AT, reason: null })
     const html = draw(BOB, { decision: { ...idle, recorded: 'approve', steps }, facts: factsOf('awaiting_approval', { count: 1 }) })
-    expect(pill(html)).toBe('Approved')
     expect(buttons(html)).toEqual([])
     expect(text(html)).toContain('Approved by Bob at 9:04. Creating the ticket…')
   })
@@ -187,89 +179,21 @@ describe('the record, once it is decided or over', () => {
 
   it('declined: the reason, nothing written, what happens next, and never created', () => {
     const html = draw(decidedAs(BOB, 'declined', 'Not this week'), { me: 'alice', facts: factsOf('rejected', { declinedBy: 'bob' }), next: 'The tickets will be proposed again at the next check, tomorrow at 8:00.' })
-    expect(pill(html)).toBe('Declined')
     expect(text(html)).toContain('Declined by Bob at 9:04: not this week. Nothing was written. The tickets will be proposed again at the next check, tomorrow at 8:00.')
     expect(text(html)).not.toMatch(/created|Created/)
     expect(buttons(html)).toEqual([])
   })
 
   it.each([
-    ['expired', 'No answer', 'No one approved in time. Nothing was written, and it can’t be decided now.'],
-    ['cancelled', 'Cancelled', 'The workflow was deleted before anyone decided. Nothing was written, and it can’t be decided now.'],
-    ['closed', 'Closed', 'The platform was updated before anyone decided. Nothing was written, and it can’t be decided now.'],
-  ] as const)('%s: says why nobody can decide, even if an old read still says Bob may', (status, label, words) => {
+    ['expired', 'No one approved in time. Nothing was written, and it can’t be decided now.'],
+    ['cancelled', 'The workflow was deleted before anyone decided. Nothing was written, and it can’t be decided now.'],
+    ['closed', 'The platform was updated before anyone decided. Nothing was written, and it can’t be decided now.'],
+  ] as const)('%s: says why nobody can decide, even if an old read still says Bob may', (status, words) => {
     const html = draw({ ...BOB, steps: BOB.steps.map((step) => ({ ...step, status })) })
-    expect(pill(html)).toBe(label)
     expect(text(html)).toContain(words)
     expect(buttons(html)).toEqual([])
   })
 
-  it('keeps what will be written and what wasn’t checked on the record, read only', () => {
-    const html = text(draw(decidedAs(BOB, 'declined'), { notChecked: ['Redis couldn’t be read, so no ticket is proposed for it.'] }))
-    expect(html).toContain(TITLE)
-    expect(html).toContain('Not checked Redis couldn’t be read')
-  })
-})
-
-describe('what the run didn’t check', () => {
-  const CAPABILITIES = (registry as CapabilitiesView).capabilities
-  const VERSION_CHECKER = ['crd_version_checker']
-  const SUMMARY_CARD = ['crd_weekly_summary']
-  /** The registry as the platform serves it once the team has a ticket summary agent: it reads Jira, and nothing else. */
-  const withSummary = (capabilities: readonly CapabilityView[]) =>
-    capabilities.map((c) => (c.tools.includes('jira.search') ? { ...c, agents: [...c.agents, ...SUMMARY_CARD] } : c))
-  const UNREAD = ['Grafana', 'LangServe', 'PostgreSQL', 'Python']
-  const SUMMARY_LINES = ['The platform can’t yet see a ticket’s component or priority.', 'The platform can’t yet look past the 50 newest tickets.']
-  const SOFTWARE_LINES = ['Grafana, LangServe, PostgreSQL and Python couldn’t be read, so no ticket is proposed for them.', 'The platform can’t yet check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using.']
-
-  it('names the software a check couldn’t read, then what the registry says the platform can’t check yet', () => {
-    expect(notCheckedWords(UNREAD, VERSION_CHECKER, CAPABILITIES)).toEqual(SOFTWARE_LINES)
-    expect(notCheckedWords(['Redis'], VERSION_CHECKER, CAPABILITIES)[0]).toBe('Redis couldn’t be read, so no ticket is proposed for it.')
-  })
-
-  it('gives a ticket summary what its agents can’t see of a ticket, only as far as the registry says so', () => {
-    expect(notCheckedWords([], SUMMARY_CARD, withSummary(CAPABILITIES))).toEqual(SUMMARY_LINES)
-    const planned = withSummary(CAPABILITIES).map((c) => (c.id === 'jira.find_by_update' ? { ...c, state: 'planned' as const, cant: 'see when a ticket was last updated, its type or who owns it' } : c))
-    expect(notCheckedWords([], SUMMARY_CARD, planned)).toEqual(['The platform can’t yet see when a ticket was last updated, its type or who owns it.', ...SUMMARY_LINES])
-  })
-
-  it('writes the registry’s apostrophes the way the Portal writes its own', () => {
-    for (const line of notCheckedWords([], SUMMARY_CARD, withSummary(CAPABILITIES))) expect(line).not.toContain("'")
-  })
-
-  it('gives a release check the release line, though its agent also reads Jira for the tickets it raised', () => {
-    expect(notCheckedWords([], VERSION_CHECKER, CAPABILITIES)).toEqual(['The platform can’t yet check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using.'])
-  })
-
-  it('never lists what the registry says is Ready, and claims nothing while the registry is not in', () => {
-    const ready = CAPABILITIES.map((c) => (c.id === 'registries.check' ? { ...c, state: 'ready' as const, cant: null } : c))
-    expect(notCheckedWords([], VERSION_CHECKER, ready)).toEqual([])
-    expect(notCheckedWords(['Redis'], VERSION_CHECKER, undefined)).toEqual(['Redis couldn’t be read, so no ticket is proposed for it.'])
-    expect(notCheckedWords([], [], CAPABILITIES)).toEqual([])
-  })
-
-  it('sits right after what will be written, for Bob and Alice, and adds no button', () => {
-    for (const [approval, me] of [
-      [BOB, 'bob'],
-      [ALICE, 'alice'],
-    ] as const) {
-      const html = draw(approval, { me, notChecked: SOFTWARE_LINES })
-      expect(text(html)).toContain(`Proposed by the AI workflow builder. Not checked ${SOFTWARE_LINES.join(' ')}`)
-      expect(buttons(html)).toEqual(me === 'bob' ? ['Ask Alice', 'Approve', 'Decline'] : [])
-    }
-  })
-
-  it('leaves the section out when the run checked everything it could', () => {
-    expect(text(draw(BOB))).not.toContain('Not checked')
-    expect(renderToStaticMarkup(<NotChecked lines={[]} level={3} />)).toBe('')
-  })
-
-  it('stays on the run’s record, read only, as its own section', () => {
-    const html = renderToStaticMarkup(<NotChecked lines={SOFTWARE_LINES} level={3} />)
-    expect(text(html)).toBe(`Not checked ${SOFTWARE_LINES.join(' ')}`)
-    expect(html).toMatch(/<h3[^>]*>Not checked<\/h3>/)
-    expect(buttons(html)).toEqual([])
-  })
 })
 
 describe('how the person is tied to the run', () => {

@@ -1533,16 +1533,17 @@ const logRows = () => stepRows().map(([t, s, c]) => `<li${c ? ` class="${c}"` : 
 const agentRows = () => [['9:01:10', 'Planner', 'Please run your plan with these inputs. GitHub repository: fastapi/fastapi; Jira project: MOCK.'], ['9:01:12', 'Version checker', 'FastAPI 0.121.0 is the newest release and MOCK has no ticket for it, so I proposed one ticket for an Approver to check.']]
   .map(([t, who, s]) => `<li><span class="t">${t}</span><span><b>${who}</b> ${s}</span></li>`).join('');
 const foldHTML = (withLine) => `<details class="d-fold" data-live="run-fold"><summary data-live="run-fold-sum"></summary>${withLine ? runLine() : ''}
-  <ol class="log" aria-label="What happened" data-live="run-log"></ol>
+  <ol class="log" aria-label="Run history" data-live="run-log"></ol>
   <p><button class="linkbtn" type="button" data-agent-msgs aria-expanded="false">Show agent messages</button></p>
   <ol class="log agent" aria-label="Agent messages" data-live="run-agent" hidden></ol></details>`;
-const foldCount = () => `What happened (${stepRows().length} steps)`;
+const foldCount = () => `Run history (${stepRows().length} steps)`;
+const ticketHTML = () => `<details class="d-ticket"><summary><span class="d-t"><b>${RUN_TICKET.title}</b><span class="d-g">${RUN_TICKET.gist}</span></span><span class="d-more">${nw('Show full text')}</span></summary>
+    <dl class="chg"><div><dt>Where</dt><dd>Jira project MOCK</dd></div><div><dt>Summary</dt><dd>${RUN_TICKET.title}</dd></div><div><dt>Details</dt><dd class="body">${RUN_TICKET.body}</dd></div><div><dt>Fields</dt><dd class="fields">Task · Medium · upgrade, fastapi</dd></div></dl></details>`;
 /* The same shape in every state: what was found, what the run wants to do or did, who decides, then the folded history. */
 function decisionHTML() {
   const st = W.stage;
   const lead = { waiting: 'This run wants to create 1 Jira ticket in MOCK:', writing: 'This run is creating 1 Jira ticket in MOCK:', done: 'This run created 1 Jira ticket in MOCK:', declined: 'This run wanted to create 1 Jira ticket in MOCK:' }[st];
-  const ticket = `<details class="d-ticket"><summary><span class="d-t"><b>${RUN_TICKET.title}</b><span class="d-g">${RUN_TICKET.gist}</span></span><span class="d-more">${nw('Show full text')}</span></summary>
-    <dl class="chg"><div><dt>Where</dt><dd>Jira project MOCK</dd></div><div><dt>Summary</dt><dd>${RUN_TICKET.title}</dd></div><div><dt>Details</dt><dd class="body">${RUN_TICKET.body}</dd></div><div><dt>Fields</dt><dd class="fields">Task · Medium · upgrade, fastapi</dd></div></dl></details>`;
+  const ticket = ticketHTML();
   const who = {
     waiting: () => `<p>${nw('An Approver decides in Teams (asked 9:01).')}${W.user === 'bob' ? '' : ' You can’t approve your own run.'}</p>${W.user === 'bob' && W.appr === 'waiting' ? `<div class="pv-foot" data-live="appr-foot">${apprFoot()}</div>` : ''}`,
     writing: () => '<p>Bob approved at 9:04. The platform is writing now.</p>',
@@ -1750,13 +1751,8 @@ const apprCard = () => `<div class="card" data-live="appr">
 /* The summary never trims what will be written: an Approver decides on the whole change. */
 const apprView = (full = false) => `<div class="pv" data-live="appr">
   <div class="pv-head"><div><p class="pv-kind">Approval, from Alice’s FastAPI release check</p><h3>Create 1 Jira ticket</h3></div><span class="pill lg" data-live="appr-pill"></span></div>
-  <div class="pv-sec"><h4>What will be written</h4><dl class="chg">
-    <div><dt>Where</dt><dd>Jira project MOCK</dd></div>
-    <div><dt>Summary</dt><dd>Upgrade FastAPI from 0.115.2 to 0.121.0</dd></div>
-    <div><dt>Details</dt><dd class="body">FastAPI 0.121.0 is out. The team runs 0.115.2.
-github.com/fastapi/fastapi/releases/tag/0.121.0</dd></div>
-    <div><dt>Fields</dt><dd class="fields">Task · Medium · upgrade, fastapi</dd></div>
-  </dl></div>
+  <p class="d-found">${nw('FastAPI 0.121.0 is out (18 Nov).')}</p><p class="d-wants">${nw('This run wants to create 1 Jira ticket in MOCK:')}</p>${ticketHTML()}
+  <p class="d-who">${nw('An Approver decides in Teams (asked 9:01).')}</p>
   ${full ? `<dl class="dl2"><div><dt>Sent</dt><dd>Today, 9:01, in Teams</dd></div><div><dt>Why you</dt><dd>No one can approve their own work.</dd></div></dl>
   <div class="pv-actions"><button class="btn ghost" type="button" data-open="run">See the run</button></div>` : ''}
   <div data-live="appr-thread"></div>

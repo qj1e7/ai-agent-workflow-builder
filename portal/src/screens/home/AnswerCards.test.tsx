@@ -670,7 +670,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     const [request] = HOME.approvals
     const many = { ...HOME, approvals: Array.from({ length: 10 }, (_, n) => ({ ...request!, approval_id: `apr_${String(n)}`, run_id: `run_${String(n)}` })), approvals_total: 25, confirmations: [] }
     const html = ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: many })
-    expect(answerOf(html)).toMatch(/^These need your yes\. Create 1 Jira ticket Needs your yes Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Review and decide/)
+    expect(answerOf(html)).toMatch(/^These need your approval\. Create 1 Jira ticket Needs your yes Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Review and decide/)
     expect(buttons(html).filter((name) => name === 'Review and decide')).toHaveLength(3)
     expect(html).toMatch(/<a[^>]*href="\/workflows"[^>]*>22 more<\/a>/)
   })
@@ -719,7 +719,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
 
   it('leads one request with the sketch’s line', () => {
     const one = { ...HOME, confirmations: [] }
-    expect(answerOf(ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: one }))).toMatch(/^This needs your yes\. Create 1 Jira ticket Needs your yes/)
+    expect(answerOf(ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: one }))).toMatch(/^This needs your approval\. Create 1 Jira ticket Needs your yes/)
   })
 
   it('sends an approve to the request to decide there, never a decision in the chat', () => {
@@ -857,14 +857,14 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
     const html = card(replay(runSuccess, 15))
     expect(pill(html)).toBe('Waiting for approval')
     expect(labels(html)).toEqual(['Found', 'Now'])
-    expect(text(html)).toContain('Waiting for a yes.')
+    expect(text(html)).toContain('Waiting for approval.')
     expect(html).not.toMatch(/MOCK-142/)
   })
 
   it('done: folds to the head and one settled line, the ticket said once', () => {
     const html = card(replay(runSuccess))
     expect(pill(html)).toBe('Done')
-    expect(text(html)).toContain('Done at 10:20 · MOCK-142 created after Bob’s yes')
+    expect(text(html)).toContain('Done at 10:20 · MOCK-142 created after Bob approved')
     expect(labels(html)).toEqual([])
     expect(html).not.toContain('aria-label="Steps of this run"')
     expect(text(html).match(/MOCK-142/g)).toHaveLength(1)
@@ -949,7 +949,7 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
       if (said.includes('Now Retrying after a short wait…')) return 'retrying'
       if (pill(html) === 'Waiting for approval' && said.includes('Now Waiting for approval.')) return 'waiting'
       if (said.includes('Now Bob approved. Creating the ticket…')) return 'writing'
-      if (pill(html) === 'Done' && said.includes('MOCK-142 created after Bob’s yes')) return 'done'
+      if (pill(html) === 'Done' && said.includes('MOCK-142 created after Bob approved')) return 'done'
       return `unexpected: ${said}`
     }
     const stages = frames.map(stageOfFrame).filter((stage, index, all) => stage !== all[index - 1])

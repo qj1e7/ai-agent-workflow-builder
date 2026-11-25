@@ -122,7 +122,7 @@ describe('the build panel’s status line and checks', () => {
     expect(checksOf(LOG, testStatus(PASSED))).toEqual([
       { ok: true, text: 'The blocks fit together.' },
       { ok: true, text: 'Every write waits for a yes.' },
-      { ok: true, text: 'Test run passed up to the yes. Nothing was written.' },
+      { ok: true, text: 'Test run passed up to the approval step. Nothing was written.' },
     ])
     expect(testStatus(STOPPED, "GitHub didn't answer.")).toEqual({ ok: false, text: "The test run stopped. GitHub didn't answer." })
     expect(testStatus(STOPPED), 'until the platform says why, it says only that it stopped, never a guess from the reason code').toEqual({ ok: false, text: 'The test run stopped.' })

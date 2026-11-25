@@ -7,11 +7,10 @@ import type { RunView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { useChat } from '../home/ChatProvider'
-import { ApprovalGate } from './ApprovalGate'
-import { partyOf, useDecision, useNotChecked } from './decision'
+import { partyOf, useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { FixSection, useFixLeads } from './FixPanel'
-import { foundLine, runByWords, workingLine, type Tense } from './happened'
+import { foundLine, runByWords, tenseOf, workingLine } from './happened'
 import { History } from './History'
 import { DeclinedNext, StopAnswers, StopNext } from './Outcome'
 import { useQuestions } from './questions'
@@ -62,40 +61,38 @@ function FeedNotReady({ connection, onRetry }: { connection: LiveRun['connection
   }
 }
 
-type Shows = 'run' | 'approval'
-
 /**
  * A run in the side panel, in the page's shape: the workflow, who ran it and its status, then what was found, what the run wants to
  * do with the ticket as a small preview, and who decides, with Approve, Decline and Ask for an Approver. A stop keeps its three
  * answers and Retry. What happened stays folded, with the run line in it.
  */
 export function RunPanel({ id }: { id: string }) {
-  return <PanelFor id={id} shows="run" />
+  return <PanelFor id={id} />
 }
 
-/** A request opened from the chat (the sketch's approval panel): the approval in every state, for Bob and Alice alike, with its record once decided. */
+/** A request opened from the chat: the same panel as its run, with the request in every state, for Bob and Alice alike, and its record once decided. */
 export function ApprovalPanel({ id }: { id: string }) {
-  return <PanelFor id={id} shows="approval" />
+  return <PanelFor id={id} />
 }
 
-function PanelFor({ id, shows }: { id: string; shows: Shows }) {
+function PanelFor({ id }: { id: string }) {
   const run = useRun(id)
   if (run.isError) {
     const gone = run.error instanceof ApiError && run.error.status === 404
     return gone ? <p className="muted">That run isn’t here any more.</p> : <Problem onRetry={() => void run.refetch()} />
   }
   if (!run.data) return <Loading />
-  return <LiveRunPanel run={run.data} shows={shows} />
+  return <LiveRunPanel run={run.data} />
 }
 
-function LiveRunPanel({ run, shows }: { run: RunView; shows: Shows }) {
+function LiveRunPanel({ run }: { run: RunView }) {
   const { live, restart, tryAgain } = useLiveRun(run.run_id)
   const failed = live.head.phase.state === 'failed'
   const latest = useRun(run.run_id, { poll: failed ? POLL_FAILED_MS : false }).data ?? run
   useReconnectWhenBehind(failed && live.loaded && latest.last_seq > live.head.seq, restart)
   const ready = live.loaded || live.connection.is === 'live' || live.connection.is === 'settled'
   if (!ready) return <FeedNotReady connection={live.connection} onRetry={tryAgain} />
-  return shows === 'approval' ? <ApprovalSummary run={latest} live={live} /> : <RunSummary run={latest} live={live} />
+  return <RunSummary run={latest} live={live} />
 }
 
 const LOADING_APPROVAL = (
@@ -119,34 +116,6 @@ function useDeciding(run: RunView, story: RunStory) {
   return { decision, questions, next, party }
 }
 
-/** The request opened from the chat, which shows everything that will be written and what the run did not check. */
-function ApprovalSummary({ run, live }: { run: RunView; live: LiveRun }) {
-  const story = useRunStory(run, live)
-  const { me, nameOf, approval, useCase } = story
-  const { decision, questions, next, party } = useDeciding(run, story)
-  const notChecked = useNotChecked(approval, useCase.data)
-  if (useCase.isLoading) return <Loading />
-  if (story.approvalId === null) return <RunSummary run={run} live={live} />
-  if (!approval || notChecked === null) return LOADING_APPROVAL
-  return (
-    <ApprovalGate
-      approval={approval}
-      decision={decision}
-      facts={story.facts}
-      notChecked={notChecked}
-      reasons={story.quick}
-      requester={nameOf(approval.requester)}
-      questions={questions}
-      me={me?.id}
-      party={party}
-      nameOf={nameOf}
-      next={next}
-      now={new Date()}
-    />
-  )
-}
-
-const TENSE: Partial<Record<RunModel['phase']['state'], Tense>> = { awaiting_approval: 'wants', acting: 'doing', succeeded: 'did', rejected: 'wanted' }
 /** While the agents work, and where a run stopped, the history is open, so the line shows the work or the break. */
 const LIVE = new Set<RunModel['phase']['state']>(['pending', 'working', 'proposed', 'acting', 'failed'])
 
@@ -171,7 +140,7 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
 
   if (useCase.isLoading) return <Loading />
   const failure = shown.phase.state === 'failed' ? shown.phase : null
-  const tense = TENSE[shown.phase.state]
+  const tense = tenseOf(shown.phase.state)
   const found = foundLine(shown.release, run.use_case_name, useCase.data?.template, new Date())
   const finished = isFinished(shown.phase)
   const main = failure ? (

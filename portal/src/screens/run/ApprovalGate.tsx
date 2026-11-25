@@ -1,36 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import type { ApprovalActionView, ApprovalView } from '../../api/types'
+import type { ApprovalActionView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { IconCheck, IconLock } from '../../ui/icons'
-import { approvalPill, approvalTitle, fieldRows, kindWords, recordWords, turnWords, waitingWords, whereWords } from './approvalWords'
-import { APPROVE, canDecideNow, standingOf, type Decision, type Standing } from './decision'
-import { AskBox, QuestionThread } from './QuestionThread'
+import { IconCheck } from '../../ui/icons'
+import { fieldRows, whereWords } from './approvalWords'
+import { APPROVE, type Decision, type Standing } from './decision'
+import { AskBox } from './QuestionThread'
 import { useFocusAfter, type Questions } from './questions'
-import type { NameOf, Party, StageFacts } from './words'
+import type { StageFacts } from './words'
 import styles from './panels.module.css'
-import pills from './RunPage.module.css'
-
-type Level = 2 | 3 | 4
-
-const HEADINGS = { 2: 'h2', 3: 'h3', 4: 'h4' } as const
-
-/** What the run didn't check, from notCheckedWords in decision.ts: on the request, waiting or decided, and on the run's record. */
-export function NotChecked({ lines, level }: { lines: readonly string[]; level: Level }) {
-  const headingId = useId()
-  if (lines.length === 0) return null
-  const Heading = HEADINGS[level]
-  return (
-    <section className={styles['sec']} aria-labelledby={headingId}>
-      <Heading id={headingId}>Not checked</Heading>
-      <ul className={styles['unchecked']}>
-        {lines.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
-    </section>
-  )
-}
 
 /** One write, exactly as the request holds it: where it goes, then every field it carries, so nothing written is hidden. */
 export function Change({ action }: { action: ApprovalActionView }) {
@@ -92,26 +70,6 @@ export function DeclineReasons({ reasons, requester, picked, pending, busy, onPi
       </div>
     </div>
   )
-}
-
-export interface ApprovalGateProps {
-  readonly approval: ApprovalView
-  readonly decision: Pick<Decision, 'pending' | 'recorded' | 'steps' | 'error' | 'decide'>
-  /** The run, for what happened after the approval. Null where the run isn't read. */
-  readonly facts: StageFacts | null
-  /** What the run didn't check, from notCheckedWords in decision.ts. Information for the reader, never the check. */
-  readonly notChecked: readonly string[]
-  /** The quick reasons Decline offers, from declineReasons in decision.ts. */
-  readonly reasons: readonly string[]
-  /** Who sees the reason with the record, and answers questions, by name. */
-  readonly requester: string
-  readonly questions: Questions
-  readonly me: string | undefined
-  readonly party: Party | null
-  readonly nameOf: NameOf
-  /** What happens after a decline, from declinedNext in words.ts. */
-  readonly next: string | null
-  readonly now: Date
 }
 
 /** Under the record, the Ask box or Decline's reasons open in place of the buttons. Never both. */
@@ -209,63 +167,5 @@ export function DecideActions({ decision, reasons, requester, questions, thread 
         </Button>
       </span>
     </>
-  )
-}
-
-/**
- * A request opened from the chat, in the sketch's shape: whose workflow asks, exactly what will be written from the request's own
- * records, what the run didn't check, then the decision. The platform checks the digest and the deciding person again at the write,
- * so nothing here is the check.
- */
-export function ApprovalGate({ approval, decision, facts, notChecked, reasons, requester, questions, me, nameOf, next, now }: ApprovalGateProps) {
-  const steps = decision.steps ?? approval.steps
-  const standing = standingOf(steps)
-  const canDecide = canDecideNow(approval, decision)
-  // Once this person's decision is recorded, the request offers them nothing more, though the next read may take a while to say so.
-  const whyNot = decision.recorded === null ? approval.why_not : 'decided_earlier_step'
-  const thread = useFocusAfter<HTMLHeadingElement>()
-  const titleId = useId()
-  const pill = approvalPill(standing, canDecide)
-  const turn = turnWords(standing, nameOf)
-  const record = recordWords(standing, facts, nameOf, reasons, now)
-
-  return (
-    <section className={styles['approval']} aria-labelledby={titleId}>
-      <div className={styles['apprHead']}>
-        <div>
-          <p className={pills['kind']}>{kindWords(approval, nameOf)}</p>
-          <h3 id={titleId}>{approvalTitle(approval.actions)}</h3>
-        </div>
-        <span className={cx(pills['pill'], pills[pill.tone])} data-approval-pill>
-          {pill.label}
-        </span>
-      </div>
-      {turn ? <p className={styles['turn']}>{turn}</p> : null}
-      <section className={styles['sec']} aria-labelledby={`${titleId}-w`}>
-        <h4 id={`${titleId}-w`}>What will be written</h4>
-        {approval.actions.map((action, index) => (
-          <Change key={index} action={action} />
-        ))}
-      </section>
-      <NotChecked lines={notChecked} level={4} />
-      <QuestionThread approval={approval} me={me} nameOf={nameOf} answer={questions.answer} heading={thread} level={4} />
-      <div className={styles['apprFoot']}>
-        {record !== null ? (
-          <Record standing={standing} words={record} facts={facts} next={next} />
-        ) : !canDecide ? (
-          <p className={styles['waitLine']}>
-            <IconLock size={18} />
-            <span>{waitingWords(whyNot, true)}</span>
-          </p>
-        ) : (
-          <DecideActions decision={decision} reasons={reasons} requester={requester} questions={questions} thread={thread} />
-        )}
-      </div>
-      {decision.error ? (
-        <p className={styles['error']} role="alert">
-          {decision.error}
-        </p>
-      ) : null}
-    </section>
   )
 }
