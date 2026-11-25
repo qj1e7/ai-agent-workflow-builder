@@ -5,7 +5,7 @@ import { useErrorWords, useSession } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { refusedWords, useCheckPart, useDeleteDraft, usePlanFor, useReadAgentCards, useSaveDraft } from '../../api/plannerQueries'
-import { useAgentCards, useJiraProjects, useMe, useSaveCard, useTools, useWatchlist } from '../../api/queries'
+import { useAgentCards, useJiraProjects, useMe, useSaveCard, useSoftwareFind, useTools, useWatchlist } from '../../api/queries'
 import { useMadeBySetUp, useSetUpOff } from '../../api/workflowQueries'
 import type { DraftView, InputKind, SimilarWorkflow, ToolId, ToolView } from '../../api/types'
 import { Button, buttonClassName } from '../../ui/Button'
@@ -26,14 +26,27 @@ import {
   leftWords,
   lowerFirst,
   nameProblem,
+  normalised,
   nameOf,
-  nextQuestion,
   OFTEN_NAMES,
   planView,
   reusedAgents,
   cardBlockers,
   chooseProject,
+  chooseRepo,
+  clearProject,
+  effectiveRepo,
   EACH_TICKET_WAITS,
+  JIRA_CHOICE,
+  PROJECT_BOX,
+  REPO_CHOICE,
+  REPO_FOUND,
+  REPO_HINT,
+  repoMissing,
+  softwareOf,
+  questionsOf,
+  type RepoChoice,
+  type RepoFind,
   savedCopyOf,
   secondName,
   setUp,
@@ -167,35 +180,42 @@ function Editor({ id, label, row, onSave, onCancel }: { id: string; label: strin
   )
 }
 
+/** One answer a key question offers as a button, with a few words about it when there are some. */
+interface KeyPick {
+  readonly key: string
+  readonly label: string
+}
+
 /**
- * Which Jira project the ticket goes in: the projects the platform may use are buttons, so one click answers it, and "Another
- * project" opens a box for a key. With no project listed the box is open already. A key is checked the way the card checks one.
+ * A question whose answers are buttons, with a quiet link to type another (25 Nov): which Jira project the ticket goes in, or
+ * which repository to watch. The box opens only from the link, or at once when nothing is offered, and a key is checked the way
+ * the card checks one. Nothing here is ever a free-text sentence.
  */
-function ProjectAsk({ labelId, choices, onChoose }: { labelId: string; choices: readonly string[]; onChoose: (key: string) => void }) {
-  const [typing, setTyping] = useState(choices.length === 0)
+function KeyAsk({ labelId, kind, picks, other, boxLabel, hint, onChoose }: { labelId: string; kind: 'jira_project' | 'github_repo'; picks: readonly KeyPick[]; other: string; boxLabel: string; hint?: string; onChoose: (key: string) => void }) {
+  const [typing, setTyping] = useState(picks.length === 0)
   const [typed, setTyped] = useState('')
   const [tried, setTried] = useState(false)
   const field = useRef<HTMLInputElement>(null)
   const opened = useRef(false)
   const id = useId()
-  // The box takes the keyboard when Another project opens it, never on its own at the start.
+  // The box takes the keyboard when the link opens it, never on its own at the start.
   useEffect(() => {
     if (typing && opened.current) field.current?.focus()
   }, [typing])
-  const problem = tried ? valueProblem('jira_project', typed) : null
+  const problem = tried ? valueProblem(kind, typed) : null
   const submit = () => {
-    if (valueProblem('jira_project', typed) !== null) {
+    if (valueProblem(kind, typed) !== null) {
       setTried(true)
       field.current?.focus()
       return
     }
-    onChoose(typed.trim().toUpperCase())
+    onChoose(normalised(kind, typed))
   }
   const keys = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       event.preventDefault()
       submit()
-    } else if (event.key === 'Escape' && choices.length > 0) {
+    } else if (event.key === 'Escape' && picks.length > 0) {
       event.preventDefault()
       setTyping(false)
     }
@@ -203,12 +223,12 @@ function ProjectAsk({ labelId, choices, onChoose }: { labelId: string; choices: 
   return (
     <>
       <span className={styles['pick']} role="group" aria-labelledby={labelId}>
-        {choices.map((key) => (
-          <button key={key} type="button" className={styles['choice']} onClick={() => onChoose(key)}>
-            {key}
+        {picks.map((pick) => (
+          <button key={pick.key} type="button" className={styles['choice']} onClick={() => onChoose(pick.key)}>
+            {pick.label}
           </button>
         ))}
-        {choices.length > 0 ? (
+        {picks.length > 0 ? (
           <button
             type="button"
             className={styles['link']}
@@ -219,14 +239,14 @@ function ProjectAsk({ labelId, choices, onChoose }: { labelId: string; choices: 
               setTried(false)
             }}
           >
-            Another project
+            {other}
           </button>
         ) : null}
       </span>
       {typing ? (
-        <span className={styles['editor']} role="group" aria-label="Another Jira project">
+        <span className={styles['editor']} role="group" aria-label={other}>
           <label className={styles['valueLabel']} htmlFor={`${id}-key`}>
-            Jira project key
+            {boxLabel}
           </label>
           <input
             ref={field}
@@ -236,11 +256,18 @@ function ProjectAsk({ labelId, choices, onChoose }: { labelId: string; choices: 
             value={typed}
             maxLength={255}
             aria-invalid={problem ? true : undefined}
-            aria-describedby={problem ? `${id}-error` : undefined}
+            aria-describedby={`${id}-hint${problem ? ` ${id}-error` : ''}`}
             onChange={(event) => setTyped(event.target.value)}
             onKeyDown={keys}
           />
           <Button onClick={submit}>Use it</Button>
+          {hint ? (
+            <span className={styles['help']} id={`${id}-hint`}>
+              {hint}
+            </span>
+          ) : (
+            <span id={`${id}-hint`} />
+          )}
           {problem ? (
             <span className={styles['problem']} id={`${id}-error`}>
               {problem}
@@ -394,7 +421,11 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const kinds: ToolKinds = useMemo(() => new Map((tools.data ?? []).map((tool) => [tool.id, tool.kind])), [tools.data])
   const reused = reusedAgents(plan, library.data, me.data?.id)
   const left = setupLeft(form, plan)
-  const question = nextQuestion(form, plan, projects)
+  const software = softwareOf(form)
+  const found = useSoftwareFind(repoMissing(form) ? software : null)
+  const matches: readonly RepoChoice[] = found.data?.status === 'found' ? found.data.matches.map((match) => ({ repo: match.repo, what: match.what })) : []
+  const repos: RepoFind | null = software === null ? null : found.isPending && found.fetchStatus !== 'idle' ? { state: 'checking' } : matches.length > 0 ? { state: 'found', matches } : { state: 'none' }
+  const questions = questionsOf(form, plan, projects, repos)
   const problems = whenProblems(form.when)
   const timeText = whenSaid(form.when)
   const writes = writesOf(plan, kinds)
@@ -405,6 +436,16 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const dirty = useRef(false)
   const settingUp = useRef(false)
   const alive = useRef(true)
+  // The finder's one clear match fills the repository, so the agent reads it and nobody looks it up. Change clears it, and it stays cleared.
+  const onlyMatch = matches.length === 1 ? (matches[0]?.repo ?? null) : null
+  useEffect(() => {
+    if (onlyMatch !== null && form.typed[REPO_CHOICE] === undefined && softwareOf(form) !== null) {
+      dirty.current = true
+      // The finder answers after the card is drawn, so its match comes in as a change to the form.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setForm((before) => (before.typed[REPO_CHOICE] === undefined ? chooseRepo(before, onlyMatch, true) : before))
+    }
+  }, [onlyMatch, form])
   const latest = useRef({ form, plan: null as Planned | null, phase, live })
   useEffect(() => {
     latest.current = { form, plan: planQuery.data ? { task, answer: planQuery.data } : null, phase, live }
@@ -650,9 +691,9 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   if (!live) return <p className="muted">Saved as a draft. Open it from Workflows to carry on.</p>
 
   const creating = phase.kind === 'creating'
-  const asked = (words: string, body: ReactNode) => (
+  const asked = (words: string, body: ReactNode, qid = 'q') => (
     <>
-      <span className={styles['pq']} id={`${id}-q`}>
+      <span className={styles['pq']} id={`${id}-${qid}`}>
         {words}
       </span>
       {body}
@@ -669,7 +710,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
     return <Editor id={`${id}-editor`} label={PART_OF[row.kind]} row={row} onSave={(text) => changePart(index, text)} onCancel={close} />
   }
   const noteOf = (row: Row): string | null => (row.state === 'edited' && row.planner?.text ? `Your request said: “${row.planner.text}”.` : row.state === 'changed' || row.state === 'cant_do' ? row.note : null)
-  const askedRow = (q: Question | null, index: number): q is Extract<Question, { kind: 'row' }> => q?.kind === 'row' && q.index === index
+  const askedRow = (index: number) => questions.find((q): q is Extract<Question, { kind: 'row' }> => q.kind === 'row' && q.index === index)
 
   const picker =
     editing === 'when' ? (
@@ -681,27 +722,37 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
         onDone={() => setEditing(null)}
       />
     ) : null
+  const whenQs = questions.filter((q): q is Extract<Question, { kind: 'when' }> => q.kind === 'when')
   const whenPiece =
-    question?.kind === 'when'
+    whenQs.length > 0
       ? {
           mark: 'ask' as const,
-          body: asked(
-            question.words,
+          body: (
             <>
-              <span className={styles['pick']} role="group" aria-labelledby={`${id}-q`}>
-                {question.choices.map((choice) => (
-                  <button key={choice.label} type="button" className={styles['choice']} onClick={() => choose(choice.set)}>
-                    {choice.label}
-                  </button>
-                ))}
-                {question.field === 'at' ? (
-                  <button type="button" className={styles['choice']} aria-expanded={editing === 'when'} onClick={() => open('when')}>
-                    Another time
-                  </button>
-                ) : null}
-              </span>
-              {picker}
-            </>,
+              {whenQs.map((q) => (
+                <span key={q.field} className={styles['piece']}>
+                  {asked(
+                    q.words,
+                    <>
+                      <span className={styles['pick']} role="group" aria-labelledby={`${id}-q-${q.field}`}>
+                        {q.choices.map((choice) => (
+                          <button key={choice.label} type="button" className={styles['choice']} onClick={() => choose(choice.set)}>
+                            {choice.label}
+                          </button>
+                        ))}
+                        {q.field === 'at' ? (
+                          <button type="button" className={styles['link']} aria-expanded={editing === 'when'} onClick={() => open('when')}>
+                            Another time
+                          </button>
+                        ) : null}
+                      </span>
+                      {q.field === 'at' ? picker : null}
+                    </>,
+                    `q-${q.field}`,
+                  )}
+                </span>
+              ))}
+            </>
           ),
         }
       : {
@@ -709,7 +760,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
           body: (
             <>
               <span>{form.when.often === 'manual' ? timeText : `${timeText ?? ''}, ${teamTime()}`}</span>
-              <button type="button" className={styles['link']} aria-expanded={editing === 'when'} onClick={() => open('when')}>
+              <button type="button" className={styles['link']} onClick={reopenWhen}>
                 Change<span className="visually-hidden"> when it runs</span>
               </button>
               {picker}
@@ -721,12 +772,46 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
     focusNext.current = true
     edit((before) => chooseProject(before, key))
   }
+  // Change puts the row's buttons back, with nothing guessed: the schedule, the project and the repository are asked again.
+  function reopenWhen() {
+    focusNext.current = true
+    setEditing(null)
+    edit((before) => ({ ...before, when: { often: '', day: '', at: '', filledFrom: null } }))
+  }
+  const reopenProject = () => {
+    focusNext.current = true
+    edit((before) => clearProject(before))
+  }
+  const reopenRepo = () => {
+    focusNext.current = true
+    edit((before) => chooseRepo(before, ''))
+  }
+  const chooseGithub = (repo: string) => {
+    focusNext.current = true
+    edit((before) => chooseRepo(before, repo))
+  }
+  const projectPicks = (choices: readonly string[]): readonly KeyPick[] => choices.map((key) => ({ key, label: key }))
 
   const rowPiece = (row: Row, index: number): { readonly mark: Mark; readonly body: ReactNode } => {
-    if (row.state === 'missing' && question?.kind === 'project' && question.index === index)
-      return { mark: 'ask', body: asked(question.words, <ProjectAsk labelId={`${id}-q`} choices={question.choices} onChoose={chooseJira} />) }
-    if (row.state === 'missing')
-      return askedRow(question, index) ? { mark: 'ask', body: asked(question.words, <>{chipOf(row, index)}{editorOf(index)}</>) } : { mark: 'later', body: <span className="muted">{ASKED_NEXT}</span> }
+    const project = questions.find((q): q is Extract<Question, { kind: 'project' }> => q.kind === 'project' && q.index === index)
+    if (row.state === 'missing' && project)
+      return { mark: 'ask', body: asked(project.words, <KeyAsk labelId={`${id}-q-project`} kind="jira_project" picks={projectPicks(project.choices)} other="Another project" boxLabel={PROJECT_BOX} onChoose={chooseJira} />, 'q-project') }
+    if (row.state === 'edited' && row.kind === 'where' && form.typed[JIRA_CHOICE] !== undefined)
+      return {
+        mark: 'ok',
+        body: (
+          <>
+            <span>{`Create 1 Jira ticket in ${form.typed[JIRA_CHOICE] ?? ''}`}</span>
+            <button type="button" className={styles['link']} onClick={reopenProject}>
+              Change<span className="visually-hidden"> the Jira project</span>
+            </button>
+          </>
+        ),
+      }
+    if (row.state === 'missing') {
+      const row_ = askedRow(index)
+      return row_ ? { mark: 'ask', body: asked(row_.words, <>{chipOf(row, index)}{editorOf(index)}</>, `q-row-${String(index)}`) } : { mark: 'later', body: <span className="muted">{ASKED_NEXT}</span> }
+    }
     const note = noteOf(row)
     return {
       mark: row.state === 'cant_do' ? 'no' : row.state === 'checking' ? 'later' : 'ok',
@@ -752,16 +837,19 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const dayPieces = form.marked
     .filter((part) => part.reason === 'how_many_days')
     .map((part) => ({
-      mark: question?.kind === 'days' ? ('ask' as const) : ('later' as const),
+      mark: questions.some((q) => q.kind === 'days') ? ('ask' as const) : ('later' as const),
       body:
-        question?.kind === 'days' ? (
+        questions.some((q) => q.kind === 'days') ? (
           asked(
             ASK_DAYS,
-            firstLook >= 0 ? (
+            <>
+              <span className={styles['pnote']}>{`“${part.text}”`}</span>
+              {firstLook >= 0 ? (
               <button type="button" className={styles['choice']} onClick={() => open(firstLook)}>
                 Change which tickets
               </button>
-            ) : null,
+            ) : null}
+            </>,
           )
         ) : (
           <span className="muted">{`“${part.text}”: ${ASKED_NEXT.toLowerCase()}`}</span>
@@ -771,13 +859,31 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const inputPiece = (agent: PlanAgent, input: PlanAgent['inputs'][number]): { readonly mark: Mark; readonly body: ReactNode } => {
     const fieldId = `${id}-value-${String(agent.index)}-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
     const key = valueKey(agent.index, input.name)
+    const key_ = key
     const value = valueOf(form, agent, input.name)
     const problem = valueProblem(input.kind, value)
     const said = shown || value !== '' ? problem : null
-    const now = question?.kind === 'input' && question.agent === agent.index && question.input === input.name ? question : null
+    const now = questions.find((q): q is Extract<Question, { kind: 'input' }> => q.kind === 'input' && q.agent === agent.index && q.input === input.name) ?? null
     if (problem !== null && now === null) return { mark: 'later', body: <span className="muted">{`${input.name}: ${ASKED_NEXT.toLowerCase()}`}</span> }
-    if (now?.words !== undefined && input.kind === 'jira_project')
-      return { mark: 'ask', body: asked(now.words, <ProjectAsk labelId={`${id}-q`} choices={now.choices ?? []} onChoose={(key) => { focusNext.current = true; edit((before) => ({ ...before, typed: { ...before.typed, [valueKey(agent.index, input.name)]: key } })) }} />) }
+    if (now !== null && input.kind === 'jira_project')
+      return {
+        mark: 'ask',
+        body: asked(
+          now.words,
+          <KeyAsk
+            labelId={`${id}-q-input`}
+            kind="jira_project"
+            picks={projectPicks(now.choices ?? [])}
+            other="Another project"
+            boxLabel={PROJECT_BOX}
+            onChoose={(key) => {
+              focusNext.current = true
+              edit((before) => ({ ...before, typed: { ...before.typed, [key_]: key } }))
+            }}
+          />,
+          'q-input',
+        ),
+      }
     const field = (
       <>
         <label className={styles['valueLabel']} htmlFor={fieldId}>
@@ -808,8 +914,50 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
   const inputPieces = (part: PartKey) =>
     plan?.kind === 'agents' ? plan.agents.flatMap((agent) => agent.inputs.filter((input) => inputPart(input.kind) === part).map((input) => inputPiece(agent, input))) : []
 
+  const repoQuestion = questions.find((q): q is Extract<Question, { kind: 'repo' }> => q.kind === 'repo')
+  const chosenRepo = effectiveRepo(form, matches)
+  const repoPiece: { readonly mark: Mark; readonly body: ReactNode }[] =
+    software === null
+      ? []
+      : repoQuestion
+        ? [
+            repoQuestion.checking
+              ? { mark: 'ask', body: <span className="muted">Looking for the repository on GitHub…</span> }
+              : {
+                  mark: 'ask',
+                  body: asked(
+                    repoQuestion.words,
+                    <KeyAsk
+                      labelId={`${id}-q-repo`}
+                      kind="github_repo"
+                      picks={repoQuestion.choices.map((one) => ({ key: one.repo, label: one.what === '' ? one.repo : `${one.repo} ${one.what}` }))}
+                      other="Another repository"
+                      boxLabel="Repository, as owner/name"
+                      hint={REPO_HINT}
+                      onChoose={chooseGithub}
+                    />,
+                    'q-repo',
+                  ),
+                },
+          ]
+        : chosenRepo !== null
+          ? [
+              {
+                mark: 'ok',
+                body: (
+                  <>
+                    <span>{chosenRepo}</span>
+                    {form.typed[REPO_FOUND] === '1' || (form.typed[REPO_CHOICE] === undefined && matches.length === 1) ? <span className={styles['pnote']}>Found on GitHub</span> : null}
+                    <button type="button" className={styles['link']} onClick={reopenRepo}>
+                      Change<span className="visually-hidden"> the repository</span>
+                    </button>
+                  </>
+                ),
+              },
+            ]
+          : []
   const parts: Part[] = [
-    ...keyed('Watch', [...rowPieces('Watch'), ...dayPieces, ...inputPieces('Watch'), ...(youRun ? [{ mark: 'ok' as const, body: <span className={styles['pnote']}>You run {youRun}</span> }] : [])]),
+    ...keyed('Watch', [...rowPieces('Watch'), ...repoPiece, ...dayPieces, ...inputPieces('Watch'), ...(youRun ? [{ mark: 'ok' as const, body: <span className={styles['pnote']}>You run {youRun}</span> }] : [])]),
     ...keyed('When', [whenPiece]),
     ...keyed('Then', [...rowPieces('Then'), ...inputPieces('Then'), ...(writes === false ? [] : [{ mark: 'ok' as const, body: <span className={styles['after']}>{EACH_TICKET_WAITS}</span> }])]),
     ...crosses,

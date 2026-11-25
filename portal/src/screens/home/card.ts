@@ -234,13 +234,60 @@ export const JIRA_CHOICE = 'jira_project'
 
 export function valueOf(form: Form, agent: PlanAgent, input: string): string {
   const kind = agent.inputs.find((one) => one.name === input)?.kind
-  return form.typed[valueKey(agent.index, input)] ?? (kind === 'jira_project' ? form.typed[JIRA_CHOICE] : undefined) ?? agent.found[input] ?? ''
+  const own = form.typed[valueKey(agent.index, input)]
+  const picked = kind === 'jira_project' ? form.typed[JIRA_CHOICE] : kind === 'github_repo' ? form.typed[REPO_CHOICE] : undefined
+  return own ?? (picked !== undefined && picked !== '' ? picked : undefined) ?? agent.found[input] ?? ''
+}
+
+/** The repository picked on the card, or chosen for them by the finder's one clear match. An empty value means Change cleared it. */
+export const REPO_CHOICE = 'github_repo'
+/** '1' when the software finder filled the repository, so the row can say where it was found. */
+export const REPO_FOUND = 'github_repo_found'
+
+/** One project the finder offered for a software's name: where it lives, and what it is. */
+export interface RepoChoice {
+  readonly repo: string
+  readonly what: string
+}
+
+/** What the finder has said about the card's software so far. */
+export type RepoFind = { readonly state: 'checking' } | { readonly state: 'none' } | { readonly state: 'found'; readonly matches: readonly RepoChoice[] }
+
+const RELEASES_OF = /^(?:new\s+)?(?:releases?|versions?)\s+(?:of|for)\s+(.+?)\s*$/i
+
+/** The software the card watches by its plain name, such as FastAPI, when its words hold no owner/name. Null when the card names none. */
+export function softwareOf(form: Form): string | null {
+  const said = form.rows.find((row) => row.kind === 'look_for' && row.state !== 'missing' && row.state !== 'cant_do')?.text ?? ''
+  const name = RELEASES_OF.exec(said)?.[1]
+  return name === undefined || name.includes('/') || name === '' ? null : name
+}
+
+/** The repository the card holds: the one picked, else the one the rows name, else the finder's one clear match. Null while it is still to choose. */
+export function effectiveRepo(form: Form, matches: readonly RepoChoice[] = []): string | null {
+  const typed = form.typed[REPO_CHOICE]
+  if (typed !== undefined) return typed === '' ? null : typed
+  if (softwareOf(form) === null) return null
+  return matches.length === 1 ? (matches[0]?.repo ?? null) : null
+}
+
+/** Whether the card watches software by name and no repository is chosen yet. The finder's one clear match fills it as soon as it answers. */
+export function repoMissing(form: Form): boolean {
+  const typed = form.typed[REPO_CHOICE]
+  return softwareOf(form) !== null && (typed === undefined || typed === '')
+}
+
+/** A repository picked, or found: it is the one the agent reads. */
+export function chooseRepo(form: Form, repo: string, found = false): Form {
+  const typed: Record<string, string> = { ...form.typed, [REPO_CHOICE]: repo }
+  if (found) typed[REPO_FOUND] = '1'
+  else delete typed[REPO_FOUND]
+  return { ...form, typed }
 }
 
 // Jira's own shape (ADR 0035): a capital letter, then capital letters, digits or underscores.
 const PROJECT = /^[A-Z][A-Z0-9_]{1,254}$/
 
-function normalised(kind: InputKind, value: string): string {
+export function normalised(kind: InputKind, value: string): string {
   const text = value.trim()
   if (kind === 'github_repo') return repoOf(text)
   return kind === 'jira_project' ? text.toUpperCase() : text
@@ -407,6 +454,8 @@ export type Question =
   | { readonly kind: 'input'; readonly agent: number; readonly input: string; readonly words: string; readonly choices?: readonly string[] }
   /** Which Jira project the ticket goes in, asked in place of where the result goes. One click on a project answers it. */
   | { readonly kind: 'project'; readonly index: number; readonly words: string; readonly choices: readonly string[] }
+  /** Which repository to watch, asked in the Watch row from the start. `checking` while the software finder works. */
+  | { readonly kind: 'repo'; readonly words: string; readonly choices: readonly RepoChoice[]; readonly checking: boolean }
 
 const OFTEN_CHOICES: readonly WhenChoice[] = (Object.entries(OFTEN_NAMES) as [Exclude<Often, ''>, string][]).map(([often, label]) => ({ label, set: { often } }))
 const DAY_CHOICES: readonly WhenChoice[] = DAY_NAMES.map((day) => ({ label: DAY_WORD(day), set: { day } }))
@@ -419,7 +468,11 @@ const ASK_ROW: Readonly<Record<RowKind, string>> = {
 }
 /** What the Then part says about a write: who has to say yes, and where. */
 export const EACH_TICKET_WAITS = 'Each ticket waits for an Approver’s yes in Teams.'
-export const ASK_PROJECT = 'Which Jira project should the ticket go in?'
+export const ASK_PROJECT = 'Create 1 Jira ticket in which project?'
+/** The label of the box a key is typed in, after Another project. */
+export const PROJECT_BOX = 'Which Jira project should the ticket go in?'
+export const ASK_REPO = 'Which repository should I watch?'
+export const REPO_HINT = 'The public repository to watch, as owner/name.'
 export const ASK_DAYS = 'Your words don’t say how many days. Change which tickets it finds to say.'
 
 function clashQuestion(form: Form, reason: PartReason, field: WhenField): Question | null {
@@ -443,7 +496,7 @@ function timeQuestion(form: Form): Question {
   const hour = bareHour(form.rows.find((row) => row.kind === 'schedule')?.text || form.text)
   const times = hour === null ? TIMES : hourChoices(hour)
   const choices = times.map((at) => ({ label: clockWords(at), set: { at } }))
-  return { kind: 'when', field: 'at', words: hour === null ? timeWords(form.when) : `At ${orList(choices.map((choice) => choice.label))}?`, choices }
+  return { kind: 'when', field: 'at', words: hour === null ? 'At what time?' : `At ${orList(choices.map((choice) => choice.label))}?`, choices }
 }
 
 /** The name of another workflow like one they have: the next number after it, so no two share a name. */
@@ -476,6 +529,14 @@ function makesTickets(form: Form): boolean {
   return TICKET_WORDS.test([...textsOf(form.rows, 'do'), form.text].join(' '))
 }
 
+/** Change on a picked project: the part about where the result goes is asked again, and nothing is guessed. */
+export function clearProject(form: Form): Form {
+  const rows = form.rows.map((row): Row => (row.kind === 'where' && row.state === 'edited' && row.planner?.state === 'missing' ? { kind: 'where', text: '', state: 'missing', note: null, planner: null } : row))
+  const typed = { ...form.typed }
+  delete typed[JIRA_CHOICE]
+  return { ...form, rows, typed }
+}
+
 /** A project picked from the buttons or typed: it fills the part about where the result goes, and the agent's Jira project. */
 export function chooseProject(form: Form, key: string): Form {
   const rows = form.rows.map((row): Row => {
@@ -486,24 +547,38 @@ export function chooseProject(form: Form, key: string): Form {
 }
 
 /**
- * The one question to ask now, in the spec’s order: how often, the day of a weekly run, the time, which tickets, the Jira
- * project, then what it does. Two days or two times from the runtime ask which one, and a bare hour asks morning or evening.
- * Null when nothing is left to ask. What the footer counts still comes from setupLeft.
+ * Every open question, from the start, each for its own row (25 Nov): the repository, then how often, the day of a weekly run and
+ * the time, then which tickets, the Jira project and what it does. Two days or two times from the runtime ask which one, a bare
+ * hour asks morning or evening, and Only when I run it needs no time. A time is never guessed. Empty when nothing is left to ask.
+ * What the footer counts still comes from setupLeft.
  */
-export function nextQuestion(form: Form, plan: PlanView | null, projects: readonly string[] = []): Question | null {
+export function questionsOf(form: Form, plan: PlanView | null, projects: readonly string[] = [], repos: RepoFind | null = null): Question[] {
   const { often, day } = form.when
-  if (often === '') return clashQuestion(form, 'one_frequency', 'often') ?? { kind: 'when', field: 'often', words: 'How often?', choices: OFTEN_CHOICES }
-  if (often === 'week' && day === '') return clashQuestion(form, 'one_day', 'day') ?? { kind: 'when', field: 'day', words: 'Which day?', choices: DAY_CHOICES }
-  if (whenProblems(form.when).at !== undefined) return clashQuestion(form, 'one_time', 'at') ?? timeQuestion(form)
-  return (
-    rowQuestion(form, 'look_for', projects) ??
-    (form.marked.some((part) => part.reason === 'how_many_days') ? { kind: 'days', words: ASK_DAYS } : null) ??
-    inputQuestion(form, plan, true, projects) ??
-    rowQuestion(form, 'do', projects) ??
-    rowQuestion(form, 'where', projects) ??
-    inputQuestion(form, plan, false, projects)
-  )
+  const asks: Question[] = []
+  const matches = repos?.state === 'found' ? repos.matches : []
+  if (softwareOf(form) !== null && effectiveRepo(form, matches) === null && repos !== null) asks.push({ kind: 'repo', words: ASK_REPO, choices: matches, checking: repos.state === 'checking' })
+  if (often === '') {
+    const clash = clashQuestion(form, 'one_frequency', 'often')
+    asks.push(clash ?? { kind: 'when', field: 'often', words: 'How often?', choices: OFTEN_CHOICES })
+  }
+  if (often === 'week' && day === '') asks.push(clashQuestion(form, 'one_day', 'day') ?? { kind: 'when', field: 'day', words: 'Which day?', choices: DAY_CHOICES })
+  if (whenProblems(form.when).at !== undefined) asks.push(clashQuestion(form, 'one_time', 'at') ?? timeQuestion(form))
+  const rest = [
+    rowQuestion(form, 'look_for', projects),
+    form.marked.some((part) => part.reason === 'how_many_days') ? ({ kind: 'days', words: ASK_DAYS } as Question) : null,
+    inputQuestion(form, plan, true, projects),
+    rowQuestion(form, 'do', projects),
+    rowQuestion(form, 'where', projects),
+    inputQuestion(form, plan, false, projects),
+  ]
+  return [...asks, ...rest.filter((one): one is Question => one !== null)]
 }
+
+/** The first open question. */
+export const nextQuestion = (form: Form, plan: PlanView | null, projects: readonly string[] = [], repos: RepoFind | null = null): Question | null => questionsOf(form, plan, projects, repos)[0] ?? null
+
+/** How many parts of the card are open: what the lead line and the footer count. */
+export const openParts = (form: Form): number => setupLeft(form, null).choices.filter(isQuestion).length
 
 export const answerWhen = (form: Form, set: Partial<When>): Form => ({ ...form, when: { ...form.when, ...set } })
 
@@ -777,6 +852,7 @@ const LEFT_CHECKING = 'my check of your new words'
 const LEFT_WHEN = 'when it runs'
 const LEFT_PLAN = 'the Planner to choose the agents'
 const LEFT_DAYS = 'how many days'
+const LEFT_REPO = 'the GitHub repository'
 
 function leftOfRow(row: Row): string | null {
   if (row.state === 'missing') return LEFT_NAME[row.kind]
@@ -808,6 +884,7 @@ function choicesLeft(form: Form, plan: PlanView | null): string[] {
     if (words !== null && !left.includes(words)) left.push(words)
   }
   for (const row of form.rows) if (row.kind !== 'schedule') add(leftOfRow(row))
+  if (repoMissing(form)) add(LEFT_REPO)
   if (Object.keys(whenProblems(form.when)).length > 0) add(LEFT_WHEN)
   if (form.marked.some((part) => part.reason === 'how_many_days')) add(LEFT_DAYS)
   if (cardBlockers(form.rows).length > 0) return left
@@ -865,10 +942,10 @@ export function leftWords({ choices }: Left): string {
 /** The one main button: Turn on. A part it can't do is crossed on the card, so the button needn't change its name. */
 export const setUpWords = (): string => 'Turn on'
 
-/** “Answer 1 question first”, shown in place of the main button while a question is open. Null when none is. */
+/** “Pick 1 more to finish”, shown in place of the main button while a question is open. Null when none is. */
 export function answerFirst({ choices }: Left): string | null {
   const asks = choices.filter(isQuestion).length
-  return asks === 0 ? null : `Answer ${String(asks)} question${asks === 1 ? '' : 's'} first`
+  return asks === 0 ? null : `Pick ${String(asks)} more to finish`
 }
 
 /** Resume reopens the card on Home, where the draft's id sits in the address. */

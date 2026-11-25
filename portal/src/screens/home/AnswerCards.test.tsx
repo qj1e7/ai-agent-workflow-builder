@@ -325,7 +325,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     expect(text(html)).not.toContain('What I can do instead')
     expect(text(cardOf(html))).toContain('Can’t do: “Colour them by team” I didn’t follow this part.')
     expect(text(html)).toMatch(/Pick \d more to finish/)
-    expect(sayOf(reply)).toMatch(/^Here’s what I understood\. Pick the (\d+ missing parts|missing part)\.$/)
+    expect(sayOf(reply)).toMatch(/^Here’s what I understood\.( Pick the (\d+ missing parts|missing part)\.)?$/)
     expect(draw(reply, { leftovers: true })).toBe('')
   })
 

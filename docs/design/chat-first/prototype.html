@@ -2510,7 +2510,7 @@ function partsRows(d) {
   const then = (o) => `${asking ? thenSelect(d) : THEN[d.then]}${o}`;
   const yes = d.then === 'jira' ? `<span class="s">${YES_LINE}</span>` : '';
   return [
-    d.soft ? okRow('Watch', `${S.name} on ${srcOf(S)}`, W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.', asking ? 'soft' : '') : of('Watch').length ? askRow('Watch', of('Watch'), d) : '',
+    d.soft ? okRow('Watch', `${S.name} on ${srcOf(S)}`, `Found on GitHub. ${W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.'}`, asking ? 'soft' : '') : of('Watch').length ? askRow('Watch', of('Watch'), d) : '',
     whenDone ? okRow('When', long(d.sched), '', asking ? 'when' : '') : of('When').length ? askRow('When', of('When'), d, chosen) : '',
     d.then === 'jira' && of('Then').length
       ? askRow('Then', of('Then'), d, `<span>${then('')}</span>`, yes)
@@ -2656,7 +2656,7 @@ async function setupDraft(c) {
     bstat('Safety checker is checking the write…');
     const note = $('[data-p-note]', c);
     note.hidden = false;
-    note.innerHTML = `${fw('safety', 20, 'working')}<span>Added a yes before the ticket.</span>`;
+    note.innerHTML = `${fw('safety', 20, 'working')}<span>I added an approval step. Before each ticket is made, an Approver must say yes in Teams.</span>`;
     await wait(450);
     nd('yes').classList.remove('off');
     nd('yes').classList.add('added');
@@ -3097,7 +3097,7 @@ function wfFacts(id, ver) {
     rwp: [['Reads', `GitHub, ${c(S.repo)}`, 'Its newest release, with the platform’s GitHub key.'], jira ? ['Writes', `Jira project ${c('MOCK')}`, `1 upgrade ticket${yes ? ', after a yes' : ''}.`] : ['Shows', 'Here, in the chat', 'One line when there’s a new release.', 'in the app']],
     accept: [], accepted: null, answer: 0,
     refused: jira && !yes ? [['“Make approved changes” has no yes before it', 'Our platform refuses the write, so the next run stops before the ticket. Put the yes back to fix it.']] : [],
-    fixed: [...(jira ? ['Added a yes before the ticket.'] : []), 'Set the team’s time zone, Singapore.', 'Added our error workflow, so a stopped run shows here.'],
+    fixed: [...(jira ? ['I added an approval step. Before each ticket is made, an Approver must say yes in Teams.'] : []), 'Set the team’s time zone, Singapore.', 'Added our error workflow, so a stopped run shows here.'],
     passed: ['Every block loads in our n8n.', 'Reads only places the team allows.', 'No key is typed into a block.', 'Runs no code.'],
     who: jira ? [['Make approved changes', yes ? 'Waits for a yes in Teams on each run, from any Approver but the person who started the run.' : 'Can’t write. There’s no yes before it, so our platform refuses the write.', yes ? 'yes' : 'no']] : [],
     sets: [['Run time', long(sched), `Set by ${by.by}, ${by.on}`], ['Software', S.name, 'From Alice’s words'], ...(jira ? [['Jira project', 'MOCK', 'The team’s allowed project'], ['Who says yes', 'Any Approver but the person who started the run', 'The team’s rule']] : [])].map(([label, value, src]) => ({ label, value, mark: 'set', src })),

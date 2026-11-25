@@ -4,7 +4,8 @@
 The layout is code, not a model call: the model chooses the cards and their values (ADR 0023),
 and this places the blocks. Block names are the sketch's words, so the run line, the build
 canvas and n8n read the same. A layout leaves out the yes. The safety checker puts it in front
-of the write, which is what the build panel shows ("Added a yes before the ticket.").
+of the write, which is what the build panel shows ("I added an approval step. Before each
+ticket is made, an Approver must say yes in Teams.").
 
 A layout may also place one of n8n's own blocks that the class file classes to read or post a
 notice, with the key the platform made for it (ADR 0045). The Planner proposes none yet.

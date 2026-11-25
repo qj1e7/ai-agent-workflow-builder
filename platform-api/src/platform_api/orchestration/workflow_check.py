@@ -1231,7 +1231,10 @@ FLAG_RULES: Mapping[RuleId, FlagRow] = {
         "Writes with no yes before it",
         "Our platform refuses the write, so the run stops before it.",
         "Every write waits for a yes.",
-        FixedForYou("Added a yes before each write."),
+        FixedForYou(
+            "I added an approval step. Before each change is made, "
+            "an Approver must say yes in Teams."
+        ),
     ),
     "second_yes": FlagRow(
         "Asks for a yes twice on one path",

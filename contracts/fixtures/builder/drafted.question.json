@@ -240,7 +240,7 @@
       },
       {
         "rule": "no_yes_before_write",
-        "words": "Added a yes before each write."
+        "words": "I added an approval step. Before each change is made, an Approver must say yes in Teams."
       }
     ],
     "passed": [

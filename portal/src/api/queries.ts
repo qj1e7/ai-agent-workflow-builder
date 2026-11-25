@@ -41,6 +41,7 @@ export const keys = {
   made: (user: string, press: string) => ['set-up-made', user, press] as const,
   templates: () => ['templates'] as const,
   tools: () => ['tools'] as const,
+  softwareFind: (user: string, name: string) => ['software-find', user, name] as const,
   agentCards: (user: string) => ['agent-cards', user] as const,
   approval: (user: string, approvalId: string) => ['approval', user, approvalId] as const,
   troubleshoot: (user: string, runId: string, attempt: number) => ['troubleshoot', user, runId, attempt] as const,
@@ -464,6 +465,22 @@ export function useFindSoftware() {
   const client = useApiClient()
   return useMutation({
     mutationFn: async (name: string) => unwrap(await client.POST('/api/v1/watchlist/find', { body: { name } })),
+  })
+}
+
+/**
+ * What the software finder says a plain name could mean, so the set-up card never asks the person to look a repository up. Only an
+ * Operator may ask, and a name asked once is kept for the visit.
+ */
+export function useSoftwareFind(name: string | null) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.softwareFind(user, name ?? ''),
+    queryFn: async () => unwrap(await client.POST('/api/v1/watchlist/find', { body: { name: name ?? '' } })),
+    enabled: name !== null && name !== '',
+    staleTime: Infinity,
+    retry: false,
   })
 }
 

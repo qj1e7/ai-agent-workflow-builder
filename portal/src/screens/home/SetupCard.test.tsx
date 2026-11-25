@@ -250,7 +250,7 @@ describe('the repository row of the set-up card', () => {
     const watch = partText(html)
     expect(watch).toContain('fastapi/fastapi')
     expect(watch).toContain('Found on GitHub')
-    expect(buttons(html)).toContain('Change')
+    expect(buttons(html)).toContain('Change the repository')
     expect(html.match(/data-mark="ask"/g)).toBeNull()
   })
 
