@@ -6,6 +6,7 @@ import pytest
 
 from platform_api.app import create_app
 from platform_api.builder import TAG_PATTERN, Watchlist
+from platform_api.builder.models import ProjectGuess
 from platform_api.db import Database
 from platform_api.orchestration import (
     FindSoftwareResult,
@@ -105,6 +106,20 @@ async def test_a_search_match_keeps_its_mark_and_its_stars(
         15854,
         "encode/httpx",
     )
+
+
+def test_a_guess_never_has_fewer_than_no_stars():
+    with pytest.raises(ValueError):
+        ProjectGuess(
+            repo="a/b",
+            what="x",
+            why="",
+            releases="none",
+            newest=None,
+            already_listed=None,
+            found_by="github_search",
+            stars=-1,
+        )
 
 
 def test_a_match_from_an_older_runtime_reads_as_from_the_reviewed_list():

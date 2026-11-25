@@ -617,10 +617,43 @@ def test_when_search_fails_nothing_is_offered_and_the_answer_says_why(
     assert result.message.startswith(says)
 
 
-def test_a_query_github_cannot_take_is_answered_as_not_found():
-    result = find(FakeProjectSource({}, search_error=SourceRejected(422)), "Widget")
+def test_a_query_github_refuses_gets_its_own_plain_words():
+    result = not_checked(find(FakeProjectSource({}, search_error=SourceRejected(422)), "Widget"))
+    assert result.message == (
+        "GitHub couldn't search for Widget. Choose where it's published and type its name there."
+    )
+
+
+@pytest.mark.parametrize(
+    "refusal", [SourceRejected(451), SourceRejected(403)], ids=["451", "403-not-a-limit"]
+)
+def test_a_hit_github_refuses_for_another_reason_is_skipped_and_the_search_goes_on(
+    refusal: SourceRejected,
+):
+    blocked = FoundRepo("acme/blocked", "Blocked", 9)
+    source = FakeProjectSource(
+        {"encode/httpx": [Release("0.28.1")]},
+        errors={"acme/blocked": refusal},
+        hits=[blocked, HTTPX],
+    )
+    assert [m.repo for m in found(find(source, "httpx")).matches] == ["encode/httpx"]
+
+
+def test_a_name_longer_than_any_request_is_turned_down_before_it_is_read():
+    source = FakeProjectSource({})
+    result = find(source, "a" * 100_000)
     assert isinstance(result, SoftwareNotKnown)
-    assert result.message.startswith("I couldn't find Widget on our list or by searching GitHub.")
+    assert result.message == (
+        "That name is too long to look up. Choose where it's published and type its name there."
+    )
+    assert (source.searched, source.asked) == ([], [])
+
+
+def test_ansible_is_named_as_ansible_core_which_its_repository_holds():
+    for typed in ["Ansible", "ansible-core"]:
+        [project] = known_for(typed)
+        assert project.repo == "ansible/ansible"
+        assert project.what.startswith("ansible-core")
 
 
 def test_the_route_marks_a_search_match_and_gives_its_stars():

@@ -221,6 +221,17 @@ def test_search_reads_each_hits_name_description_and_stars_in_githubs_order():
     ]
 
 
+def test_search_keeps_no_more_hits_than_it_asked_for():
+    body = {"items": [hit(f"o/r{i}") for i in range(7)]}
+    assert [found.repo for found in source(answering(200, body)).search("widget", 5)] == [
+        "o/r0",
+        "o/r1",
+        "o/r2",
+        "o/r3",
+        "o/r4",
+    ]
+
+
 def test_a_search_github_limits_is_rejected_as_limited():
     headers = {"x-ratelimit-remaining": "0"}
     transport = httpx.MockTransport(lambda r: httpx.Response(403, json={}, headers=headers))
