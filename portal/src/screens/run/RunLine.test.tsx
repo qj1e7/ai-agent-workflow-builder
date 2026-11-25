@@ -298,7 +298,7 @@ describe('the words on the line', () => {
     expect(settledOf(declined, nameOf, SAME_DAY, QUICK)).toEqual({ tone: 'off', text: 'Ended at 10:18 · Bob declined: wrong version. Nothing was written.' })
     expect(said({ ...declined, declineReason: 'FastAPI 0.121 breaks our build.' })).toBe('Ended at 10:18 · Bob declined: FastAPI 0.121 breaks our build. Nothing was written.')
     expect(said({ ...declined, declineReason: null })).toBe('Ended at 10:18 · Bob declined. Nothing was written.')
-    expect(said({ ...declined, approvedBy: ['carol'] })).toBe('Ended at 10:18 · Carol said yes, then Bob declined: wrong version. Nothing was written.')
+    expect(said({ ...declined, approvedBy: ['carol'] })).toBe('Ended at 10:18 · Carol approved, then Bob declined: wrong version. Nothing was written.')
   })
 
   it('leave a run that is still going, or stopped, unsettled', () => {
@@ -358,7 +358,6 @@ describe('the Step by step', () => {
       { kind: 'declined', seq: 3, at: at('2026-10-27T16:01:00Z'), record: { by: 'bob', approvedBy: [], reason: null } },
     ])
     expect([...html.matchAll(/<time[^>]*dateTime="([^"]+)"[^>]*>([^<]*)<\/time>/gi)].map((match) => `${match[1] ?? ''} ${match[2] ?? ''}`)).toEqual([
-      '2026-10-27T00:00:00.000Z 8:00:00',
       '2026-10-27T15:59:00.000Z 23:59:00',
       '2026-10-27T16:01:00.000Z Wed 28 Oct, 0:01:00',
     ])

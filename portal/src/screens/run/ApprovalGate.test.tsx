@@ -14,7 +14,7 @@ import { declineReasons, notCheckedWords, partyOf, stepsAfter } from './decision
 import type { LiveRun } from './liveRun'
 import { AskBox } from './QuestionThread'
 import { ANSWER_HELP, NO_QUESTIONS, NOT_ANSWERED, STILL_WAITING, askRefusalWords, sentWords } from './questions'
-import { declinedSoFarWords, statusWords } from './RunPage'
+import { statusWords } from './RunPage'
 import { emptyModel, type Phase } from './runModel'
 import { factsOf, lockWords, withCurrentNames, type Party } from './words'
 
@@ -55,12 +55,11 @@ const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;'
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 const pill = (html: string) => text(html.match(/<span[^>]*data-approval-pill[^>]*>([\s\S]*?)<\/span>/)?.[1] ?? '')
 
-function draw(approval: ApprovalView, { page = false, me = 'bob', decision = idle, notChecked = [], facts = null, next = null }: Partial<Pick<ApprovalGateProps, 'decision' | 'notChecked' | 'facts' | 'next'>> & { page?: boolean; me?: string } = {}): string {
+function draw(approval: ApprovalView, { me = 'bob', decision = idle, notChecked = [], facts = null, next = null }: Partial<Pick<ApprovalGateProps, 'decision' | 'notChecked' | 'facts' | 'next'>> & { me?: string } = {}): string {
   return renderToStaticMarkup(
     <MemoryRouter>
       <ApprovalGate
         approval={approval}
-        page={page ? { found: approval.found } : null}
         decision={decision}
         facts={facts}
         notChecked={notChecked}
@@ -115,34 +114,9 @@ describe('the approval, waiting for Bob’s yes', () => {
     expect(html.match(/class="[^"]*primary/g)).toHaveLength(1)
   })
 
-  it('leaves its pill to the run page’s head, so the page shows one pill', () => {
-    expect(pill(draw(BOB, { page: true }))).toBe('')
-    expect(pill(draw(ALICE, { me: 'alice', page: true }))).toBe('')
-  })
-
-  it('in the side panel leaves the AI’s summary and Why you for the page', () => {
+  it('leaves the AI’s summary, Why you and Sent off the request', () => {
     const html = text(draw(BOB))
-    expect(html).not.toContain('Summary by AI')
-    expect(html).not.toContain('Why you')
-  })
-
-  it('on the page adds the AI’s summary, labelled as help and never as the thing approved, after what will be written', () => {
-    const html = text(draw(BOB, { page: true }))
-    expect(html).toContain('Summary by AI. LangGraph has a new release: 1.2.16. Decide on the change above, not this.')
-    expect(html.indexOf('What will be written')).toBeLessThan(html.indexOf('Summary by AI'))
-    expect(html).toContain('Why you No one can approve their own work.')
-  })
-
-  it('shows no AI summary when the agents left none, and still the whole change', () => {
-    const html = text(draw({ ...BOB, found: '' }, { page: true }))
-    expect(html).not.toContain('Summary by AI')
-    expect(html).toContain(TITLE)
-  })
-
-  it('links a ticket key in the AI’s summary only when the request writes to that project', () => {
-    const html = draw({ ...BOB, found: 'MOCK-12 already covers part of this. GPT-4 is not a ticket.' }, { page: true })
-    expect(html).toMatch(/<a[^>]*>MOCK-12<\/a>/)
-    expect(html).not.toMatch(/<a[^>]*>GPT-4<\/a>/)
+    for (const gone of ['Summary by AI', 'Why you', 'Sent']) expect(html).not.toContain(gone)
   })
 
   it('keeps focus on the pressed button while the decision is on its way, and holds the others', () => {
@@ -150,23 +124,6 @@ describe('the approval, waiting for Bob’s yes', () => {
     expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*aria-busy="true"[^>]*>[\s\S]*?Approve/)
     expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*>Decline<\/button>/)
     expect(html).not.toMatch(/<button[^>]*\sdisabled=""/)
-  })
-
-  it('on the page says when the request went to Teams, in the sketch’s words, before why them', () => {
-    expect(text(draw(BOB, { page: true }))).toContain('Sent Today, 10:14, in Teams Why you No one can approve their own work.')
-  })
-
-  it('says nothing of a send before the request is tried, nor in the side panel', () => {
-    const waiting: ApprovalView = { ...BOB, steps: BOB.steps.map((step) => ({ ...step, post: 'waiting', sent_to: [], sent_at: null })) }
-    expect(text(draw(waiting, { page: true }))).not.toMatch(/\bSent\b|Teams/)
-    expect(text(draw(BOB))).not.toMatch(/\bSent\b/)
-  })
-
-  it('says on the page when the request couldn’t be sent to Teams, and still lets them decide', () => {
-    const failed: ApprovalView = { ...BOB, steps: BOB.steps.map((step) => ({ ...step, post: 'failed', sent_to: [], sent_at: null })) }
-    const html = draw(failed, { page: true })
-    expect(text(html)).toContain('Sent Couldn’t send to Teams Why you')
-    expect(buttons(html)).toContain('Approve')
   })
 
   it('says what went wrong as an alert', () => {
@@ -186,26 +143,17 @@ describe('the approval, for someone who can’t say yes', () => {
     expect(text(html)).toContain(words)
   })
 
-  it('names on the page how Alice is tied to the run, once: the foot then only says who it waits for', () => {
-    const html = text(draw(ALICE, { me: 'alice', page: true }))
-    expect(html).toContain(`Why not you ${lockWords('own_work', STARTER)}`)
-    expect(html).not.toContain('Why you No one')
-    expect(html).toMatch(/Waiting for an Approver\.$/)
-    expect(html).not.toContain('You can’t approve your own work.')
-  })
 })
 
 describe('two Approvers, one after the other', () => {
-  it('tells Bob and Alice it is step 1 of 2, and Bob that their yes is the first', () => {
+  it('tells Bob and Alice it is step 1 of 2', () => {
     expect(text(draw(TWO))).toContain('Step 1 of 2. It needs two Approvers, one after the other.')
     expect(text(draw({ ...TWO, you_can_decide: false, why_not: 'own_work' }, { me: 'alice' }))).toContain('Step 1 of 2. It needs two Approvers, one after the other.')
-    expect(text(draw(TWO, { page: true }))).toContain('Why you No one can approve their own work. Your yes is the first of two.')
   })
 
-  it('tells the second Approver who said yes first, and that theirs is the second', () => {
-    const html = text(draw(SECOND, { page: true }))
+  it('tells the second Approver who approved first', () => {
+    const html = text(draw(SECOND))
     expect(html).toContain('Step 2 of 2. Carol approved first.')
-    expect(html).toContain('Why you No one can approve their own work. Your yes is the second of two.')
     expect(html.match(/Carol approved/g), 'who approved first is said once').toHaveLength(1)
     expect(buttons(draw(SECOND))).toEqual(['Ask Alice', 'Approve', 'Decline'])
   })
@@ -300,16 +248,14 @@ describe('what the run didn’t check', () => {
     expect(notCheckedWords([], [], CAPABILITIES)).toEqual([])
   })
 
-  it('sits right after what will be written, in the panel and on the page, for Bob and Alice, and adds no button', () => {
+  it('sits right after what will be written, for Bob and Alice, and adds no button', () => {
     for (const [approval, me] of [
       [BOB, 'bob'],
       [ALICE, 'alice'],
     ] as const) {
-      for (const page of [false, true]) {
-        const html = draw(approval, { me, page, notChecked: SOFTWARE_LINES })
-        expect(text(html)).toContain(`Proposed by the AI workflow builder. Not checked ${SOFTWARE_LINES.join(' ')}`)
-        expect(buttons(html)).toEqual(me === 'bob' ? ['Ask Alice', 'Approve', 'Decline'] : [])
-      }
+      const html = draw(approval, { me, notChecked: SOFTWARE_LINES })
+      expect(text(html)).toContain(`Proposed by the AI workflow builder. Not checked ${SOFTWARE_LINES.join(' ')}`)
+      expect(buttons(html)).toEqual(me === 'bob' ? ['Ask Alice', 'Approve', 'Decline'] : [])
     }
   })
 
@@ -396,14 +342,8 @@ describe('right after this person decides, before the run’s own events say so'
     const model = { ...emptyModel, phase }
     return { shown: model, head: model, connection: { is: 'live' }, loadedUpTo: 0, loaded: true }
   }
-  const declined = { by: 'bob', approvedBy: [], reason: 'Wrong version' }
-
-  it('keeps the declined record on the run page until the run is declined, as approving keeps its words', () => {
-    const waiting = liveAt({ state: 'awaiting_approval' })
-    expect(declinedSoFarWords({ declined }, waiting, nameOf)).toBe('Declined by Bob. Nothing was written. Reason: Wrong version.')
-    expect(declinedSoFarWords({ declined }, liveAt({ state: 'rejected', by: 'bob', step: 0 }), nameOf)).toBeNull()
-    expect(declinedSoFarWords({ declined: null }, waiting, nameOf)).toBeNull()
-    expect(statusWords({ recorded: 'approve' }, liveAt({ state: 'acting' }))).toBe('Approved. The platform is writing now.')
+  it('says nothing of an approval on the page while the run’s own events catch up, since the record and the pill already say it', () => {
+    expect(statusWords(liveAt({ state: 'acting' }))).toBe('')
   })
 
   it('still shows the question thread to the person who decided', () => {

@@ -226,7 +226,7 @@ describe('What happened, in plain steps', () => {
 })
 
 describe('the agents’ own words, for support', () => {
-  const messages = (model: RunModel) => messageRowsOf(model.chat, named).map((row) => `${row.time} ${row.agent ? `${row.agent.display}: ` : ''}${row.text}`)
+  const messages = (model: RunModel) => messageRowsOf(model.chat).map((row) => `${row.time} ${row.agent ? `${row.agent.display}: ` : ''}${row.text}`)
 
   it('gives what each agent said, with its name, in order, and nothing the plain steps already say', () => {
     expect(messages(replay(success))).toEqual([
@@ -238,7 +238,7 @@ describe('the agents’ own words, for support', () => {
 
   it('never repeats the agents’ report as an unlabelled line', () => {
     for (const model of [replay(success), replay(rejected)]) {
-      for (const row of messageRowsOf(model.chat, named)) expect(row.agent, row.text).not.toBeNull()
+      for (const row of messageRowsOf(model.chat)) expect(row.agent, row.text).not.toBeNull()
     }
   })
 

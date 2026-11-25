@@ -77,12 +77,12 @@ export function approvalPill(standing: Standing, canDecide: boolean): Pill {
   }
 }
 
-/** A rule with two Approvers says whose turn it is: "Step 1 of 2…", then "Step 2 of 2. Carol said yes first.". Null for one. */
+/** A rule with two Approvers says whose turn it is: "Step 1 of 2…", then "Step 2 of 2. Carol approved first.". Null for one. */
 export function turnWords(standing: Standing, nameOf: NameOf): string | null {
   if (standing.is !== 'open' || standing.steps < 2) return null
   const at = `Step ${String(standing.step + 1)} of ${String(standing.steps)}.`
   if (standing.step === 0) return `${at} It needs two Approvers, one after the other.`
-  return standing.approvedBy.length > 0 ? `${at} ${andList(standing.approvedBy.map(nameOf))} said yes first.` : at
+  return standing.approvedBy.length > 0 ? `${at} ${andList(standing.approvedBy.map(nameOf))} approved first.` : at
 }
 
 /** Why this person may say yes, and which of two yeses is theirs. Who said yes first is in the turn line, so it isn't said again. */

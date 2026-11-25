@@ -840,3 +840,29 @@ def test_today_and_the_first_day_of_2000_are_accepted(name):
         )
         Room(chat, jira=jira, request=request_with("jira.search")).run()
         assert len(jira.searches) == 1
+
+
+def test_the_read_of_releases_carries_the_day_the_newest_came_out_when_github_says():
+    source = FakeSource(langgraph_tags()[:8])
+    source.releases[0] = Release(tag=source.releases[0].tag, published_at="2026-11-18T08:00:00Z")
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    result = Room(ScriptedChat(script=script), source=source).run()
+    assert isinstance(result, TaskFinished)
+    [read] = [
+        e
+        for e in result.events
+        if e.kind == "agent_step_finished" and e.data.step == "github_read_releases"
+    ]
+    assert read.data.result["newest_published_at"] == "2026-11-18T08:00:00Z"
+
+
+def test_the_read_of_releases_leaves_the_day_out_when_github_gives_none():
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    result = Room(ScriptedChat(script=script)).run()
+    assert isinstance(result, TaskFinished)
+    [read] = [
+        e
+        for e in result.events
+        if e.kind == "agent_step_finished" and e.data.step == "github_read_releases"
+    ]
+    assert "newest_published_at" not in read.data.result

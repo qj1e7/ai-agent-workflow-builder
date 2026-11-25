@@ -1,25 +1,29 @@
+import { useState } from 'react'
 import { ApiError } from '../../api/client'
 import { useSession } from '../../api/context'
 import { useRun } from '../../api/queries'
 import { useNow } from '../../api/ticking'
-import type { ApprovalView, RunView } from '../../api/types'
+import type { RunView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { useChat } from '../home/ChatProvider'
-import { ApprovalGate, NotChecked } from './ApprovalGate'
-import { openStep, partyOf, useDecision, useNotChecked } from './decision'
+import { ApprovalGate } from './ApprovalGate'
+import { partyOf, useDecision, useNotChecked } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { FixSection, useFixLeads } from './FixPanel'
-import { AnswerList, DeclinedNext, StopAnswers, StopNext } from './Outcome'
-import { QuestionThread } from './QuestionThread'
+import { foundLine, runByWords, workingLine, type Tense } from './happened'
+import { History } from './History'
+import { DeclinedNext, StopAnswers, StopNext } from './Outcome'
 import { useQuestions } from './questions'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
-import { declinedSoFarWords, statusWords } from './RunPage'
+import { RunDecision } from './RunDecision'
 import { RunLine } from './RunLine'
 import { RunPill } from './RunPill'
+import { isFinished, type RunModel } from './runModel'
+import { statusWords } from './RunPage'
 import { useRunStory, type RunStory } from './useRunStory'
 import { nextRunOf } from '../workflows/workflow'
-import { declinedNext, declinedNowWords, feedTroubleOf, RUN_PROBLEM } from './words'
+import { declinedNext, declinedNowWords, feedTroubleOf, logRowsOf, messageRowsOf, RUN_PROBLEM, stageWords } from './words'
 import { testAgainOf } from './testAgain'
 import styles from './RunPage.module.css'
 
@@ -61,9 +65,9 @@ function FeedNotReady({ connection, onRetry }: { connection: LiveRun['connection
 type Shows = 'run' | 'approval'
 
 /**
- * A run in the side panel (spec 3.3): its state, its headline and the run line, with a stop's three answers and Retry. A finished
- * run keeps its line with the settled line under it, as the sketch's panel does. Only the chat's card folds. While it waits for a
- * yes the reader may give, it is the approval instead. Someone who can't decide sees the summary, as in the prototype.
+ * A run in the side panel, in the page's shape: the workflow, who ran it and its status, then what was found, what the run wants to
+ * do with the ticket as a small preview, and who decides, with Approve, Decline and Ask for an Approver. A stop keeps its three
+ * answers and Retry. What happened stays folded, with the run line in it.
  */
 export function RunPanel({ id }: { id: string }) {
   return <PanelFor id={id} shows="run" />
@@ -94,14 +98,14 @@ function LiveRunPanel({ run, shows }: { run: RunView; shows: Shows }) {
   return shows === 'approval' ? <ApprovalSummary run={latest} live={live} /> : <RunSummary run={latest} live={live} />
 }
 
-const LOADING_WRITES = (
+const LOADING_APPROVAL = (
   <p className="muted" role="status">
-    Loading what will be written
+    Loading the approval
   </p>
 )
 
-/** What the panel's request needs around it: the decision, its questions, what wasn't checked and what follows a decline. */
-function useRequest(run: RunView, story: RunStory) {
+/** What the panel's request needs around it: the decision, its questions and what follows a decline. */
+function useDeciding(run: RunView, story: RunStory) {
   const { me, nameOf, approval, useCase } = story
   const backToTop = useAfterPanelAction()
   const { say } = useChat()
@@ -111,17 +115,27 @@ function useRequest(run: RunView, story: RunStory) {
     if (recorded.verdict === 'decline') say(declinedNowWords({ reason: recorded.reason ?? null }))
   })
   const questions = useQuestions(approval, nameOf, say)
-  const notChecked = useNotChecked(approval, useCase.data)
   const next = declinedNext({ test: run.test, watchlist: useCase.data?.template === 'software_watchlist' }, nextRunOf(useCase.data), new Date())
-  const gate = (shown: ApprovalView, checked: readonly string[]) => (
+  return { decision, questions, next, party }
+}
+
+/** The request opened from the chat, which shows everything that will be written and what the run did not check. */
+function ApprovalSummary({ run, live }: { run: RunView; live: LiveRun }) {
+  const story = useRunStory(run, live)
+  const { me, nameOf, approval, useCase } = story
+  const { decision, questions, next, party } = useDeciding(run, story)
+  const notChecked = useNotChecked(approval, useCase.data)
+  if (useCase.isLoading) return <Loading />
+  if (story.approvalId === null) return <RunSummary run={run} live={live} />
+  if (!approval || notChecked === null) return LOADING_APPROVAL
+  return (
     <ApprovalGate
-      approval={shown}
-      page={null}
+      approval={approval}
       decision={decision}
       facts={story.facts}
-      notChecked={checked}
+      notChecked={notChecked}
       reasons={story.quick}
-      requester={nameOf(shown.requester)}
+      requester={nameOf(approval.requester)}
       questions={questions}
       me={me?.id}
       party={party}
@@ -130,25 +144,19 @@ function useRequest(run: RunView, story: RunStory) {
       now={new Date()}
     />
   )
-  return { decision, questions, notChecked, next, gate }
 }
 
-function ApprovalSummary({ run, live }: { run: RunView; live: LiveRun }) {
-  const story = useRunStory(run, live)
-  const { notChecked, gate } = useRequest(run, story)
-  if (story.useCase.isLoading) return <Loading />
-  if (story.approvalId === null) return <RunSummary run={run} live={live} />
-  if (!story.approval || notChecked === null) return LOADING_WRITES
-  return gate(story.approval, notChecked)
-}
+const TENSE: Partial<Record<RunModel['phase']['state'], Tense>> = { awaiting_approval: 'wants', acting: 'doing', succeeded: 'did', rejected: 'wanted' }
+/** While the agents work, and where a run stopped, the history is open, so the line shows the work or the break. */
+const LIVE = new Set<RunModel['phase']['state']>(['pending', 'working', 'proposed', 'acting', 'failed'])
 
 function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
   const story = useRunStory(run, live)
-  const { me, nameOf, approval, stations, settled, arrivedLive, useCase } = story
-  const waiting = story.model.phase.state === 'awaiting_approval'
-  const { decision, questions, notChecked, next, gate } = useRequest(run, story)
-  const status = statusWords(decision, live)
-  const declinedSoFar = declinedSoFarWords(decision, live, nameOf)
+  const { me, nameOf, approval, stations, arrivedLive, useCase } = story
+  const shown = story.model
+  const { decision, questions, next, party } = useDeciding(run, story)
+  const status = statusWords(live)
+  const [fold, setFold] = useState<boolean | null>(null)
   const safeId = `${run.run_id}-safe`
   const now = useNow(() => new Date()).getTime()
   const fixAsk = {
@@ -159,43 +167,75 @@ function RunSummary({ run, live }: { run: RunView; live: LiveRun }) {
     now,
     approverId: me?.roles.includes('approver') ? me.id : null,
   }
-  const fixLeading = useFixLeads({ ...fixAsk, fix: story.model.fix })
+  const fixLeading = useFixLeads({ ...fixAsk, fix: shown.fix })
 
   if (useCase.isLoading) return <Loading />
-  if (waiting && story.approvalId !== null && (!approval || notChecked === null)) return LOADING_WRITES
-  if (waiting && approval?.you_can_decide && openStep(approval) && decision.recorded === null) return gate(approval, notChecked ?? [])
-  const failure = story.model.phase.state === 'failed' ? story.model.phase : null
+  const failure = shown.phase.state === 'failed' ? shown.phase : null
+  const tense = TENSE[shown.phase.state]
+  const found = foundLine(shown.release, run.use_case_name, useCase.data?.template, new Date())
+  const finished = isFinished(shown.phase)
+  const main = failure ? (
+    <>
+      <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
+      <FixSection {...fixAsk} fix={shown.fix} />
+    </>
+  ) : story.approvalId !== null && tense !== undefined ? (
+    approval ? (
+      <>
+        <RunDecision
+          approval={approval}
+          found={found}
+          tense={tense}
+          decision={decision}
+          facts={story.facts}
+          reasons={story.quick}
+          requester={nameOf(approval.requester)}
+          questions={questions}
+          me={me?.id}
+          party={party}
+          nameOf={nameOf}
+          next={null}
+          now={new Date()}
+        />
+        {shown.phase.state === 'rejected' && next ? <DeclinedNext words={next} testAgain={testAgainOf({ ...run, state: shown.phase.state }, me, story.stopped.modelOff ?? false)} /> : null}
+      </>
+    ) : (
+      LOADING_APPROVAL
+    )
+  ) : (
+    <>
+      {found ? <p>{found}</p> : null}
+      <p>{finished ? stageWords(story.facts, nameOf) : workingLine(story.facts)}</p>
+    </>
+  )
   return (
     <div className={styles['panelView']}>
       <div className={styles['head']}>
-        <p className={styles['kind']}>{story.kind}</p>
-        <RunPill facts={story.facts} />
+        <p className={styles['kind']}>
+          {run.use_case_name} · {runByWords(shown.trigger, shown.startedBy, nameOf)}
+        </p>
+        <RunPill facts={story.facts} nameOf={nameOf} />
       </div>
       {status ? (
         <p className="muted" role="status">
           {status}
         </p>
       ) : null}
-      {declinedSoFar ? <p className="muted">{declinedSoFar}</p> : null}
-      <RunLine stations={stations} arrivedLive={arrivedLive} settled={settled} small />
-      {story.model.phase.state === 'rejected' && next ? <DeclinedNext words={next} testAgain={testAgainOf({ ...run, state: story.model.phase.state }, me, story.stopped.modelOff ?? false)} /> : null}
+      {main}
+      <History
+        rows={logRowsOf(shown.chat, nameOf, story.quick)}
+        messages={messageRowsOf(shown.chat)}
+        loadedUpTo={live.loadedUpTo}
+        open={fold ?? LIVE.has(shown.phase.state)}
+        onToggle={setFold}
+        line={<RunLine stations={stations} arrivedLive={arrivedLive} settled={null} small />}
+      />
       {failure ? (
-        <>
-          <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
-          <FixSection {...fixAsk} fix={story.model.fix} />
-          <div className={styles['panelFoot']}>
-            <StopNext runId={run.run_id} failure={failure} {...story.stopped} quiet={fixLeading} safeId={safeId} />
-          </div>
-        </>
-      ) : story.answers.length > 0 && !waiting ? (
-        <AnswerList answers={story.answers} />
-      ) : null}
-      {approval && !failure ? (
-        <>
-          {openStep(approval) === null ? <NotChecked lines={notChecked ?? []} level={3} /> : null}
-          <QuestionThread approval={approval} me={me?.id} nameOf={nameOf} answer={questions.answer} />
-        </>
+        <div className={styles['panelFoot']}>
+          <StopNext runId={run.run_id} failure={failure} {...story.stopped} quiet={fixLeading} safeId={safeId} />
+        </div>
       ) : null}
     </div>
   )
 }
+

@@ -483,11 +483,15 @@ class _AgentRun:
         shown = [r for r in found if not r.draft][:RELEASES_SHOWN]
         tags = [r.tag for r in shown]
         newest = f" The newest is {tags[0]}." if tags else ""
+        # The run page says when the newest release came out, so the day travels with the read.
+        result: dict[str, object] = {"releases": len(shown), "tags": tags}
+        if shown and shown[0].published_at:
+            result["newest_published_at"] = shown[0].published_at
         write(
             self._finished(
                 tool,
                 f"read {len(shown)} releases of {args.repo}.{newest}",
-                {"releases": len(shown), "tags": tags},
+                result,
             )
         )
         return _result(
