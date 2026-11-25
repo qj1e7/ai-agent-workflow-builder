@@ -1146,6 +1146,9 @@ const STEP = {
   tell: { id: 'write', short: 'Tell you', kind: 'tell', icon: 'bell' },
 };
 const stepsFor = (then) => (then === 'tell' ? [STEP.when, STEP.read, STEP.compare, STEP.tell] : [STEP.when, STEP.read, STEP.compare, STEP.yes, STEP.write]);
+/* The Jira projects the platform may write in. The local stack has MOCK. */
+const JIRA_PROJECTS = ['MOCK'];
+const YES_LINE = 'Each ticket waits for an Approver’s yes in Teams.';
 const THEN = { jira: 'Create a Jira ticket, after a yes', tell: 'Tell me here' };
 
 /* ---------- Schedules: a time is never guessed ---------- */
@@ -2480,10 +2483,11 @@ function question(d) {
       : { k: 'When', q: 'How often?', opts: [['day:', 'Every day'], ['day:mon', 'Mondays'], ['day:fri', 'Fridays']] };
   }
   if (!d.sched.time) return { k: 'When', q: `${d.sched.day ? `${DAY[d.sched.day]}s` : 'Every day'}, at what time?`, opts: ['8:00', '9:00', '13:00', '17:00'].map((t) => [`time:${t}`, t]) };
+  if (d.then === 'jira' && !d.project) return { k: 'Then', q: 'Which Jira project should the ticket go in?', opts: JIRA_PROJECTS.map((p) => [`proj:${p}`, p]), other: true, typing: d.typing, miss: d.typeMiss };
   return null;
 }
 const okRow = (k, v, s = '') => `<li class="pt" data-s="ok"><span class="ic">${ICON.check}</span><span class="k">${k}</span><span class="v"><span>${v}</span>${s ? `<span class="s">${s}</span>` : ''}</span></li>`;
-const askRow = (q) => `<li class="pt" data-s="ask"><span class="ic" role="img" aria-label="Question">?</span><span class="k">${q.k}</span><span class="v"><span>${q.q}</span><span class="pick">${q.opts.map(([v, l]) => `<button type="button" data-pick="${v}">${l}</button>`).join('')}</span></span></li>`;
+const askRow = (q) => `<li class="pt" data-s="ask"><span class="ic" role="img" aria-label="Question">?</span><span class="k">${q.k}</span><span class="v"><span id="pq-${q.k}">${q.q}</span><span class="pick" role="group" aria-labelledby="pq-${q.k}">${q.opts.map(([v, l]) => `<button type="button" data-pick="${v}">${l}</button>`).join('')}${q.other ? `<button class="linkbtn" type="button" data-ptype aria-expanded="${q.typing ? 'true' : 'false'}">Another project</button>` : ''}</span>${q.typing ? `<form class="askf" data-ptf><input type="text" autocomplete="off" placeholder="Like MOCK" aria-label="Jira project key"${q.miss ? ' aria-invalid="true"' : ''}><button class="btn sm" type="submit">Use it</button></form>${q.miss ? '<span class="s">Write the project key, such as MOCK.</span>' : ''}` : ''}</span></li>`;
 const noRow = (c) => `<li class="pt wide" data-s="no"><span class="ic" role="img" aria-label="Can’t do">${ICON.x}</span><span class="v"><span><b>${esc(c.label)}.</b> <span class="s">${c.why}</span>${c.ask ? ' <button class="linkbtn" type="button" data-toast="Asked the team. Their answer will show here.">Ask the team</button>' : ''}</span></span></li>`;
 const thenSelect = (d) => `<select data-then="${d.key}" aria-label="Then">${Object.entries(THEN).map(([v, l]) => `<option value="${v}"${v === d.then ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
 function partsRows(d) {
@@ -2493,7 +2497,8 @@ function partsRows(d) {
   return [
     d.soft ? okRow('Watch', `${S.name} on ${srcOf(S)}`, W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.') : q && q.k === 'Watch' ? askRow(q) : '',
     when ? okRow('When', long(d.sched)) : q && q.k === 'When' ? askRow(q) : '',
-    okRow('Then', d.status === 'asking' ? thenSelect(d) : THEN[d.then]),
+    okRow('Then', d.status === 'asking' ? thenSelect(d) : THEN[d.then], d.then === 'jira' ? YES_LINE : ''),
+    d.then === 'jira' && d.project ? okRow('Jira', `Project ${d.project}`) : q && q.k === 'Then' ? askRow(q) : '',
     ...d.cant.map(noRow),
   ].join('');
 }
@@ -2514,7 +2519,7 @@ function patchParts(c) {
   const left = $('[data-p-left]', c);
   left.className = 'c-left';
   left.textContent = '';
-  const n = [!d.soft, d.sched.day === undefined, !d.sched.time].filter(Boolean).length;
+  const n = [!d.soft, d.sched.day === undefined, !d.sched.time, d.then === 'jira' && !d.project].filter(Boolean).length;
   $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button>${q ? `<span class="waiting dwait">Answer ${n} ${n === 1 ? 'question' : 'questions'} first</span>` : `<button class="btn" type="button" data-setup>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`}`;
 }
 function pickPart(btn) {
@@ -2525,6 +2530,16 @@ function pickPart(btn) {
   if (k === 'soft') d.soft = v;
   if (k === 'day') d.sched.day = v || null;
   if (k === 'time') d.sched.time = v;
+  if (k === 'proj') Object.assign(d, { project: v, typing: false, typeMiss: false });
+  patchParts(c);
+}
+/* A key typed by hand is checked the way the card checks it: capital letters, digits or underscores, such as MOCK. */
+function projTyped(form) {
+  const c = form.closest('[data-parts]');
+  const d = W.drafts[c.dataset.parts];
+  const key = $('input', form).value.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]+$/.test(key)) { d.typeMiss = true; patchParts(c); $('[data-ptf] input', c)?.focus(); return; }
+  Object.assign(d, { project: key, typing: false, typeMiss: false });
   patchParts(c);
 }
 function dropDraft(c) {
@@ -3438,6 +3453,9 @@ const TASKS = {
       await tap($('[data-pick="time:9:00"]', c));
       pickPart($('[data-pick="time:9:00"]', c));
       await wait(800);
+      await tap($('[data-pick="proj:MOCK"]', c));
+      pickPart($('[data-pick="proj:MOCK"]', c));
+      await wait(800);
       await tap($('[data-setup]', c));
       await setupDraft(c);
       await wait(600);
@@ -3637,7 +3655,7 @@ $('#composer').addEventListener('submit', (e) => {
 });
 app.addEventListener('submit', (e) => {
   const f = e.target;
-  const act = f.matches('[data-askf]') ? askSend : f.matches('[data-dtf]') ? dTyped : f.matches('[data-fbf]') ? fbSend : f.matches('[data-addf]') ? addSoft : null;
+  const act = f.matches('[data-ptf]') ? projTyped : f.matches('[data-askf]') ? askSend : f.matches('[data-dtf]') ? dTyped : f.matches('[data-fbf]') ? fbSend : f.matches('[data-addf]') ? addSoft : null;
   if (!act) return;
   e.preventDefault();
   if (!playing) act(f);
@@ -3668,6 +3686,7 @@ app.addEventListener('click', (e) => {
   if (inP && pick('[data-open]')) { quiet(showPage(pick('[data-open]').dataset.open, false, 'chat')); return; }
   if (pick('[data-need]')) { quiet(needGo(pick('[data-need]').dataset.need, inP)); return; }
   if (pick('[data-pick]')) { pickPart(pick('[data-pick]')); return; }
+  if (pick('[data-ptype]')) { const c = pick('[data-parts]'); const d = W.drafts[c.dataset.parts]; d.typing = !d.typing; patchParts(c); if (d.typing) $('[data-ptf] input', c)?.focus(); return; }
   if (pick('[data-setup]')) { quiet(setupDraft(pick('[data-parts]'))); return; }
   if (pick('[data-drop]')) { dropDraft(pick('[data-parts]')); return; }
   if (pick('.turnon')) { turnOn(pick('[data-parts]')); return; }
@@ -3745,7 +3764,7 @@ app.addEventListener('change', (e) => {
   if (t.id === 'nxDay') setDay(t.value);
   if (t.id === 'sdDay') W.sd.day = t.value || null;
   if (t.id === 'sdTime') W.sd.time = t.value;
-  if (t.dataset.then) W.drafts[t.dataset.then].then = t.value;
+  if (t.dataset.then) { W.drafts[t.dataset.then].then = t.value; patchParts(t.closest('[data-parts]')); $(`[data-then="${t.dataset.then}"]`)?.focus(); }
 });
 app.addEventListener('keydown', (e) => {
   const g = e.target.closest && e.target.closest('.cv.edit [data-node]');
