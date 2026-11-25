@@ -183,18 +183,19 @@ describe('the Jira step of the set-up card', () => {
         .replace(/<[^>]*$/, '') ?? '',
     )
 
-  it('asks which Jira project the ticket goes in, with the platform’s projects as buttons and a link to type another', () => {
+  it('asks which project in the Then row, with the platform’s projects as buttons and a link to type another', () => {
     const html = render(card(reply, TICKET), { projects: ['MOCK'] })
     const then = partText(html, 'Then')
-    expect(then).toContain('Which Jira project should the ticket go in?')
+    expect(then).toContain('Create 1 Jira ticket in which project?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['MOCK', 'Another project']))
-    expect(html.match(/data-mark="ask"/g), 'one question at a time').toHaveLength(1)
+    expect(html.match(/data-mark="ask"/g), 'the Then row is the one open part').toHaveLength(1)
     expect(then, 'no empty chip for where it goes').not.toContain('where it goes')
     expect(then).not.toContain('Where should the result go?')
-    expect(html, 'the key box opens only from Another project').not.toMatch(/<input[^>]*type="text"/)
+    expect(html, 'no free-text box until Another project').not.toMatch(/<input[^>]*type="text"/)
+    expect(text(html)).toContain('Pick 1 more to finish')
   })
 
-  it('says each ticket waits for an Approver’s yes in Teams, in place of After a yes', () => {
+  it('says each ticket waits for an Approver’s yes in Teams under the project question, in place of After a yes', () => {
     const html = render(card(reply, TICKET), { projects: ['MOCK'] })
     expect(text(html)).not.toContain('After a yes')
     expect(partText(html, 'Then')).toContain('Each ticket waits for an Approver’s yes in Teams.')
@@ -205,6 +206,30 @@ describe('the Jira step of the set-up card', () => {
     const words = text(renderToStaticMarkup(<PartsList parts={frozenParts(form, null, null, null)} />))
     expect(words).toContain('Each ticket waits for an Approver’s yes in Teams.')
     expect(words).not.toContain('After a yes')
+  })
+
+  it('asks every open part at once from the start: How often?, At what time? and the project, each with its buttons, and counts them', () => {
+    const open: SetupCardReply = { ...reply, rows: ROWS.map((row) => (row.kind === 'schedule' ? { ...row, text: '', state: 'missing' as const } : row)) }
+    const html = render(card(open, 'Check LangGraph and create a Jira ticket'), { projects: ['MOCK'] })
+    expect(html.match(/data-mark="ask"/g), 'When and Then are both open').toHaveLength(2)
+    const when = partText(html, 'When')
+    expect(when).toContain('How often?')
+    expect(when).toContain('At what time?')
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Every day', 'Every weekday', 'Every week', 'Only when I run it', '8:00', '9:00', '13:00', '17:00', 'Another time', 'MOCK', 'Another project']))
+    expect(text(html)).toContain('Pick 2 more to finish')
+    expect(buttons(html), 'Turn on waits until nothing is left').not.toContain('Turn on')
+  })
+
+  it('shows no dead button, and the project buttons are a group named by the question', () => {
+    const html = render(card(reply, TICKET), { projects: ['MOCK'] })
+    expect(html).not.toMatch(/<button[^>]*disabled/)
+    expect(html).toMatch(/role="group" aria-labelledby="[^"]+"/)
+  })
+
+  it('opens the key box at once when the platform lists no project', () => {
+    const html = render(card(reply, TICKET), { projects: [] })
+    expect(html).toMatch(/<input[^>]*type="text"/)
+    expect(buttons(html)).not.toContain('Another project')
   })
 })
 

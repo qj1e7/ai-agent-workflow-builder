@@ -19,6 +19,14 @@ import {
   chooseProject,
   cardBlockers,
   nextQuestion,
+  answerFirst,
+  openParts,
+  questionsOf,
+  softwareOf,
+  repoMissing,
+  chooseRepo,
+  effectiveRepo,
+  REPO_CHOICE,
   setUpWords,
   secondName,
   timeWords,
@@ -643,7 +651,7 @@ describe('the Planner’s set-up card', () => {
       const weekly = pick(start, 'Every week')
       expect(words(weekly)).toBe('Which day?')
       const friday = pick(weekly, 'Friday')
-      expect(words(friday)).toBe('Fridays, at what time?')
+      expect(words(friday)).toBe('At what time?')
       expect(nextQuestion(friday, null)).toMatchObject({ choices: [{ label: '8:00' }, { label: '9:00' }, { label: '13:00' }, { label: '17:00' }] })
       const timed = pick(friday, '9:00')
       expect(whenSaid(timed.when)).toBe('Every Friday at 9:00')
@@ -651,7 +659,7 @@ describe('the Planner’s set-up card', () => {
     })
 
     it('never guesses a time: a named day with no time asks the time, and a bare hour asks morning or evening', () => {
-      expect(words(said('Every Friday'))).toBe('Fridays, at what time?')
+      expect(words(said('Every Friday'))).toBe('At what time?')
       const bare = said('Every Friday at 9')
       expect(words(bare)).toBe('At 9:00 or 21:00?')
       expect(whenSaid(pick(bare, '21:00').when)).toBe('Every Friday at 21:00')
@@ -683,7 +691,7 @@ describe('the Planner’s set-up card', () => {
       expect(nextQuestion(form, null)).toEqual({ kind: 'row', index: 0, words: 'Which tickets should it find?' })
       const found = changeRow(form, 0, 'Closed tickets')
       const settled = { ...found, rows: found.rows.map((row) => ({ ...row, state: row.kind === 'look_for' ? ('edited' as const) : row.state })) }
-      expect(nextQuestion(settled, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]), ['MOCK'])).toEqual({ kind: 'input', agent: 0, input: 'Jira project', words: 'Which Jira project should the ticket go in?', choices: ['MOCK'] })
+      expect(nextQuestion(settled, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]), ['MOCK'])).toEqual({ kind: 'input', agent: 0, input: 'Jira project', words: 'Create 1 Jira ticket in which project?', choices: ['MOCK'] })
       expect(nextQuestion({ ...settled, typed: { '0:Jira project': 'MOCK' } }, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]))).toEqual({ kind: 'row', index: 1, words: 'What should it do with them?' })
     })
   })
@@ -696,11 +704,11 @@ describe('the Planner’s set-up card', () => {
     })
 
     it('asks which Jira project the ticket goes in, with the projects the platform may use as choices, in place of where the result goes', () => {
-      expect(nextQuestion(ticket(), null, ['MOCK'])).toEqual({ kind: 'project', index: 3, words: 'Which Jira project should the ticket go in?', choices: ['MOCK'] })
+      expect(nextQuestion(ticket(), null, ['MOCK'])).toEqual({ kind: 'project', index: 3, words: 'Create 1 Jira ticket in which project?', choices: ['MOCK'] })
     })
 
     it('still asks, with no choices, when the platform names no project, so a key can be typed', () => {
-      expect(nextQuestion(ticket(), null)).toMatchObject({ kind: 'project', words: 'Which Jira project should the ticket go in?', choices: [] })
+      expect(nextQuestion(ticket(), null)).toMatchObject({ kind: 'project', words: 'Create 1 Jira ticket in which project?', choices: [] })
     })
 
     it('asks where the result goes, as before, when nothing in the request is a Jira ticket', () => {
@@ -729,7 +737,41 @@ describe('the Planner’s set-up card', () => {
     it('uses the same words when a drafted agent’s Jira project is still empty', () => {
       const where = ticket({ rows: ticket().rows.map((row) => (row.kind === 'where' ? { ...row, text: 'In Jira', state: 'understood' as const } : row)) })
       const asked = nextQuestion(where, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]), ['MOCK', 'OPS'])
-      expect(asked).toMatchObject({ kind: 'input', words: 'Which Jira project should the ticket go in?', choices: ['MOCK', 'OPS'] })
+      expect(asked).toMatchObject({ kind: 'input', words: 'Create 1 Jira ticket in which project?', choices: ['MOCK', 'OPS'] })
+    })
+  })
+
+  describe('every open question at once', () => {
+    const missing = (kind: RowKind, text = '') => ({ kind, text, state: (text === '' ? 'missing' : 'understood') as RowState, note: null })
+    const blank = () => cardFrom('x', [missing('schedule'), missing('look_for', 'New releases of langchain-ai/langgraph'), missing('do', 'Create a Jira ticket'), missing('where')], '')
+
+    it('lists How often?, At what time? and the Jira project together, in the order of the card', () => {
+      expect(questionsOf(blank(), null, ['MOCK']).map((q) => q.words)).toEqual(['How often?', 'At what time?', 'Create 1 Jira ticket in which project?'])
+    })
+
+    it('asks the day beside the time once every week is chosen, and no time for Only when I run it', () => {
+      const weekly = answerWhen(blank(), { often: 'week' })
+      expect(questionsOf(weekly, null, []).map((q) => q.words).slice(0, 2)).toEqual(['Which day?', 'At what time?'])
+      const manual = answerWhen(blank(), { often: 'manual' })
+      expect(questionsOf(manual, null, []).map((q) => q.words)).toEqual(['Create 1 Jira ticket in which project?'])
+    })
+
+    it('never guesses a time: a day without one still asks At what time?', () => {
+      const day = answerWhen(blank(), { often: 'weekdays' })
+      expect(questionsOf(day, null, []).map((q) => q.words)).toContain('At what time?')
+    })
+
+    it('is empty once nothing is left to ask, and the first of the list is the next question', () => {
+      const done = chooseProject(answerWhen(blank(), { often: 'weekdays', at: '09:00' }), 'MOCK')
+      expect(questionsOf(done, null, ['MOCK'])).toEqual([])
+      expect(nextQuestion(blank(), null, ['MOCK'])).toEqual(questionsOf(blank(), null, ['MOCK'])[0])
+    })
+
+    it('counts the open parts, not the questions: When is one part', () => {
+      expect(openParts(blank())).toBe(2)
+      expect(answerFirst({ choices: ['when it runs', 'where it goes'], leftOut: [] })).toBe('Pick 2 more to finish')
+      expect(answerFirst({ choices: ['where it goes'], leftOut: [] })).toBe('Pick 1 more to finish')
+      expect(answerFirst({ choices: [], leftOut: [] })).toBeNull()
     })
   })
 
@@ -751,11 +793,11 @@ describe('the Planner’s set-up card', () => {
 
     it('is a question until a repository is chosen, and the footer counts it', () => {
       expect(repoMissing(fastapi())).toBe(true)
-      expect(setupLeft(fastapi(), null).choices).toEqual(['the GitHub repository'])
+      expect(setupLeft(fastapi(), null).choices.filter(isQuestion)).toEqual(['the GitHub repository'])
       expect(answerFirst(setupLeft(fastapi(), null))).toBe('Pick 1 more to finish')
       const chosen = chooseRepo(fastapi(), 'fastapi/fastapi', true)
       expect(repoMissing(chosen)).toBe(false)
-      expect(setupLeft(chosen, null).choices).toEqual([])
+      expect(setupLeft(chosen, null).choices.filter(isQuestion)).toEqual([])
     })
 
     it('asks first, before When and the Jira project, with each match as a choice', () => {
