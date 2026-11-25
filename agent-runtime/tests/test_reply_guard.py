@@ -754,12 +754,21 @@ def test_about_keeps_nothing_without_facts_and_never_more_than_the_limit():
     assert len(about_of([f"S{n}" for n in range(9)], text, many)) == ABOUT_LIMIT
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I read versions from the npm registry.",
+        "I read versions from the Maven Central registry.",
+        "The Maven registry lists every version of Log4j.",
+    ],
+)
+def test_npm_s_and_maven_s_own_registries_are_built(text: str):
+    assert claims_only_what_is_built(shown_of(said(text)), OPERATOR)
+
+
 def test_npm_s_own_registry_is_built_but_any_other_registry_is_not():
     """Item 4 of the 18 Nov review dropped "registry" from the unbuilt words, which let "any
-    package registry" claims through. Only npm's registry is read (ADR 0025)."""
-    assert claims_only_what_is_built(
-        shown_of(said("I read versions from the npm registry.")), OPERATOR
-    )
+    package registry" claims through. Only npm's and Maven Central's are read (ADR 0025)."""
     assert not claims_only_what_is_built(
         shown_of(said("I can read the PyPI and Docker registries.")), OPERATOR
     )
