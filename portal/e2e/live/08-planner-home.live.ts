@@ -195,6 +195,12 @@ test.describe('with the AI model on', () => {
 
   /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard, and a project the Planner already filled in is left as it is. */
   async function fillTheRest(page: Page, project: string): Promise<void> {
+    const asked = card(page).last().getByRole('group', { name: 'Which Jira project should the ticket go in?' })
+    if (await asked.count()) {
+      // One click answers it. The platform's projects are the buttons, and MOCK is the one on the local stack.
+      await asked.getByRole('button', { name: project, exact: true }).click()
+      return
+    }
     const field = card(page).last().getByLabel(/^Jira project/)
     if ((await field.count()) && (await field.inputValue()) === '') {
       await field.focus()
@@ -277,7 +283,7 @@ test.describe('with the AI model on', () => {
       await expect(card(page), 'the Planner answers with a set-up card').toBeVisible()
       const parts = card(page).getByRole('list', { name: 'Each part of your request' })
       await expect(parts.locator('[data-part]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-part')))).resolves.toEqual(['Watch', 'When', 'Then'])
-      await expect(parts.locator('[data-part="Then"]'), 'what it writes waits for a yes, and says so').toContainText('After a yes')
+      await expect(parts.locator('[data-part="Then"]'), 'what it writes waits for a yes, and says so').toContainText('Each ticket waits for an Approver’s yes in Teams.')
       await expect(pillOf(page)).toHaveText('Draft')
       await expect(parts.locator('[data-mark="ask"]'), 'one question at a time').toHaveCount(1)
       await expect(parts.locator('[data-part="When"]'), 'a time is never guessed: it asks how often first').toContainText('How often?')

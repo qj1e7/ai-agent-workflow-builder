@@ -48,11 +48,13 @@ interface World {
   readonly kept?: CardKept
   /** The workflow's version tried on practice systems, as GET /api/v1/use-cases/{id}/simulation answers it. */
   readonly simulation?: UseCaseSimulationView
+  /** The Jira projects the platform may use, as GET /api/v1/tools lists them. */
+  readonly projects?: readonly string[]
 }
 
 const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, simulation }: World = {}): string {
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, simulation, projects }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], ALICE)
   if (run) queryClient.setQueryData(keys.run(scope, run.run_id), run)
@@ -60,6 +62,7 @@ function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread =
   else queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
   if (setUp) queryClient.setQueryData(keys.setUp(scope, CREATED.use_case_id), setUp)
   if (watched) queryClient.setQueryData(keys.watchlist(scope), watched)
+  if (projects) queryClient.setQueryData(keys.tools(), { tools: [], jira_projects: projects })
   if (made) queryClient.setQueryData(keys.made(scope, made.key), made.made)
   if (simulation) queryClient.setQueryData(keys.useCaseSimulation(scope, simulation.use_case_id), simulation)
   const memory = newCardMemory()
@@ -157,6 +160,48 @@ describe('the set-up card before Set up', () => {
     const html = render(card(setupCard as SetupCardReply), { useCase: { ...ON, use_case_id: 'uc_01JB8', name: 'Weekly summary of closed tickets', schedule: { ...DRAFT.schedule!, day: 'friday', at: '17:00' } } })
     expect(text(html)).toContain('It already watches langchain-ai/langgraph, every Friday at 17:00.')
     expect(buttons(html)).toEqual(['Set up another', 'Open it'])
+  })
+})
+
+describe('the Jira step of the set-up card', () => {
+  const TICKET = 'Check LangGraph on GitHub for new releases every weekday at 9am, and create a Jira ticket when there’s a new one.'
+  const ROWS: SetupCardReply['rows'] = [
+    { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+    { kind: 'look_for', text: 'New releases of langchain-ai/langgraph', state: 'understood', note: null },
+    { kind: 'do', text: 'Create a Jira ticket for each new one', state: 'understood', note: null },
+    { kind: 'where', text: '', state: 'missing', note: null },
+  ]
+  const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
+  const partText = (html: string, key: string) =>
+    text(
+      (html.split(`data-part="${key}"`)[1] ?? '')
+        .split('data-part=')[0]
+        ?.replace(/^[^>]*>/, '')
+        .replace(/<[^>]*$/, '') ?? '',
+    )
+
+  it('asks which Jira project the ticket goes in, with the platform’s projects as buttons and a link to type another', () => {
+    const html = render(card(reply, TICKET), { projects: ['MOCK'] })
+    const then = partText(html, 'Then')
+    expect(then).toContain('Which Jira project should the ticket go in?')
+    expect(buttons(html)).toEqual(expect.arrayContaining(['MOCK', 'Another project']))
+    expect(html.match(/data-mark="ask"/g), 'one question at a time').toHaveLength(1)
+    expect(then, 'no empty chip for where it goes').not.toContain('where it goes')
+    expect(then).not.toContain('Where should the result go?')
+    expect(html, 'the key box opens only from Another project').not.toMatch(/<input[^>]*type="text"/)
+  })
+
+  it('says each ticket waits for an Approver’s yes in Teams, in place of After a yes', () => {
+    const html = render(card(reply, TICKET), { projects: ['MOCK'] })
+    expect(text(html)).not.toContain('After a yes')
+    expect(partText(html, 'Then')).toContain('Each ticket waits for an Approver’s yes in Teams.')
+  })
+
+  it('keeps the same sentence once Set up is pressed', () => {
+    const form = cardFrom(reply.name, ROWS, TICKET, [])
+    const words = text(renderToStaticMarkup(<PartsList parts={frozenParts(form, null, null, null)} />))
+    expect(words).toContain('Each ticket waits for an Approver’s yes in Teams.')
+    expect(words).not.toContain('After a yes')
   })
 })
 

@@ -16,6 +16,8 @@ import {
   andList,
   answerWhen,
   cardFrom,
+  chooseProject,
+  cardBlockers,
   nextQuestion,
   setUpWords,
   secondName,
@@ -681,8 +683,53 @@ describe('the Planner’s set-up card', () => {
       expect(nextQuestion(form, null)).toEqual({ kind: 'row', index: 0, words: 'Which tickets should it find?' })
       const found = changeRow(form, 0, 'Closed tickets')
       const settled = { ...found, rows: found.rows.map((row) => ({ ...row, state: row.kind === 'look_for' ? ('edited' as const) : row.state })) }
-      expect(nextQuestion(settled, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]))).toEqual({ kind: 'input', agent: 0, input: 'Jira project', words: 'Which Jira project should it use?' })
+      expect(nextQuestion(settled, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]), ['MOCK'])).toEqual({ kind: 'input', agent: 0, input: 'Jira project', words: 'Which Jira project should the ticket go in?', choices: ['MOCK'] })
       expect(nextQuestion({ ...settled, typed: { '0:Jira project': 'MOCK' } }, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]))).toEqual({ kind: 'row', index: 1, words: 'What should it do with them?' })
+    })
+  })
+
+  describe('the Jira project question', () => {
+    const missing = (kind: RowKind, text = '') => ({ kind, text, state: (text === '' ? 'missing' : 'understood') as RowState, note: null })
+    const ticket = (extra: Partial<Form> = {}): Form => ({
+      ...answerWhen(cardFrom('x', [missing('schedule', 'Every weekday at 9am'), missing('look_for', 'New releases of langchain-ai/langgraph'), missing('do', 'Create a Jira ticket for each new one'), missing('where')], ''), { often: 'weekdays', at: '09:00' }),
+      ...extra,
+    })
+
+    it('asks which Jira project the ticket goes in, with the projects the platform may use as choices, in place of where the result goes', () => {
+      expect(nextQuestion(ticket(), null, ['MOCK'])).toEqual({ kind: 'project', index: 3, words: 'Which Jira project should the ticket go in?', choices: ['MOCK'] })
+    })
+
+    it('still asks, with no choices, when the platform names no project, so a key can be typed', () => {
+      expect(nextQuestion(ticket(), null)).toMatchObject({ kind: 'project', words: 'Which Jira project should the ticket go in?', choices: [] })
+    })
+
+    it('asks where the result goes, as before, when nothing in the request is a Jira ticket', () => {
+      const note = cardFrom('x', [missing('schedule', 'Every weekday at 9am'), missing('look_for', 'New releases of langchain-ai/langgraph'), missing('do', 'Show me the version'), missing('where')], '')
+      expect(nextQuestion(answerWhen(note, { often: 'weekdays', at: '09:00' }), null, ['MOCK'])).toEqual({ kind: 'row', index: 3, words: 'Where should the result go?' })
+    })
+
+    it('one click answers it: the where part is filled in, the plan can be asked for, and the project fills the agent’s Jira input', () => {
+      const asked = ticket()
+      expect(cardBlockers(asked.rows).map((blocker) => blocker.words)).toEqual(['you say where it goes'])
+      const chosen = chooseProject(asked, 'MOCK')
+      expect(chosen.rows[3]).toMatchObject({ kind: 'where', text: 'In the MOCK project', state: 'edited' })
+      expect(cardBlockers(chosen.rows)).toEqual([])
+      expect(taskWithoutSchedule(chosen.rows)).toContain('Where it goes: in the MOCK project.')
+      const plan = planView({ ...(NEW_AGENT as object), project: null } as PlanOut, chosen.rows)
+      const agent = plan.kind === 'agents' ? plan.agents[0] : undefined
+      expect(agent && valueOf(chosen, agent, 'Jira project')).toBe('MOCK')
+      expect(nextQuestion(chosen, plan, ['MOCK'])).toBeNull()
+    })
+
+    it('keeps the Planner’s own words for the where part, so changing it back puts them back', () => {
+      const chosen = chooseProject(ticket(), 'OPS')
+      expect(chosen.rows[3]?.planner).toMatchObject({ text: '', state: 'missing' })
+    })
+
+    it('uses the same words when a drafted agent’s Jira project is still empty', () => {
+      const where = ticket({ rows: ticket().rows.map((row) => (row.kind === 'where' ? { ...row, text: 'In Jira', state: 'understood' as const } : row)) })
+      const asked = nextQuestion(where, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]), ['MOCK', 'OPS'])
+      expect(asked).toMatchObject({ kind: 'input', words: 'Which Jira project should the ticket go in?', choices: ['MOCK', 'OPS'] })
     })
   })
 
