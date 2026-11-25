@@ -6885,6 +6885,17 @@
             "title": "Events Url",
             "type": "string"
           },
+          "fix_offer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FixOffer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether Fix it for me could start on this stop now, and if not, why, in the words the start would refuse with (ADR 0055, section 1). Read only, and only on the single-run read: null in a list, and null when fixes aren't set up here."
+          },
           "last_seq": {
             "title": "Last Seq",
             "type": "integer"
@@ -7864,6 +7875,34 @@
           "source"
         ],
         "title": "FixNoteOut",
+        "type": "object"
+      },
+      "FixOffer": {
+        "additionalProperties": false,
+        "description": "Whether Fix it for me could start on a stopped run now (ADR 0055, section 1), read only.",
+        "properties": {
+          "can": {
+            "title": "Can",
+            "type": "boolean"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a fix can't start now, in the words the start would refuse with. Null when it can.",
+            "title": "Why Not"
+          }
+        },
+        "required": [
+          "can",
+          "why_not"
+        ],
+        "title": "FixOffer",
         "type": "object"
       },
       "FixProposed": {

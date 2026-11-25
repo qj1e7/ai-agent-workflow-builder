@@ -197,3 +197,13 @@ def _not_a_dot_segment(repo: str) -> str:
 
 
 type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
+
+
+class FixOffer(WireModel):
+    """Whether Fix it for me could start on a stopped run now (ADR 0055, section 1), read only."""
+
+    can: bool
+    why_not: str | None = Field(
+        description="Why a fix can't start now, in the words the start would refuse with. "
+        "Null when it can."
+    )

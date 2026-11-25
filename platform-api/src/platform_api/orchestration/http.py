@@ -73,6 +73,7 @@ from platform_api.wire import (
     ErrorBody,
     FailureReason,
     FailureStage,
+    FixOffer,
     QuestionText,
     RunOutcome,
     StepName,
@@ -184,6 +185,12 @@ class FailedView(_RunBase):
     what_happened: str = Field(
         description="Why it stopped, in the AI troubleshooter's one sentence, without the time. "
         "Every place that names this stop says it, so none guesses from the reason."
+    )
+    fix_offer: FixOffer | None = Field(
+        default=None,
+        description="Whether Fix it for me could start on this stop now, and if not, why, in "
+        "the words the start would refuse with (ADR 0055, section 1). Read only, and only on "
+        "the single-run read: null in a list, and null when fixes aren't set up here.",
     )
 
 
@@ -600,12 +607,16 @@ async def list_runs(principal: CurrentPrincipal, orchestrator: CurrentOrchestrat
     responses={**SIGNED_IN, 404: error_response("No such run")},
 )
 async def get_run(
-    run_id: RunId, principal: CurrentPrincipal, orchestrator: CurrentOrchestrator
+    run_id: RunId, principal: CurrentPrincipal, orchestrator: CurrentOrchestrator, request: Request
 ) -> RunView:
     detail = await orchestrator.get_run(run_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="No such run")
-    return run_view(detail, principal)
+    view = run_view(detail, principal)
+    fixes = getattr(request.app.state, "fixes", None)
+    if isinstance(view, FailedView) and fixes is not None:
+        return view.model_copy(update={"fix_offer": await fixes.offer(run_id)})
+    return view
 
 
 @router.post(
