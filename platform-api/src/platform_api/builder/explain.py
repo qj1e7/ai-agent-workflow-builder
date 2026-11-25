@@ -73,7 +73,7 @@ class ExplainStep(WireModel):
     block_type: str | None = Field(
         description="n8n's type of the block. Null unless you have n8n access."
     )
-    tag: str = Field(description="What it does, such as Reads Jira or Writes after a yes.")
+    tag: str = Field(description="What it does, such as Reads Jira or Writes after approval.")
 
 
 class ExplainTouch(WireModel):
@@ -117,9 +117,10 @@ class ExplainCleared(WireModel):
 class ExplainWrite(WireModel):
     block: str
     decides: Literal["each_run", "set_up", "refused", "cant_run_yet"] = Field(
-        description="each_run: Approvers say yes on each run. set_up: it runs on the set-up "
-        "approval, with no yes on each run. refused: no yes comes before it, so the platform "
-        "refuses the write. cant_run_yet: no approval lets it run on this platform yet."
+        description="each_run: Approvers approve it on each run. set_up: it runs on the set-up "
+        "approval, with no approval on each run. refused: nothing asks for approval before it, "
+        "so the platform refuses the write. cant_run_yet: no approval lets it run on this "
+        "platform yet."
     )
     approvers: int | None = Field(
         description="How many Approvers say yes on each run, one after the other. Null unless "
@@ -155,7 +156,7 @@ class WorkflowExplained(WireModel):
     )
     in_short: list[Segment] = Field(
         description="One or two sentences in code's own words: when it runs, what it reads, what "
-        "it changes or posts, and what waits for a yes."
+        "it changes or posts, and what waits for approval."
     )
     reworded: str | None = Field(
         description="In short as the AI model smoothed it, when asked with reworded=true and it "
@@ -310,7 +311,7 @@ START_WORDS: Mapping[str, str] = {
 NEGATIONS = frozenset({"not", "no", "never", "nothing", "none", "nor", "cannot", "without"})
 MODALS = frozenset({"can", "could", "would"})
 BASE: Mapping[str, str] = {"posts": "post", "tells": "tell"}
-AFTER_A_YES = "after a yes"
+AFTER_APPROVAL = "after approval"
 
 
 def explain_facts(report: WorkflowReport) -> list[ExplainFact]:
@@ -351,7 +352,8 @@ def _phrase_fact(touch: Touch) -> ExplainFact:
     words = set(_WORD.findall(code))
     system = [w for w in _WORD.findall(touch.system or "") if w in words and w != "and"]
     quoted = dict.fromkeys(w.text for w in phrase if isinstance(w, Quoted))
-    together = [*_verbs(phrase), *system, *quoted, *(["yes"] if AFTER_A_YES in code else [])]
+    approved = ["approval"] if AFTER_APPROVAL in code else []
+    together = [*_verbs(phrase), *system, *quoted, *approved]
     action: Literal["writes", "posts"] = "posts" if touch.action == "posts" else "writes"
     return ExplainFact(kind=action, together=together, negated=_negated(code))
 

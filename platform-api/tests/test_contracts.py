@@ -159,6 +159,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/planner-chosen.json": choose_result_adapter,
     "agent/software-find-request.json": TypeAdapter(FindSoftwareRequest),
     "agent/software-found.json": find_software_result_adapter,
+    "agent/software-found-by-search.json": find_software_result_adapter,
     "agent/releases-read-request.json": TypeAdapter(ReadReleasesRequest),
     "agent/releases-read.json": read_releases_result_adapter,
     "agent/planner-answer-request.json": TypeAdapter(AnswerRequest),

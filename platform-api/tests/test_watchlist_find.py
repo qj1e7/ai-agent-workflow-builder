@@ -6,6 +6,7 @@ import pytest
 
 from platform_api.app import create_app
 from platform_api.builder import TAG_PATTERN, Watchlist
+from platform_api.builder.models import ProjectGuess
 from platform_api.db import Database
 from platform_api.orchestration import (
     FindSoftwareResult,
@@ -78,10 +79,54 @@ async def test_a_name_gives_the_checked_projects_and_sends_the_watchlists_own_ta
                 "releases": "published",
                 "newest": "1.2.20",
                 "already_listed": None,
+                "found_by": "reviewed_list",
+                "stars": None,
             }
         ],
     }
     assert finder.asked == [("LangGraph", TAG_PATTERN)]
+
+
+async def test_a_search_match_keeps_its_mark_and_its_stars(
+    client: httpx.AsyncClient, finder: FakeFinder
+):
+    searched = SoftwareMatch(
+        repo="encode/httpx",
+        what="A next generation HTTP client for Python",
+        why="Found by searching GitHub, so make sure it's the one you mean. It has 15,854 stars.",
+        releases="published",
+        newest="0.28.1",
+        found_by="github_search",
+        stars=15854,
+    )
+    finder.answer = FoundSoftware(matches=[searched])
+    [guess] = (await find(client, "httpx")).json()["matches"]
+    assert (guess["found_by"], guess["stars"], guess["repo"]) == (
+        "github_search",
+        15854,
+        "encode/httpx",
+    )
+
+
+def test_a_guess_never_has_fewer_than_no_stars():
+    with pytest.raises(ValueError):
+        ProjectGuess(
+            repo="a/b",
+            what="x",
+            why="",
+            releases="none",
+            newest=None,
+            already_listed=None,
+            found_by="github_search",
+            stars=-1,
+        )
+
+
+def test_a_match_from_an_older_runtime_reads_as_from_the_reviewed_list():
+    older = SoftwareMatch.model_validate(
+        {"repo": "a/b", "what": "x", "why": "", "releases": "none", "newest": None}
+    )
+    assert (older.found_by, older.stars) == ("reviewed_list", None)
 
 
 async def test_the_name_is_trimmed_before_it_is_looked_up(

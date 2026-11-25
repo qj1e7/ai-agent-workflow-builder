@@ -659,9 +659,9 @@ class Watchlist:
         self._n8n = n8n
 
     async def find(self, name: str) -> FindOut:
-        """The GitHub projects a name could mean, each checked just now, and which the watchlist
-        already holds. It writes nothing. The tag rule is the watchlist's own, so a match
-        offered here is one the watch can compare."""
+        """The projects a name could mean, from the reviewed list or else GitHub's search, each
+        checked just now, and which the watchlist already holds. It writes nothing. The tag rule
+        is the watchlist's own, so a match offered here is one the watch can compare."""
         found = await self._finder.find(name, SOFTWARE_WATCHLIST.tag_pattern)
         match found:
             case RuntimeDown(detail):
@@ -689,6 +689,8 @@ class Watchlist:
                             releases=match.releases,
                             newest=match.newest,
                             already_listed=held.get((match.kind, match.repo.casefold())),
+                            found_by=match.found_by,
+                            stars=match.stars,
                         )
                         for match in matches
                     ]

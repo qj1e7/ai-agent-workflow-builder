@@ -15,7 +15,14 @@ from pydantic import (
 
 from platform_api.monitoring import AgentEvent, CauseSystem, FailureKind
 from platform_api.orchestration.schedule import AT_PATTERN, Day
-from platform_api.wire import MavenCoordinate, NpmPackage, RepoName, SourceKind, WireModel
+from platform_api.wire import (
+    FoundBy,
+    MavenCoordinate,
+    NpmPackage,
+    RepoName,
+    SourceKind,
+    WireModel,
+)
 
 
 class GithubSource(WireModel):
@@ -466,6 +473,8 @@ class SoftwareMatch(WireModel):
     why: str = Field(max_length=300)
     releases: Literal["published", "none"]
     newest: str | None
+    found_by: FoundBy = "reviewed_list"
+    stars: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def _fits_its_kind(self) -> SoftwareMatch:

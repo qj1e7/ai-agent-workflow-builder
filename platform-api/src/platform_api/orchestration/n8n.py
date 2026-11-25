@@ -7,6 +7,7 @@ N8nClient is bootstrap's, synchronous. N8nApi is the platform's own while it run
 
 import asyncio
 import logging
+import secrets
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -432,8 +433,11 @@ def _short(response: httpx.Response) -> str:
 # line in docs/evidence/prototypes/p7-n8n-engine-facts, so a version bump has a short checklist.
 
 PLATFORM_API_KEY_LABEL = "platform-api"
-"""Bootstrap removes keys with this label at each deploy, and platform-api removes its own older
-than a day whenever it makes one."""
+"""Each key platform-api makes is labelled with this, a space and an id of its own, since n8n
+2.42.6 refuses a second key with a label its user already holds. A key is the platform's only
+when the owner account holds it and its label is this alone, as before 25 Nov 2026, or this and
+a space."""
+NAME_TAKEN = "There is already an entry with this name"
 PLATFORM_API_SCOPES = (
     "workflow:create",
     "workflow:read",
@@ -466,6 +470,9 @@ its copy is deleted. The platform's key never stops a run."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)
+KEY_RENEW_AGE = STALE_KEY_AGE / 2
+"""A process makes a new key once its own is this old, so a key older than STALE_KEY_AGE is no
+live process's."""
 START_TYPE = "CUSTOM.wabStartFromPortal"
 START_NAME = "Start from the Portal"
 VOUCHED = frozenset({"running", "waiting"})
@@ -901,6 +908,10 @@ def _credential(out: _CredentialOut) -> N8nCredential:
     )
 
 
+def _name_taken(response: httpx.Response) -> bool:
+    return response.status_code != 200 and NAME_TAKEN in response.text
+
+
 def _expect(response: httpx.Response, *ok: int) -> httpx.Response:
     if response.status_code not in (ok or (200,)):
         raise N8nError(
@@ -1015,9 +1026,23 @@ def _ran(execution: _ExecutionOut) -> dict[str, str]:
     return ran
 
 
+@dataclass(frozen=True)
+class _HeldKey:
+    raw: str
+    made: datetime
+
+
+def _platform_key(key: _ListedKey, owner: str) -> bool:
+    label = key.label
+    return key.owner.email == owner and (
+        label == PLATFORM_API_KEY_LABEL or label.startswith(f"{PLATFORM_API_KEY_LABEL} ")
+    )
+
+
 class N8nApi:
-    """One per process. It signs in once and makes its own API key once, and again only when n8n
-    refuses them. It never deletes a key, so a second process during a deploy keeps working."""
+    """One per process. It signs in once and makes an API key of its own, and a new one when n8n
+    refuses it or it is KEY_RENEW_AGE old. It deletes only the platform's keys older than
+    STALE_KEY_AGE, so a second process during a deploy, or a second replica, keeps working."""
 
     def __init__(
         self,
@@ -1037,7 +1062,9 @@ class N8nApi:
         self._wall = wall
         self._signed_in = False
         self._user: str | None = None
-        self._key: str | None = None
+        self._key: _HeldKey | None = None
+        self._keying = asyncio.Lock()
+        """One key at a time, so calls that need one at once wait for the same key."""
         self._lock = asyncio.Lock()
 
     async def close(self) -> None:
@@ -1082,34 +1109,46 @@ class N8nApi:
         return response
 
     async def _api_key(self, refused: str | None = None) -> str:
-        async with self._lock:
-            if self._key is not None and self._key != refused:
-                return self._key
-        await self._remove_stale_keys()
-        expires = int((self._wall() + KEY_LIFETIME).timestamp())
+        async with self._keying:
+            held = self._key
+            if held and held.raw != refused and self._wall() - held.made < KEY_RENEW_AGE:
+                return held.raw
+            await self._remove_stale_keys()
+            made = self._wall()
+            response = await self._new_key(made)
+            if _name_taken(response):
+                response = await self._new_key(made)
+                if _name_taken(response):
+                    raise N8nError(
+                        "n8n refused two new API keys for the platform, each because a key with "
+                        "that name already exists"
+                    )
+            key = _parse(_Rest[dict[str, JsonValue]], _expect(response)).data.get("rawApiKey")
+            if not isinstance(key, str):
+                raise N8nError("n8n made an API key but did not show it")
+            self._key = _HeldKey(key, made)
+            return key
+
+    async def _new_key(self, made: datetime) -> httpx.Response:
         body = {
-            "label": PLATFORM_API_KEY_LABEL,
-            "expiresAt": expires,
+            "label": f"{PLATFORM_API_KEY_LABEL} {secrets.token_hex(4)}",
+            "expiresAt": int((made + KEY_LIFETIME).timestamp()),
             "scopes": list(self._scopes),
         }
-        created = _expect(await self._rest("POST", "/api-keys", body))
-        key = _parse(_Rest[dict[str, JsonValue]], created).data.get("rawApiKey")
-        if not isinstance(key, str):
-            raise N8nError("n8n made an API key but did not show it")
-        async with self._lock:
-            self._key = key
-        return key
+        return await self._rest("POST", "/api-keys", body)
 
     async def _remove_stale_keys(self) -> None:
         """The platform's own keys older than a day, which an earlier process or a key that ran
-        out left behind. A key another process made today is left alone, and so is any key of
-        someone else's, whatever its label."""
+        out left behind. A key of a live process is younger, and any key of someone else's, or
+        with a label the platform does not give, is left alone. A key already gone was removed
+        by another process."""
         listed = _parse(_Rest[_KeyList], _expect(await self._rest("GET", "/api-keys"))).data
         cutoff = self._wall() - STALE_KEY_AGE
         for key in listed.items:
-            ours = key.label == PLATFORM_API_KEY_LABEL and key.owner.email == self._owner.email
-            if ours and datetime.fromisoformat(key.created_at) < cutoff:
-                _expect(await self._rest("DELETE", f"/api-keys/{key.id}"))
+            if _platform_key(key, self._owner.email) and (
+                datetime.fromisoformat(key.created_at) < cutoff
+            ):
+                _expect(await self._rest("DELETE", f"/api-keys/{key.id}"), 200, 404)
 
     async def _public(
         self,

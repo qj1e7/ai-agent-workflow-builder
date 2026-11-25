@@ -31,11 +31,11 @@ ACCESS = ModelAccess(
 )
 SMOOTH = (
     "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create "
-    "Jira tickets in “MOCK”, each after a yes, and changes nothing else."
+    "Jira tickets in “MOCK”, each after approval, and changes nothing else."
 )
 IN_SHORT = (
     "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
-    "It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else."
+    "It can create Jira tickets in “MOCK”, each after approval. It changes nothing else."
 )
 FASTAPI = {
     "name": "FastAPI release check",
@@ -55,8 +55,8 @@ STEPS = [
     ("Read release", True, "Reads GitHub"),
     ("Compare", True, "Runs an agent"),
     ("Newer?", False, "Shapes the data"),
-    ("Ask for a yes", True, "Waits for a yes"),
-    ("Create ticket", True, "Writes after a yes"),
+    ("Ask for a yes", True, "Waits for approval"),
+    ("Create ticket", True, "Writes after approval"),
     ("Nothing to change", False, "Ends the run"),
 ]
 

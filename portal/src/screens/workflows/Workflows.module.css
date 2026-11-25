@@ -516,20 +516,6 @@
   background: var(--sunk);
 }
 
-/* A row with its own Explain beside it: the link takes the room, the button keeps its size. */
-.withExplain {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-right: 12px;
-}
-
-.withExplain .rowLink {
-  flex: 1;
-  width: auto;
-  min-width: 0;
-}
-
 .rowBtns {
   display: flex;
   flex-wrap: wrap;

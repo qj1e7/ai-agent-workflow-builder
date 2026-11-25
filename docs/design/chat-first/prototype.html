@@ -263,6 +263,9 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
 .dstate[data-s="wait"] { background: var(--wait-line); --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4.8' fill='none' stroke='black' stroke-width='1.8'/%3E%3Cpath d='M6 3.4v2.8l1.8 1.1' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E"); }
 .dstate[data-s="err"] { background: var(--stop); --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E"); }
 .dsee { align-self: flex-start; margin: 2px 0 0 8px; }
+.dflags summary { display: inline-block; cursor: pointer; font-weight: 600; font-size: var(--fs-small); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; border-radius: 4px; }
+.dflags summary:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.dflags .caps { margin-top: 6px; }
 @container app (min-width: 1080px) {
   .app:not(.fresh):not(.paging) .main:not(.split) { grid-template-columns: minmax(0, 1fr) 360px; }
   .app:not(.fresh):not(.paging) .main:not(.split) .dockcol { display: flex; }
@@ -429,7 +432,6 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
 .wf-table tbody tr:first-child td { border-top: 0; }
 .wf-table .c-state { width: 1%; white-space: nowrap; }
 .wf-table .c-when, .wf-table .c-next { white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
-.wf-table .c-x { width: 1%; }
 .wf-name { padding: 2px 0; border: 0; background: none; font-weight: 600; text-align: start; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
 .wf-last { display: grid; gap: 6px; font-size: var(--fs-small); color: var(--text-2); }
 @container app (max-width: 1000px) { .wf-table .c-when { display: none; } }
@@ -1004,10 +1006,10 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
       <li>“Draft a workflow that …” brings in the Workflow drafter. Each step shows as it goes, and the blocks appear on the line as it lays them out. Play “Draft a workflow”.</li>
       <li>The draft card asks one question at a time, with choices from the team’s own data. A run time is never guessed. A guess shows as a guess you can change. Keys are never typed in the chat, and an Operator adds them in Settings.</li>
       <li>Send for approval appears only when nothing is still needed. Until then the card says how many questions are left.</li>
-      <li>The report is code’s own words. In short comes first, then one row per section with a short gist. A row opens on a click, and Settings opens by itself while anything is still needed.</li>
+      <li>The report is code’s own words. In short comes first, then one row per section with a short gist. A row opens on a click, and Settings opens by itself while anything is still needed. Since 25 Nov it shows only in the chat’s Explain answer. The draft card lists its flags under See them, and has no See the report.</li>
       <li>Where something can’t go on yet, the reason sits where its button would be, such as “Answer 1 question first”. No button is ever shown dead. The Planner’s set-up card and the change card follow the same rule.</li>
-      <li>Bob ticks each flag and says why. Approve appears only when every flag has a tick and a reason. A write by n8n’s own blocks won’t ask on each run, and the page says so. Play “Bob approves a draft”, then “Second Approver” for a workflow that changes who can use GitLab.</li>
-      <li>Explain sits on each row of Workflows, on the workflow page and on each version. “Explain the FastAPI release check” answers in the chat, with a Reworded label and code’s own wording one tap away. Play “Explain”.</li>
+      <li>Bob ticks each flag and says why. Approve appears only when every flag has a tick and a reason. A write by n8n’s own blocks won’t ask on each run, and the page says so. What it reads, writes and posts, who approves each write, the settings and the safety checks are in view, with no More details. Play “Bob approves a draft”, then “Second Approver” for a workflow that changes who can use GitLab.</li>
+      <li>“Explain the FastAPI release check” answers in the chat, with a Reworded label and code’s own wording one tap away. Play “Explain”. Since 25 Nov there is no Explain page: no Explain on a row of Workflows, the workflow page, a version or the side panel.</li>
       <li>A thumbs up or down sits under each Planner answer, only while tracing is on. Switch “Tracing” to compare.</li>
     </ul>
   </section>
@@ -1751,7 +1753,7 @@ function whenHTML(id) {
   if (W.schedEdit === id) return `<div class="sched"><select id="sdDay" aria-label="Day">${dayOpts(W.sd.day)}</select><select id="sdTime" aria-label="Time">${timeOpts(W.sd.time)}</select><button class="btn sm" type="button" data-sched-save="${id}">Save</button><button class="btn ghost sm" type="button" data-sched-cancel>Cancel</button></div>`;
   return `<div class="when-row"><span>${long(f.sched)}</span>${canEdit() ? `<button class="linkbtn" type="button" data-sched-edit="${id}">Change</button>` : ''}</div>`;
 }
-const versRows = (id) => W.hist[id].map((h, i) => `<li><span><b>Version ${h.v}${i === 0 ? ', in use' : ''}</b><span class="s">${h.what}. ${h.by}, ${h.on}.</span></span><button class="btn ghost sm" type="button" data-open="explain:${id}:${h.v}">Explain</button>${i === 0 || !canEdit() ? '<span></span>' : `<button class="btn ghost sm" type="button" data-rollback="${id}:${h.v}">Roll back</button>`}</li>`).join('');
+const versRows = (id) => W.hist[id].map((h, i) => `<li><span><b>Version ${h.v}${i === 0 ? ', in use' : ''}</b><span class="s">${h.what}. ${h.by}, ${h.on}.</span></span>${i === 0 || !canEdit() ? '<span></span>' : `<button class="btn ghost sm" type="button" data-rollback="${id}:${h.v}">Roll back</button>`}</li>`).join('');
 const lastRun = (id) => (id === 'fastapi' ? `Today 8:00: ${lower(TODAY[W.stage])}` : W.hist[id].length === 1 && W.hist[id][0].on === 'just now' ? 'No runs yet' : 'Today 8:00: nothing new');
 const nextRun = (id) => (W.paused[id] ? 'Paused' : cap(firstRun(W.wf[id].sched)));
 function wfView(id, full = false) {
@@ -2063,7 +2065,7 @@ function patchWf(el) {
   $('[data-live="wf-flow"]', el).innerHTML = flowHTML(steps, ran ? st : {}, { first: short(f.sched), note, run: ran });
   $('[data-live="wf-vers"]', el).innerHTML = versRows(id);
   const open = id === 'fastapi' && ['stopped', 'waiting'].includes(W.stage) ? '<button class="btn" type="button" data-open="run">Open the run</button>' : '';
-  $('[data-live="wf-acts"]', el).innerHTML = `${open}${canEdit() ? `<button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>` : ''}<button class="btn ghost" type="button" data-open="explain:${id}">Explain</button>`;
+  $('[data-live="wf-acts"]', el).innerHTML = `${open}${canEdit() ? `<button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>` : ''}`;
   const ver = $('[data-live="n8n-ver"]', el);
   if (ver) { ver.textContent = `Version ${f.ver}, published by ${f.by}, ${f.on}`; $('[data-live="n8n-canvas"]', el).innerHTML = canvasSVG(id); }
 }
@@ -2225,17 +2227,16 @@ function titleOf(spec) {
   if (v === 'wf') return W.wf[id].name;
   if (v === 'soft') return W.soft[id].name;
   if (v === 'dw') return dT(W.dw[id]).name;
-  return { needs: 'Needs you', run: 'The run', appr: 'Approval', build: 'Build', key: 'Jira key', report: 'The report', setup: 'Set-up approval', fixappr: 'Set-up approval', slog: 'Approval log', explain: 'Explain' }[v];
+  return { needs: 'Needs you', run: 'The run', appr: 'Approval', build: 'Build', key: 'Jira key', setup: 'Set-up approval', fixappr: 'Set-up approval', slog: 'Approval log' }[v];
 }
 /* Rail pages carry more per row than chat cards: the last run, what checks each software, urgent first. */
-const xBtn = (id) => `<button class="btn ghost sm" type="button" data-open="explain:${id}">Explain</button>`;
 const rowState = (id) => (W.dw[id] ? dwState(id) : wfState(id));
 const listRowsFull = () => boardIds().map((id) => {
   const d = W.dw[id];
   const [t, s] = rowState(id);
   const last = d ? `${dwMini(id, true)}<span>${dwSub(id)}</span>` : `${wfMini(id, true)}<span>${lastRun(id)}</span>`;
   const when = d ? dT(d).whenShort(dVal(d, dT(d).settings[0]).value) : short(W.wf[id].sched);
-  return `<tr${W.wfFilter && W.wfFilter !== t ? ' hidden' : ''}><td class="c-state"><span class="pill" data-s="${s}">${t}</span></td><td><button class="wf-name" type="button" data-open="${d ? 'dw' : 'wf'}:${id}">${d ? dT(d).name : W.wf[id].name}</button></td><td><div class="wf-last">${last}</div></td><td class="c-when">${when}</td><td class="c-next">${d ? '' : nextRun(id)}</td><td class="c-x">${xBtn(id)}</td></tr>`;
+  return `<tr${W.wfFilter && W.wfFilter !== t ? ' hidden' : ''}><td class="c-state"><span class="pill" data-s="${s}">${t}</span></td><td><button class="wf-name" type="button" data-open="${d ? 'dw' : 'wf'}:${id}">${d ? dT(d).name : W.wf[id].name}</button></td><td><div class="wf-last">${last}</div></td><td class="c-when">${when}</td><td class="c-next">${d ? '' : nextRun(id)}</td></tr>`;
 }).join('');
 function filtersHTML(ids, stateOf, key) {
   const counts = new Map();
@@ -2253,7 +2254,7 @@ const watchRowsFull = () => [...softIds()].sort((a, b) => RANK[softState(a)[0]] 
 const pageList = (k) => (k === 'wf'
   ? `<div class="pv"><div class="pg-head"><h3 class="page-title">Workflows</h3><div class="filters" role="group" aria-label="Show" data-live="wf-filters"></div></div>
     ${needs().length ? '<section class="pv-sec"><h4 class="sec-title">Needs you</h4><div class="needs" data-live="needs"></div></section>' : ''}
-    <section class="pv-sec"><h4 class="sec-title">All workflows <span class="n" data-live="n-wf"></span></h4><div class="tbl-wrap"><table class="wf-table"><thead><tr><th scope="col">${nw('State')}</th><th scope="col">Workflow</th><th scope="col">Last run</th><th scope="col" class="c-when">When</th><th scope="col">Next run</th><th scope="col"><span class="vh">Explain</span></th></tr></thead><tbody data-live="list-full"></tbody></table></div></section></div>`
+    <section class="pv-sec"><h4 class="sec-title">All workflows <span class="n" data-live="n-wf"></span></h4><div class="tbl-wrap"><table class="wf-table"><thead><tr><th scope="col">${nw('State')}</th><th scope="col">Workflow</th><th scope="col">Last run</th><th scope="col" class="c-when">When</th><th scope="col">Next run</th></tr></thead><tbody data-live="list-full"></tbody></table></div></section></div>`
   : `<div class="pv"><div class="pg-head"><h3 class="page-title">${nw('Software watchlist')}</h3>${canEdit() ? `<form class="add" data-addf><label for="addIn">${nw('Add software')}</label><span class="add-row"><input id="addIn" type="text" autocomplete="off" placeholder="Grafana" data-nw="Grafana"><button class="btn" type="submit">${nw('Find it')}</button></span></form>` : ''}</div>
     <div class="filters" role="group" aria-label="Show" data-live="watch-filters"></div>
     <ul class="sw-list" data-live="watch-full"></ul></div>`);
@@ -2288,12 +2289,10 @@ function viewHTML(spec, full = false) {
   if (v === 'appr') return apprView(full);
   if (v === 'build') return buildView(id);
   if (v === 'soft') return softView(id, full);
-  if (v === 'report') return reportView(id);
   if (v === 'setup') return setupView(id, full);
   if (v === 'fixappr') return fixApprView();
   if (v === 'dw') return dwView(id, full);
   if (v === 'slog') return slogView(id);
-  if (v === 'explain') return explainView(id, spec.split(':')[2]);
   if (v === 'settings') return settingsView();
   return keyView();
 }
@@ -2951,16 +2950,16 @@ const DT = {
     inShort: (v, has) => `Every Monday at ${v('time')}, it finds GitLab issues in ${v('repo')} with no activity for ${v('days')} and closes them.${has('post') ? ` It posts the list in Slack ${v('channel')}.` : ''} It creates 1 ticket in Jira project ${v('jira')} after a yes. It changes nothing else.`,
     rwp: (v, has) => [
       ['Reads', `GitLab, project ${v('repo')}`, `Issues with no activity for ${v('days', true)}, with the platform’s GitLab key.`],
-      ['Writes', `GitLab, project ${v('repo')}`, `Closes those issues with the write key ${v('key')}. No yes on each run.`],
-      ['Writes', `Jira project ${v('jira')}`, '1 ticket that lists the closed issues, after a yes.'],
+      ['Writes', `GitLab, project ${v('repo')}`, `Closes those issues with the write key ${v('key')}. No approval on each run.`],
+      ['Writes', `Jira project ${v('jira')}`, '1 ticket that lists the closed issues, after approval.'],
       ...(has('post') ? [['Posts', `Slack ${v('channel')}`, 'The words “Closed today:”, then the titles that “Close issues” returns.']] : []),
     ],
     who: (v, has) => [
-      ['Create the ticket', `Waits for a yes in Teams on each run, from ${v('appr', true)}.`, 'yes'],
-      ['Close issues', 'Runs on the set-up approval, with no yes on each run.', 'setup'],
-      ...(has('post') ? [['Post the list', 'Posts on the set-up approval, with no yes on each run.', 'setup']] : []),
+      ['Create the ticket', `Waits for approval in Teams on each run, from ${v('appr', true)}.`, 'yes'],
+      ['Close issues', 'Runs on the set-up approval, with no approval on each run.', 'setup'],
+      ...(has('post') ? [['Post the list', 'Posts on the set-up approval, with no approval on each run.', 'setup']] : []),
     ],
-    noYes: (has) => `“Close issues”${has('post') ? ' and “Post the list”' : ''} won’t ask for a yes on each run. Your approval now is the only one.`,
+    noYes: (has) => `“Close issues”${has('post') ? ' and “Post the list”' : ''} won’t ask for approval on each run. Your approval now is the only one.`,
     flags: [
       { id: 'native_write', block: 'close', what: 'Closes GitLab issues with n8n’s own block', why: 'n8n’s own blocks don’t ask for a yes on each run, so this approval is the only one.', agree: 'Every Monday it closes each issue it finds, with the write key “GitLab ops”.' },
       { id: 'post_read', block: 'post', what: 'Posts words from what the run read', why: 'Issue titles go to #eng-housekeeping as they are. A title could say anything.', agree: 'The titles of the issues it closed are posted as written.', words: '“Closed today:”, then the titles that “Close issues” returns' },
@@ -2992,14 +2991,14 @@ const DT = {
     rwp: (v, has) => [
       ['Reads', `Confluence, page ${v('page')}`, 'The names of people who left, with the platform’s Confluence key.'],
       ['Reads', 'GitLab', 'The accounts of those people, with the platform’s GitLab key.'],
-      ['Writes', 'GitLab', `Removes those accounts from every project, with the write key ${v('key')}. No yes on each run.`],
+      ['Writes', 'GitLab', `Removes those accounts from every project, with the write key ${v('key')}. No approval on each run.`],
       ...(has('post') ? [['Posts', `Slack ${v('channel')}`, 'The words “Removed from GitLab today:”, then the names that “Find their accounts” returns.']] : []),
     ],
     who: (v, has) => [
-      ['Remove from GitLab', 'Runs on the set-up approval, with no yes on each run. It changes who can use GitLab, so its set-up needs two Approvers.', 'setup'],
-      ...(has('post') ? [['Post who was removed', 'Posts on the set-up approval, with no yes on each run.', 'setup']] : []),
+      ['Remove from GitLab', 'Runs on the set-up approval, with no approval on each run. It changes who can use GitLab, so its set-up needs two Approvers.', 'setup'],
+      ...(has('post') ? [['Post who was removed', 'Posts on the set-up approval, with no approval on each run.', 'setup']] : []),
     ],
-    noYes: () => '“Remove from GitLab” won’t ask for a yes on each run. The two approvals now are the only ones.',
+    noYes: () => '“Remove from GitLab” won’t ask for approval on each run. The two approvals now are the only ones.',
     flags: [
       { id: 'native_write', block: 'remove', what: 'Removes people from GitLab with n8n’s own block', why: 'This changes who can use GitLab, and nobody says yes on each run. So two Approvers decide now, one after the other.', agree: 'Each quarter it removes everyone on the leavers page from GitLab, with the write key “GitLab admin”.' },
       { id: 'post_read', block: 'post', what: 'Posts names from what the run read', why: 'Names from the leavers page go to #access-review as written.', agree: 'The names it removed are posted as written.', words: '“Removed from GitLab today:”, then the names that “Find their accounts” returns' },
@@ -3114,12 +3113,12 @@ function wfFacts(id, ver) {
     short: `${long(sched)}, it reads the newest ${c(S.name)} release on GitHub. If it is newer than the version the team runs, it ${jira ? `creates 1 ticket in Jira project ${c('MOCK')}${yes ? ' after an Approver’s yes' : ''}` : 'tells you here'}. It changes nothing else.`,
     reworded: jira && yes ? `${f.name} looks at ${S.name} on GitHub ${sched.day ? `every ${DAY[sched.day]}` : 'every day'} at ${sched.time}. When there’s a release newer than yours, it opens 1 Jira ticket in MOCK, but only after an Approver says yes. Nothing else changes.` : null,
     steps: stepsFor(f.then).filter((s) => s.id !== 'yes' || yes).map((s) => ({ name: B[s.id][0], tag: B[s.id][1], ours: !!B[s.id][2], n8n: B[s.id][3] })),
-    rwp: [['Reads', `GitHub, ${c(S.repo)}`, 'Its newest release, with the platform’s GitHub key.'], jira ? ['Writes', `Jira project ${c('MOCK')}`, `1 upgrade ticket${yes ? ', after a yes' : ''}.`] : ['Shows', 'Here, in the chat', 'One line when there’s a new release.', 'in the app']],
+    rwp: [['Reads', `GitHub, ${c(S.repo)}`, 'Its newest release, with the platform’s GitHub key.'], jira ? ['Writes', `Jira project ${c('MOCK')}`, `1 upgrade ticket${yes ? ', after approval' : ''}.`] : ['Shows', 'Here, in the chat', 'One line when there’s a new release.', 'in the app']],
     accept: [], accepted: null, answer: 0,
     refused: jira && !yes ? [['“Make approved changes” has no yes before it', 'Our platform refuses the write, so the next run stops before the ticket. Put the yes back to fix it.']] : [],
     fixed: [...(jira ? ['I added an approval step. Before each ticket is made, an Approver must approve it in Teams.'] : []), 'Set the team’s time zone, Singapore.', 'Added our error workflow, so a stopped run shows here.'],
     passed: ['Every block loads in our n8n.', 'Reads only places the team allows.', 'No key is typed into a block.', 'Runs no code.'],
-    who: jira ? [['Make approved changes', yes ? 'Waits for a yes in Teams on each run, from any Approver but the person who started the run.' : 'Can’t write. There’s no yes before it, so our platform refuses the write.', yes ? 'yes' : 'no']] : [],
+    who: jira ? [['Make approved changes', yes ? 'Waits for an Approver in Teams on each run. Nobody who started the run or made the workflow can approve it.' : 'Can’t write. Nothing asks for approval before it, so our platform refuses the write.', yes ? 'yes' : 'no']] : [],
     sets: [['Run time', long(sched), `Set by ${by.by}, ${by.on}`], ['Software', S.name, 'From Alice’s words'], ...(jira ? [['Jira project', 'MOCK', 'The team’s allowed project'], ['Who says yes', 'Any Approver but the person who started the run', 'The team’s rule']] : [])].map(([label, value, src]) => ({ label, value, mark: 'set', src })),
     appr: 'None needed. The Planner laid it out from a tested layout, and every write waits for a yes.',
     apprG: 'No set-up approval needed',
@@ -3154,7 +3153,7 @@ const RSEC = {
   who: (F) => {
     const y = F.who.filter((w) => w[2] === 'yes').length;
     const s = F.who.filter((w) => w[2] === 'setup').length;
-    const g = F.who.length ? [y ? `${y} ${y === 1 ? 'waits' : 'wait'} for a yes on each run` : '', s ? `${s} on the set-up approval` : '', F.who.length - y - s ? 'Writes refused' : ''].filter(Boolean).join(' · ') : 'Writes nothing';
+    const g = F.who.length ? [y ? `${y} ${y === 1 ? 'waits' : 'wait'} for approval on each run` : '', s ? `${s} on the set-up approval` : '', F.who.length - y - s ? 'Writes refused' : ''].filter(Boolean).join(' · ') : 'Writes nothing';
     const ic = { yes: ICON.gate, setup: '!', no: ICON.x };
     return [g, F.who.length ? `<ul class="parts">${F.who.map(([n, t, k]) => `<li class="pt wide" data-s="${k === 'setup' ? 'flag' : k}"><span class="ic" aria-hidden="true">${ic[k]}</span><span class="v"><span><b>${qn(n)}</b></span><span class="s">${t}</span></span></li>`).join('')}</ul>` : '<p>It writes nothing, so nobody approves a write.</p>'];
   },
@@ -3187,7 +3186,7 @@ function patchRep(el) {
 function toggleRw(btn) { const c = btn.closest('[data-x]'); c.dataset.code = c.dataset.code === '1' ? '' : '1'; refresh(); }
 
 /* ---------- The draft card: the steps as they go, then the line, In short, one question at a time ---------- */
-const dCardShell = (d) => `<div class="card" data-live="dcard" data-k="${d.key}" data-rev="${d.rev}" data-spec="report:${d.key}"><div class="c-head"><b>${dT(d).name}</b><span class="c-hr"><span class="small muted">Revision ${d.rev}</span><span class="pill" data-s="run">Drafting</span></span></div><ul class="dprog" data-dprog></ul><div class="dl-scroll" data-dline hidden></div><p class="c-note" data-dnote hidden></p></div>`;
+const dCardShell = (d) => `<div class="card" data-live="dcard" data-k="${d.key}" data-rev="${d.rev}"><div class="c-head"><b>${dT(d).name}</b><span class="c-hr"><span class="small muted">Revision ${d.rev}</span><span class="pill" data-s="run">Drafting</span></span></div><ul class="dprog" data-dprog></ul><div class="dl-scroll" data-dline hidden></div><p class="c-note" data-dnote hidden></p></div>`;
 function dQRow(d, s) {
   const extra = (s.typed ? `<button type="button" data-dtype="${d.key}">Type a time</button>` : '') + (s.op ? `<button type="button" data-dop="${d.key}">Ask an Operator to add one</button>` : '');
   const typing = s.typed && d.typing ? `<form class="askf" data-dtf="${d.key}"><input type="text" autocomplete="off" placeholder="Like 7:45 or 6pm" aria-label="Type a time"><button class="btn sm" type="submit">Set</button></form>${d.typeMiss ? '<span class="s">I couldn’t read a time in that.</span>' : ''}` : '';
@@ -3197,17 +3196,18 @@ const dOpRow = (d, s) => `<li class="pt" data-s="ask"><span class="ic" role="img
 const dGuessRow = (d, s) => `<li class="pt" data-s="guess"><span class="ic" role="img" aria-label="Guess">${ICON.pen}</span><span class="k">${s.k}</span><span class="v"><span><span class="chip">${esc(dVal(d, s).value)}</span> <span class="s">I guessed.</span> <button class="linkbtn" type="button" data-dchg="${d.key}|${s.id}">Change</button></span>${d.picking === s.id ? pickFor(d, s) : ''}</span></li>`;
 function dFoot(d) {
   const k = d.key;
-  const see = `<button class="btn ghost sm" type="button" data-open="report:${k}">See the report</button>`;
   if (d.status === 'inn8n') return ['Open in your own n8n space, without its keys.', `<button class="btn sm" type="button" data-ddone="${k}">Done in n8n</button>`];
-  if (d.status === 'sent') return ['Waiting for an Approver. You can’t approve your own draft.', see];
-  if (d.status === 'half') return ['1 of 2 approved, waiting for a second Approver.', see];
+  if (d.status === 'sent') return ['Waiting for an Approver. You can’t approve your own draft.', ''];
+  if (d.status === 'half') return ['1 of 2 approved, waiting for a second Approver.', ''];
   if (d.status === 'approved') return [`ok:${ICON.check}${dAcceptLine(d)}. Set up as a draft.`, `<button class="btn ghost sm" type="button" data-open="dw:${k}">Open it</button>`];
-  if (d.status === 'declined') return [`Declined by Bob: ${lower(d.declWhy)}. Nothing was set up.`, see];
+  if (d.status === 'declined') return [`Declined by Bob: ${lower(d.declWhy)}. Nothing was set up.`, ''];
   const n = dNeeded(d).length;
   const asked = d.opAsked && dNeeded(d).some((s) => s.op) ? 1 : 0;
   const wait = n - asked ? `Answer ${n - asked} ${n - asked === 1 ? 'question' : 'questions'} first` : 'Waiting for an Operator to add a key';
-  return [d.cancelled ? 'This revision cancelled the waiting approval.' : '', `${see}<button class="btn ghost sm" type="button" data-dask="${k}">Ask for a change</button>${W.maint ? `<button class="btn ghost sm" type="button" data-dn8n="${k}">Edit in n8n</button>` : ''}${n ? `<span class="waiting dwait">${wait}</span>` : `<button class="btn sm" type="button" data-dsend="${k}">Send for approval</button>`}`];
+  return [d.cancelled ? 'This revision cancelled the waiting approval.' : '', `<button class="btn ghost sm" type="button" data-dask="${k}">Ask for a change</button>${W.maint ? `<button class="btn ghost sm" type="button" data-dn8n="${k}">Edit in n8n</button>` : ''}${n ? `<span class="waiting dwait">${wait}</span>` : `<button class="btn sm" type="button" data-dsend="${k}">Send for approval</button>`}`];
 }
+/* The flags of a draft, under See them. There is no report page to open: each flag says what, where and why. */
+const dFlagList = (d) => `<details class="dflags"><summary>See them</summary><ul class="caps">${dFlags(d).map((f) => `<li><b>${f.what}</b><span class="s">In ${qn(dT(d).blocks.find((b) => b.id === f.block).short)}. ${f.why}</span></li>`).join('')}</ul></details>`;
 function dCardInner(d) {
   const T = dT(d);
   const [pt, ps] = dPill(d);
@@ -3216,7 +3216,7 @@ function dCardInner(d) {
   const opS = editing && d.opAsked ? dNeeded(d).find((s) => s.op) : null;
   const fl = dFlags(d).length;
   const rows = editing ? [q ? dQRow(d, q) : '', opS ? dOpRow(d, opS) : '', ...dSets(d).filter((s) => dVal(d, s).mark === 'guessed').map((s) => dGuessRow(d, s)),
-    fl ? `<li class="pt wide" data-s="flag"><span class="ic" aria-hidden="true">!</span><span class="v"><span>${fl} ${fl === 1 ? 'flag' : 'flags'} for an Approver to accept. <button class="linkbtn" type="button" data-dsee="${d.key}">See them</button></span></span></li>` : ''].join('') : '';
+    fl ? `<li class="pt wide" data-s="flag"><span class="ic" aria-hidden="true">!</span><span class="v"><span>${fl} ${fl === 1 ? 'flag' : 'flags'} for an Approver to accept.</span>${dFlagList(d)}</span></li>` : ''].join('') : '';
   const [left, act] = dFoot(d);
   const ok = left.startsWith('ok:');
   return `<div class="c-head"><b>${T.name}</b><span class="c-hr"><span class="small muted">Revision ${d.rev}</span><span class="pill" data-s="${ps}">${pt}</span></span></div>
@@ -3367,7 +3367,10 @@ function setupView(k, full) {
     <p class="pv-sent">${F.short}</p>
     <p class="callout">${ICON.alert}<span>${T.noYes((id) => has(d, id))}</span></p>
     <div class="pv-sec"><h4>Flags to accept</h4><p class="small muted" data-live="s-hint"></p><ul class="fls" data-live="s-flags"></ul></div>
-    ${full ? `<div class="pv-sec"><h4>The rest of the report</h4>${repBox(k, 'pane', { skip: 'flags' })}</div>` : `<div class="pv-sec"><h4>What it reads, writes and posts</h4>${RSEC.rwp(F)[1]}</div>`}
+    <div class="pv-sec"><h4>What it reads, writes and posts</h4>${RSEC.rwp(F)[1]}</div>
+    <div class="pv-sec"><h4>Who approves each write</h4>${RSEC.who(F)[1]}</div>
+    <div class="pv-sec"><h4>Settings</h4>${RSEC.set(F)[1]}</div>
+    <div class="pv-sec"><h4>Safety checks</h4><p class="rp-sub">Fixed for you</p><ul class="caps rp-ok">${F.fixed.map((x) => `<li>${x}</li>`).join('')}</ul><p class="rp-sub">Passed</p><ul class="caps rp-ok">${F.passed.map((x) => `<li>${x}</li>`).join('')}</ul></div>
     <div class="pv-foot" data-live="s-foot"></div>
   </div>`;
 }
@@ -3422,21 +3425,20 @@ function sApprove(k) {
 }
 function sDecline(k) { const d = W.dw[k]; if (!canDecide(d) || !d.declWhy) return; Object.assign(d, { status: 'declined', declUI: false }); refresh(); }
 
-/* ---------- The drafted workflow's page, its approval log, and Explain ---------- */
+/* ---------- The drafted workflow's page and its approval log ---------- */
 function dwView(k, full) {
   const d = W.dw[k];
   const F = dFacts(d);
   const [t, s] = dwState(k);
-  const vers = `<li><span><b>Revision ${d.rev}${d.status === 'approved' ? ', in use' : ''}</b><span class="s">${d.status === 'approved' ? `${dAcceptLine(d)}, ${d.at}` : 'Drafted by the Workflow drafter for Alice'}.</span></span><button class="btn ghost sm" type="button" data-open="explain:${k}">Explain</button><span></span></li>`;
+  const vers = `<li><span><b>Revision ${d.rev}${d.status === 'approved' ? ', in use' : ''}</b><span class="s">${d.status === 'approved' ? `${dAcceptLine(d)}, ${d.at}` : 'Drafted by the Workflow drafter for Alice'}.</span></span><span></span><span></span></li>`;
   const T = dT(d);
   if (!full) {
     return `<div class="pv"><div class="pv-head"><div><p class="pv-kind">Workflow</p><h3>${F.name}</h3></div><span class="pill lg" data-s="${s}">${t}</span></div>
     <p class="pv-sent">${F.short}</p>
     ${d.status === 'approved' ? `<p><button class="linkbtn okl" type="button" data-open="slog:${k}">${ICON.check}${dAcceptLine(d)}</button></p>` : `<p class="muted">${dwSub(k)}.</p>`}
-    <div class="pv-actions"><button class="btn ghost" type="button" data-open="explain:${k}">Explain</button></div>
   </div>`;
   }
-  return `<div class="pv"><div class="pg-head"><div><p class="pv-kind">Workflow</p><div class="title-row"><h3 class="page-title">${F.name}</h3><span class="pill lg" data-s="${s}">${t}</span></div></div><div class="pv-actions"><button class="btn ghost" type="button" data-open="explain:${k}">Explain</button></div></div>
+  return `<div class="pv"><div class="pg-head"><div><p class="pv-kind">Workflow</p><div class="title-row"><h3 class="page-title">${F.name}</h3><span class="pill lg" data-s="${s}">${t}</span></div></div></div>
     <p class="pv-sent">${F.short}</p>
     ${d.status === 'approved' ? `<p><button class="linkbtn okl" type="button" data-open="slog:${k}">${ICON.check}${dAcceptLine(d)}</button></p>` : `<p class="muted">${dwSub(k)}.</p>`}
     <dl class="meta-strip"><div><dt>When</dt><dd>${T.whenLong(dVal(d, T.settings[0]).value)}</dd></div></dl>
@@ -3457,8 +3459,6 @@ function slogView(k) {
     <div class="pv-sec"><h4>Accepted flags</h4><ul class="parts">${fl.map((f) => `<li class="pt wide" data-s="flag"><span class="ic" aria-hidden="true">!</span><span class="v"><span><b>${f.what}</b></span>${dWhys(d, f.id).map(([n, r]) => `<span class="s">${n} accepted it: “${esc(r)}”</span>`).join('')}</span></li>`).join('')}</ul></div>
     <div class="pv-sec"><h4>Step by step</h4><ol class="log">${steps.map(([t, s]) => `<li><span class="t">${t}</span><span>${s}</span></li>`).join('')}</ol></div></div>`;
 }
-const reportView = (k) => `<div class="pv"><div class="pv-head"><div><p class="pv-kind">Workflow report, revision ${W.dw[k].rev}</p><h3>${dT(W.dw[k]).name}</h3></div><span class="pill lg" data-live="d-pill" data-k="${k}"></span></div>${repBox(k, 'pane')}</div>`;
-const explainView = (id, v) => `<div class="pv"><div class="pv-head"><div><p class="pv-kind">Explain${v ? `, version ${v}` : ''}</p><h3>${wfName(id)}</h3></div></div>${repBox(id, 'pane', { v })}</div>`;
 const explainCard = (id) => `<div class="card" data-x="${id}"><div class="c-head"><b>${wfName(id)}</b></div>${repBox(id, 'card')}<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="${W.wf[id] ? 'wf' : 'dw'}:${id}">Open the workflow</button></span></div></div>`;
 /* "explain <workflow>" names it as an edit does: one match explains it, more ask which, none says so. */
 function explainAsk(s) {
@@ -3636,7 +3636,6 @@ Object.assign(TASKS, {
       }
       await wait(900);
       const c = lastDraft();
-      if (wide()) { await tap($('[data-open^="report:"]', c)); await openView(`report:${c.dataset.k}`); await wait(1600); }
       await tap($('[data-dsend]', c));
       dSend(c.dataset.k);
     },
@@ -3680,12 +3679,6 @@ Object.assign(TASKS, {
       const rw = lastIn('[data-rw]');
       await tap(rw);
       toggleRw(rw);
-      await wait(1500);
-      await tap($('#rail [data-rail="wf"]'));
-      await railGo('wf');
-      await wait(1000);
-      await tap($('#page [data-open="explain:react"]'));
-      await showPage('explain:react', true);
     },
   },
 });
@@ -3767,7 +3760,6 @@ app.addEventListener('click', (e) => {
   if (pick('[data-dtype]')) { const d = W.dw[pick('[data-dtype]').dataset.dtype]; d.typing = true; refresh(); vis(`[data-dtf="${d.key}"] input`)?.focus(); return; }
   if (pick('[data-dop]')) { W.dw[pick('[data-dop]').dataset.dop].opAsked = true; refresh(); toast('Asked the Operators. Their answer will show here.'); return; }
   if (pick('[data-dchg]')) { const [k, id] = pick('[data-dchg]').dataset.dchg.split('|'); const d = W.dw[k]; d.picking = d.picking === id ? null : id; refresh(); return; }
-  if (pick('[data-dsee]')) { const k = pick('[data-dsee]').dataset.dsee; OPEN.set(`${k}:pane:flags`, true); quiet(openView(`report:${k}`)); return; }
   if (pick('[data-dsend]')) { dSend(pick('[data-dsend]').dataset.dsend); return; }
   if (pick('[data-dask]')) { W.dwFocus = pick('[data-dask]').dataset.dask; cin.placeholder = 'Say what to change, like “post at 9 instead”'; cin.focus(); return; }
   if (pick('[data-dn8n]')) { W.dw[pick('[data-dn8n]').dataset.dn8n].status = 'inn8n'; refresh(); toast('Opened in your own n8n space, without its keys.'); return; }

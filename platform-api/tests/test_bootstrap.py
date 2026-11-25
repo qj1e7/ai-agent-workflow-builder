@@ -776,7 +776,9 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     ]
     assert "workflow:delete" in n8n.scopes
     assert any(line.startswith(f"workflow {OLD_RUN_WORKFLOW} (W1): removed") for line in said)
-    assert n8n.api_keys == [{"id": "k2", "label": "Alice's own key"}], "platform-api makes its own"
+    assert [key["id"] for key in n8n.api_keys] == ["k1", "k2"], (
+        "platform-api removes its own keys once no process of it uses them"
+    )
 
 
 def restore_pending(owner_url: str) -> list[str] | None:

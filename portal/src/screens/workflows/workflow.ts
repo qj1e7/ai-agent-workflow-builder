@@ -6,7 +6,7 @@ import { agentIdentity } from '../../ui/agents'
 import { andList, declinedOfSteps, declinedRecord, runPill, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
 import { faceId } from '../agents/agents'
 import { heldWords, repeatWords } from '../software/software'
-import { DELETED_IN_N8N, gradePill, madeWords, needsFix, refusedBanner, UNKNOWN_PUBLISHER } from './n8nChange'
+import { DELETED_IN_N8N, madeWords, needsFix, needsFixBanner, refusedBanner, UNKNOWN_PUBLISHER } from './n8nChange'
 import { lineWhen, nextRunAt, runWhen, scheduleZoneName, teamZone, zoneWords } from './times'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
@@ -547,8 +547,6 @@ export type BannerAction =
   | { readonly kind: 'undo'; readonly to: number; readonly inUse: number }
   /** Save the same schedule again: the platform lays the workflow out on the team time zone, which every earlier version misses. */
   | { readonly kind: 'resave'; readonly day: Day; readonly at: string }
-  /** Open the workflow's Explain at its flags, which say what to fix and where, when the page has no fix of its own to offer. */
-  | { readonly kind: 'explain'; readonly useCaseId: string }
 
 export interface Banner {
   readonly tone: BannerTone
@@ -558,7 +556,7 @@ export interface Banner {
 
 interface BannerFacts {
   readonly useCase: Pick<UseCaseView, 'use_case_id' | 'template' | 'state' | 'next_run_at' | 'schedule' | 'last_run'> &
-    Partial<Pick<UseCaseView, 'grade' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused' | 'held_in_n8n' | 'made_in_n8n_by' | 'start_refused'>>
+    Partial<Pick<UseCaseView, 'grade' | 'findings' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused' | 'held_in_n8n' | 'made_in_n8n_by' | 'start_refused'>>
   readonly viewer: Viewer
   readonly now: Date
   readonly nameOf: NameOf
@@ -570,19 +568,21 @@ const sentence = (words: string): string => (/[.!?]$/.test(words) ? words : `${w
 
 export const OWNER_WARNING = 'Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.'
 
-const NEEDS_A_FIX = `${gradePill('needs_a_fix').label}.`
+/** Who can clear a version that needs a fix when the page offers no fix of its own. A change in n8n is graded again as a new version. */
+export const WHO_FIXES = 'Anyone with n8n access can fix it in n8n.'
 
 /**
- * A version that needs a fix, in one sentence. Its findings are on Explain's flags, which say what to fix and where. A schedule on another
+ * A version that needs a fix, with what to fix in the safety checker's words, so both roles read it on the page. A schedule on another
  * zone than the team's is saved again (ADR 0046), and saving makes the presser its owner, so the banner says so, as the schedule editor
- * does. Else Undo goes back to the version before. While neither can be pressed, Explain is the way forward.
+ * does. Else Undo goes back to the version before. While neither can be pressed, the banner says who can clear it.
  */
 function needsFixOf(useCase: BannerFacts['useCase'], viewer: Viewer, version: number): Banner {
   const schedule = useCase.schedule
   const mayPublish = viewer.operator && !useCase.held_in_n8n
-  if (mayPublish && mayChangeSchedule(useCase, viewer) && schedule && schedule.time_zone !== teamZone()) return { tone: 'bad', text: `${NEEDS_A_FIX} ${OWNER_WARNING}`, action: { kind: 'resave', day: schedule.day, at: schedule.at } }
-  if (mayPublish && version > 1) return { tone: 'bad', text: NEEDS_A_FIX, action: { kind: 'undo', to: version - 1, inUse: version } }
-  return { tone: 'bad', text: NEEDS_A_FIX, action: { kind: 'explain', useCaseId: useCase.use_case_id } }
+  const text = needsFixBanner(useCase.findings ?? [])
+  if (mayPublish && mayChangeSchedule(useCase, viewer) && schedule && schedule.time_zone !== teamZone()) return { tone: 'bad', text: `${text} ${OWNER_WARNING}`, action: { kind: 'resave', day: schedule.day, at: schedule.at } }
+  if (mayPublish && version > 1) return { tone: 'bad', text, action: { kind: 'undo', to: version - 1, inUse: version } }
+  return { tone: 'bad', text: `${text} ${WHO_FIXES}`, action: null }
 }
 
 /** Every change that publishes again, which the platform refuses while anyone has the workflow open in n8n (ENGINE-PLAN 11). */

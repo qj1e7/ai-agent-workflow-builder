@@ -235,8 +235,8 @@ def test_the_fastapi_release_check_reads_github_and_writes_jira_after_a_yes() ->
         ("Read release", True, "Reads GitHub"),
         ("Compare", True, "Runs an agent"),
         ("Newer?", False, "Shapes the data"),
-        ("Ask for a yes", True, "Waits for a yes"),
-        ("Create ticket", True, "Writes after a yes"),
+        ("Ask for a yes", True, "Waits for approval"),
+        ("Create ticket", True, "Writes after approval"),
         ("Nothing to change", False, "Ends the run"),
     ], "in run order, without the sticky note"
     assert [(t.action, t.system, t.place, t.block.text) for t in report.touches] == [
@@ -247,11 +247,16 @@ def test_the_fastapi_release_check_reads_github_and_writes_jira_after_a_yes() ->
     ]
     assert text(report.in_short) == (
         "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
-        "It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else."
+        "It can create Jira tickets in “MOCK”, each after approval. It changes nothing else."
     )
-    assert [(text((a.block,)), a.decides) for a in report.approves] == [
-        ("“Create ticket”", EachRun(1))
-    ]
+    assert [(text((a.block,)), a.decides, a.words) for a in report.approves] == [
+        (
+            "“Create ticket”",
+            EachRun(1),
+            "Waits for an Approver in Teams on each run. Nobody who started the run or made the "
+            "workflow can approve it.",
+        )
+    ], "who approves each write, in approval words"
     assert report.flags == ()
     assert report.needs_an_answer == 0
 
@@ -304,9 +309,9 @@ def test_once_set_up_approvals_exist_an_approver_may_accept_what_the_table_says(
     takes = {f.rule: f.takes for f in report.flags}
     assert takes["operation_off"] == "An Approver may accept it at set-up."
     assert [(a.block.text, a.decides, a.words) for a in report.approves] == [
-        ("Open an issue", AtSetUp(), "Runs on the set-up approval, with no yes on each run."),
-        ("Post summary", AtSetUp(), "Posts on the set-up approval, with no yes on each run."),
-        ("Call the hook", AtSetUp(), "Runs on the set-up approval, with no yes on each run."),
+        ("Open an issue", AtSetUp(), "Runs on the set-up approval, with no approval on each run."),
+        ("Post summary", AtSetUp(), "Posts on the set-up approval, with no approval on each run."),
+        ("Call the hook", AtSetUp(), "Runs on the set-up approval, with no approval on each run."),
     ], "n8n loads HTTP Request (ADR 0051, build step 12), so an Approver may accept it"
 
 
@@ -334,8 +339,8 @@ def test_a_block_our_n8n_doesn_t_load_or_holds_off_can_t_run_whatever_an_approva
     )
     assert text(report.in_short) == (
         "Every Monday at 9:00, it reads GitHub “fastapi/fastapi”. "
-        "It could change data in Jira through “Open an issue”, with no yes on each run. "
-        "It posts what “Read FastAPI” returned in Slack “C0TEAM”, with no yes on each run. "
+        "It could change data in Jira through “Open an issue”, with no approval on each run. "
+        "It posts what “Read FastAPI” returned in Slack “C0TEAM”, with no approval on each run. "
         "It could change or send data through “Call the hook”, but it can't run on this "
         "platform yet. It changes nothing else."
     )
@@ -445,7 +450,13 @@ def test_two_approvers_say_yes_on_each_run_when_a_card_asks_for_two() -> None:
         }
     )
     report = workflow_report(SetUp("planner", fastapi(), {VERSION_CHECKER_ID: two}), TEAM)
-    assert [a.decides for a in report.approves] == [EachRun(2)]
+    assert [(a.decides, a.words) for a in report.approves] == [
+        (
+            EachRun(2),
+            "Waits for two Approvers in Teams on each run, one after the other. Nobody who "
+            "started the run or made the workflow can approve it.",
+        )
+    ]
 
 
 def test_a_write_with_its_yes_taken_away_is_refused_and_says_so() -> None:
@@ -454,10 +465,17 @@ def test_a_write_with_its_yes_taken_away_is_refused_and_says_so() -> None:
         {"node": "Create ticket", "type": "main", "index": 0}
     ]
     report = report_of(document)
-    assert [(a.block.text, a.decides) for a in report.approves] == [("Create ticket", Refused())]
+    assert [(a.block.text, a.decides, a.words) for a in report.approves] == [
+        (
+            "Create ticket",
+            Refused(),
+            "Can't write. Nothing asks for approval before it, so our platform refuses the write.",
+        )
+    ]
     [write] = [t for t in report.touches if t.action == "writes"]
     assert text(write.phrase) == (
-        "would create Jira tickets in “MOCK”, but our platform refuses it with no yes before it"
+        "would create Jira tickets in “MOCK”, but our platform refuses it, as nothing asks for "
+        "approval before it"
     )
     assert [f.rule for f in report.flags] == ["no_yes_before_write"]
 
@@ -728,13 +746,16 @@ def test_a_write_whose_card_names_no_place_says_so() -> None:
         {"name": "GitHub repository", "value": "fastapi/fastapi"}
     ]
     [write] = [t for t in report_of(document).touches if t.action == "writes"]
-    assert (write.place, text(write.phrase)) == (None, "can create Jira tickets, each after a yes")
+    assert (write.place, text(write.phrase)) == (
+        None,
+        "can create Jira tickets, each after approval",
+    )
 
 
 def test_a_write_with_no_card_before_it_asks_one_approver_and_makes_what_was_approved() -> None:
     report = report_of(json.loads((GOLDEN / "watchlist.json").read_text()))
     [write] = [t for t in report.touches if t.action == "writes"]
-    assert text(write.phrase) == "can make the changes approved in the run, each after a yes"
+    assert text(write.phrase) == "can make the changes approved in the run, each after approval"
     assert [a.decides for a in report.approves] == [EachRun(1)]
 
 

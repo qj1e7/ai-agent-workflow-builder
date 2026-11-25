@@ -85,7 +85,7 @@ describe('the order of what needs you', () => {
     expect(needsTotal(home)).toBe(needsTotal({ ...home, fixes: [] }) + 1)
     const [row] = needs.shown.filter((need) => need.kind === 'fix') as [Need]
     expect(groupOf(row)).toBe('now')
-    expect(actionsOf(row)).toEqual([{ kind: 'open', label: 'See what to fix', to: '/workflows/uc_fix/explain' }])
+    expect(actionsOf(row), 'the workflow’s page says what to fix').toEqual([{ kind: 'open', label: 'See what to fix', to: '/workflows/uc_fix' }])
     expect(wordsOf(row, NOW).title).toBe('LangGraph release check needs a fix')
   })
 

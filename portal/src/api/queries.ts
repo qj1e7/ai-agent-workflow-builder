@@ -35,7 +35,7 @@ export const keys = {
   /** One per event of the run, so each new event reads the blocks' states again. */
   runInN8n: (user: string, runId: string, seq: number) => ['run', user, runId, 'n8n', seq] as const,
   /** Under the workflow's own key, so a workflow read again reads its report again. */
-  explained: (user: string, useCaseId: string, version: number | null, reworded: boolean) => ['use-case', user, useCaseId, 'explain', version, reworded] as const,
+  explained: (user: string, useCaseId: string) => ['use-case', user, useCaseId, 'explain'] as const,
   versions: (user: string, useCaseId: string, version: number) => ['versions', user, useCaseId, version] as const,
   setUp: (user: string, useCaseId: string) => ['set-up', user, useCaseId] as const,
   made: (user: string, press: string) => ['set-up-made', user, press] as const,

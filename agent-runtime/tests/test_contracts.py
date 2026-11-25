@@ -84,6 +84,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner-chosen.json": TypeAdapter(ChooseResult),
     "software-find-request.json": TypeAdapter(FindSoftwareRequest),
     "software-found.json": TypeAdapter(FindSoftwareResult),
+    "software-found-by-search.json": TypeAdapter(FindSoftwareResult),
     "releases-read-request.json": TypeAdapter(ReadReleasesRequest),
     "releases-read.json": TypeAdapter(ReadReleasesResult),
     "planner-answer-request.json": TypeAdapter(AnswerRequest),

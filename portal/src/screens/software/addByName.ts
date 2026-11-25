@@ -44,11 +44,27 @@ export function matchesOf(state: AddState): readonly ProjectGuess[] {
   return state.answer?.status === 'found' ? state.answer.matches : []
 }
 
+/** A match found by searching GitHub, not from our reviewed list. It is only ever a choice. */
+export const searched = (match: ProjectGuess): boolean => match.found_by === 'github_search'
+
+/** The one match the person may confirm as it is: a single match from our reviewed list. A match found by searching GitHub is never picked for them, even alone. */
+export function clearMatch(matches: readonly ProjectGuess[]): ProjectGuess | undefined {
+  const [only, ...others] = matches
+  return only && others.length === 0 && !searched(only) ? only : undefined
+}
+
+/** Why Home sends the person to choose on the Software watchlist. */
+export function chooseWords(name: string, matches: readonly ProjectGuess[]): string {
+  if (!matches.some(searched)) return `More than one project could be ${name}.`
+  const count = matches.length === 1 ? 'one project' : `${matches.length} projects`
+  return `I searched GitHub for ${name} and found ${count} it could be.`
+}
+
 /** One match to confirm, several to choose from, or the repository typed by hand. */
 export function modeOf(state: AddState): Mode {
   const matches = matchesOf(state)
   if (state.change || matches.length === 0) return 'address'
-  return matches.length === 1 ? 'single' : 'choose'
+  return clearMatch(matches) ? 'single' : 'choose'
 }
 
 function without(errors: FormErrors, field: keyof FormErrors): FormErrors {
@@ -62,12 +78,12 @@ export function addReducer(state: AddState, action: AddAction): AddState {
     case 'kind':
       return { ...state, kind: action.kind, errors: without(state.errors, 'repo') }
     case 'answered': {
-      const only = action.answer.status === 'found' && action.answer.matches.length === 1 ? action.answer.matches[0] : undefined
+      const only = action.answer.status === 'found' ? clearMatch(action.answer.matches) : undefined
       return { ...state, step: 'guess', answer: action.answer, pick: only && verdictOf(only).kind === 'add' ? 0 : -1, change: false, kind: 'github', repo: '', errors: {} }
     }
     case 'change': {
-      const [only, ...others] = matchesOf(state)
-      const keep = only && others.length === 0 && verdictOf(only).kind === 'add' ? only : undefined
+      const only = clearMatch(matchesOf(state))
+      const keep = only && verdictOf(only).kind === 'add' ? only : undefined
       return { ...state, change: true, kind: keep ? kindOf(keep) : 'github', repo: keep ? keep.repo : '', errors: {} }
     }
     case 'picked':

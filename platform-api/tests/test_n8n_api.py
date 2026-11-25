@@ -1,6 +1,7 @@
 """The platform's own calls to n8n while it runs (ENGINE-PLAN 2.1 and 2.5), against a fake n8n
 that answers as spike P7 recorded n8n 2.42.6 answering."""
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -136,7 +137,7 @@ async def test_the_platform_s_key_has_only_the_scopes_it_uses_and_runs_out_in_da
     n8n = FakeN8n()
     await api_for(n8n).create(DOCUMENT)
     [asked] = n8n.key_requests
-    assert asked["label"] == "platform-api"
+    assert asked["label"].startswith("platform-api ")
     assert sorted(asked["scopes"]) == [
         "credential:create",
         "credential:delete",
@@ -169,17 +170,90 @@ async def test_a_key_that_ran_out_is_replaced_without_a_new_sign_in() -> None:
     assert (n8n.logins, len(n8n.key_requests)) == (1, 2)
 
 
+async def test_a_process_that_starts_within_a_day_of_another_makes_a_key_of_its_own() -> None:
+    """n8n 2.42.6 refuses a second key with a label its user already holds. A deploy or a relink
+    starts platform-api again while the last process's key is still there (seen 25 Nov 2026)."""
+    sleeps = Sleeps()
+    n8n = FakeN8n(key_clock=sleeps.wall_clock)
+    first = api_for(n8n, sleeps)
+    await first.create(DOCUMENT)
+    sleeps.wall += timedelta(hours=2)
+    second = api_for(n8n, sleeps)
+    await second.create(DOCUMENT)
+    await first.create(DOCUMENT)
+    assert (len(n8n.key_requests), len(n8n.keys)) == (2, 2), "the first process's key still works"
+    labels = {k["label"] for k in n8n.listed_keys}
+    assert len(labels) == 2 and all(label.startswith("platform-api ") for label in labels)
+
+
+async def test_two_processes_that_start_at_once_each_make_a_key_of_their_own() -> None:
+    """As two replicas would, with a key a third process left two days ago."""
+    sleeps = Sleeps()
+    left = listed_key("left", "platform-api 0a1b2c3d", WALL - timedelta(days=2))
+    n8n = FakeN8n(key_clock=sleeps.wall_clock, interleaves=True, listed_keys=[left])
+    one, two = api_for(n8n, sleeps), api_for(n8n, sleeps)
+    await asyncio.gather(one.create(DOCUMENT), two.create(DOCUMENT))
+    asked = [call for call in n8n.calls if call.endswith(" /rest/api-keys")]
+    assert asked.index("POST /rest/api-keys") > 1, "both looked before either made a key"
+    await asyncio.gather(one.create(DOCUMENT), two.create(DOCUMENT))
+    assert len(n8n.key_requests) == 2
+    assert [k["id"] for k in n8n.listed_keys] == ["apikey1", "apikey2"]
+
+
+async def test_one_process_makes_one_key_however_many_calls_need_it_at_once() -> None:
+    n8n = FakeN8n(interleaves=True)
+    api = api_for(n8n)
+    await asyncio.gather(*(api.create(DOCUMENT) for _ in range(3)))
+    assert len(n8n.key_requests) == 1
+
+
 async def test_making_a_key_removes_only_the_platform_s_own_keys_older_than_a_day() -> None:
     n8n = FakeN8n(
+        key_clock=lambda: WALL,
         listed_keys=[
-            listed_key("old", "platform-api", WALL - timedelta(days=2)),
-            listed_key("fresh", "platform-api", WALL - timedelta(hours=2)),
-            listed_key("hers", "platform-api", WALL - timedelta(days=9), "alice@example.com"),
+            listed_key("bare", "platform-api", WALL - timedelta(days=2)),
+            listed_key("old", "platform-api 0a1b2c3d", WALL - timedelta(days=2)),
+            listed_key("live", "platform-api 4e5f6a7b", WALL - timedelta(hours=20)),
+            listed_key("hers", "platform-api 8c9d0e1f", WALL - timedelta(days=9), "a@example.com"),
+            listed_key("alike", "platform-apis", WALL - timedelta(days=9)),
+            listed_key("boot", "platform-bootstrap", WALL - timedelta(days=9)),
             listed_key("staff", "Alice's key", WALL - timedelta(days=9)),
-        ]
+        ],
     )
     await api_for(n8n).create(DOCUMENT)
-    assert [k["id"] for k in n8n.listed_keys] == ["fresh", "hers", "staff"]
+    kept = [k["id"] for k in n8n.listed_keys]
+    assert kept == ["live", "hers", "alike", "boot", "staff", "apikey1"]
+
+
+async def test_a_process_makes_a_new_key_before_its_own_is_one_another_would_remove() -> None:
+    """Keys older than a day are removed, so a process makes a new key at half that age, and a
+    key in use is never one another process removes."""
+    sleeps = Sleeps()
+    n8n = FakeN8n(key_clock=sleeps.wall_clock)
+    api = api_for(n8n, sleeps)
+    await api.create(DOCUMENT)
+    sleeps.wall += timedelta(hours=11, minutes=59)
+    await api.create(DOCUMENT)
+    assert len(n8n.key_requests) == 1
+    sleeps.wall += timedelta(minutes=1)
+    await api.create(DOCUMENT)
+    assert len(n8n.key_requests) == 2
+    assert n8n.deleted_keys == 0, "the key it used until now is under a day old"
+
+
+async def test_a_name_n8n_says_is_taken_is_tried_once_more_with_a_new_id() -> None:
+    n8n = FakeN8n(name_clashes=1)
+    await api_for(n8n).create(DOCUMENT)
+    first, second = (asked["label"] for asked in n8n.key_requests)
+    assert first != second and second.startswith("platform-api ")
+    assert len(n8n.keys) == 1
+
+
+async def test_a_name_taken_twice_is_a_plain_error() -> None:
+    n8n = FakeN8n(name_clashes=2)
+    with pytest.raises(N8nError, match="a key with that name already exists"):
+        await api_for(n8n).create(DOCUMENT)
+    assert (len(n8n.key_requests), n8n.keys) == (2, [])
 
 
 async def test_write_publishes_the_change_when_nothing_changed_under_it() -> None:

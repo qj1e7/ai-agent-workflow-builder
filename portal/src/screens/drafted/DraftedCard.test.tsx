@@ -20,7 +20,7 @@ import { ApiProvider } from '../../api/context'
 import { draftedKey, stillMoving } from '../../api/draftedQueries'
 import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
-import type { CantReply, DraftedWorkflowView, Me, PartReply, PlannerReply, RefinementView, SetupCardReply, SetUpApprovalView, UseCaseView } from '../../api/types'
+import type { CantReply, DraftedWorkflowView, ExplainSetting, Me, PartReply, PlannerReply, RefinementView, SetupCardReply, SetUpApprovalView, UseCaseView } from '../../api/types'
 import { holdTurnOn } from '../../api/workflowQueries'
 import { Answer, type Page } from '../home/AnswerCards'
 import { ChatProvider } from '../home/ChatProvider'
@@ -82,7 +82,7 @@ describe('the drafted workflow card', () => {
     expect(words).toMatch(/Added \d+ things? every workflow needs\./)
     expect(html).toContain('data-check')
     expect(words.split(CHECK)).toHaveLength(2)
-    expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Edit in n8n', 'Turn on'])
+    expect(buttons(html)).toEqual(['Ask for a change', 'Edit in n8n', 'Turn on'])
     expect(words).not.toContain('Send for approval')
   })
 
@@ -106,7 +106,7 @@ describe('the drafted workflow card', () => {
     const html = card(refused)
     expect(text(html)).toContain('Revision 2 Draft')
     expect(text(html)).toContain('Changed since it was approved. Press Turn on to ask for the check again.')
-    expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Turn on'])
+    expect(buttons(html)).toEqual(['Ask for a change', 'Turn on'])
   })
 
   it('after n8n did not take it, it says so and offers Try again beside Turn on and Ask for a change', () => {
@@ -119,7 +119,21 @@ describe('the drafted workflow card', () => {
     } as DraftedWorkflowView
     const html = card(failed)
     expect(text(html)).toContain('n8n didn’t take it, so it isn’t set up yet. Try again.')
-    expect(buttons(html)).toEqual(['Try again', 'See the report', 'Ask for a change', 'Turn on'])
+    expect(buttons(html)).toEqual(['Try again', 'Ask for a change', 'Turn on'])
+  })
+
+  it('lists its flags under a disclosure, with no See the report and no Explain', () => {
+    const flag = { rule: 'operation_off', block: 'Open an issue', what: 'Changes data with one of n8n’s own blocks', why: 'n8n’s own blocks don’t ask for approval on each run.', clears: 'approver_may_accept', takes: 'An Approver may accept it at set-up.' } as const
+    const base = ready as DraftedWorkflowView
+    const flagged = { ...base, flags: 1, report: base.report === null ? null : { ...base.report, flags: [flag] } } as DraftedWorkflowView
+    const html = card(flagged)
+    const flags = /<details\b[\s\S]*?<\/details>/.exec(html)?.[0] ?? ''
+    expect(flags, 'closed until opened').not.toMatch(/<details[^>]*\bopen/)
+    expect(text(flags)).toMatch(/^1 flag\. See them /)
+    expect(text(flags)).toContain(flag.what)
+    expect(text(flags), 'where, as the block’s own name').toMatch(/In “Open an issue” ?\./)
+    expect(buttons(html)).not.toContain('See the report')
+    expect(text(html)).not.toMatch(/\bExplain\b/)
   })
 
   it('once Turn on asked for the check, it stays a Draft that waits for an Approver to check it, with no button its author could press', () => {
@@ -128,7 +142,7 @@ describe('the drafted workflow card', () => {
     expect(text(html)).not.toContain('Waiting for a yes')
     expect(text(html)).toContain('Waiting for an Approver to check it.')
     expect(text(html)).toContain(CHECK)
-    expect(buttons(html)).toEqual(['See the report'])
+    expect(buttons(html), 'nothing for its author to press').toEqual([])
   })
 
   it('after the yes, it says who checked it and offers Turn on again, beside Open it', () => {
@@ -138,7 +152,7 @@ describe('the drafted workflow card', () => {
     expect(words).toContain('Bob checked it once.')
     expect(words).not.toContain(CHECK)
     expect(words).toContain(TURN_ON_NOW)
-    expect(buttons(html)).toEqual(['See the report', 'Turn on', 'Open it'])
+    expect(buttons(html)).toEqual(['Turn on', 'Open it'])
     expect(html).toContain('href="/workflows/uc_01JDRAFTRELEASE"')
   })
 
@@ -154,7 +168,7 @@ describe('the drafted workflow card', () => {
     const html = render(<DraftedCard draftedId={SET_UP.drafted_id} revision={SET_UP.card_revision} />, { view: SET_UP })
     expect(text(html)).toContain('Bob checked it once.')
     expect(text(html)).not.toContain(TURN_ON_NOW)
-    expect(buttons(html)).toEqual(['See the report', 'Open it'])
+    expect(buttons(html)).toEqual(['Open it'])
   })
 
   it('reads On once the workflow is on, with nothing left to press but Open it', () => {
@@ -162,7 +176,7 @@ describe('the drafted workflow card', () => {
     expect(text(html)).toContain('Revision 2 On')
     expect(text(html)).toContain('Bob checked it once.')
     expect(text(html)).not.toContain(TURN_ON_NOW)
-    expect(buttons(html)).toEqual(['See the report', 'Open it'])
+    expect(buttons(html)).toEqual(['Open it'])
   })
 
   it('says it is setting it up while n8n has not taken it, and shows the failure with Try again', () => {
@@ -391,9 +405,40 @@ describe('the set-up approval page', () => {
     expect(text(html)).toContain('Set-up approval, from Carol’s draft')
     expect(text(html)).toContain('Release check')
     expect(text(html)).toContain('Needs your yes')
-    expect(text(html)).toContain('What it reads, writes and posts')
-    expect(text(html)).toContain('More details')
     expect(buttons(html)).toEqual(expect.arrayContaining(['Approve', 'Decline']))
+  })
+
+  it('shows what the workflow reads and writes and who approves each write, in view, and no Explain or More details', () => {
+    const view = bobSetUp as SetUpApprovalView
+    const html = render(<SetUpApproval view={view} />)
+    const shown = text(html)
+    expect(shown).toContain('What it reads, writes and posts')
+    for (const touch of view.report.touches) expect(shown).toContain(`By “${touch.block}”`)
+    expect(shown).toContain('Who approves each write')
+    for (const write of view.report.approves) expect(shown).toContain(`“${write.block}” ${write.words}`)
+    expect(html, 'both are in view, never behind a disclosure').not.toMatch(/<details/)
+    expect(shown).not.toMatch(/More details|\bExplain\b|Step by step/)
+  })
+
+  it('shows each setting with where it came from, the key for each write block, a guess marked as guessed, and code’s checks, in view', () => {
+    const base = bobSetUp as SetUpApprovalView
+    const key: ExplainSetting = { label: [{ text: 'Write key for ', quoted: false }, { text: 'Close it', quoted: true }], value: [{ text: 'GitLab ops', quoted: true }], mark: 'filled', said: 'Chosen by Alice' }
+    const guess: ExplainSetting = { label: [{ text: 'The Jira project', quoted: true }], value: [{ text: 'MOCK', quoted: true }], mark: 'guessed', said: 'Guessed, and can be changed' }
+    const view: SetUpApprovalView = { ...base, report: { ...base.report, settings: [key, guess] } }
+    const html = render(<SetUpApproval view={view} />)
+    const shown = text(html)
+    expect(shown).toContain('Settings')
+    expect(shown, 'the key the write block uses, and who chose it').toContain('Write key for “Close it” “GitLab ops” Chosen by Alice')
+    expect(shown).toContain('The Jira project” “MOCK” Guessed, and can be changed')
+    expect(html, 'a guess is marked, never shown as given').toMatch(/data-mark="guessed"[^>]*>Guessed, and can be changed</)
+    expect(shown).toContain('Safety checks')
+    expect(shown).toContain('Fixed for you')
+    for (const fixed of base.report.fixed) expect(shown).toContain(fixed.words)
+    expect(shown).toContain('Passed')
+    for (const passed of base.report.passed) expect(shown).toContain(passed.words)
+    expect(html, 'all in view, never behind a disclosure').not.toMatch(/<details/)
+    expect(shown.indexOf('Who approves each write')).toBeLessThan(shown.indexOf('Settings'))
+    expect(shown.indexOf('Settings')).toBeLessThan(shown.indexOf('Safety checks'))
   })
 
   it('gives the person who asked for it the reason in place of Approve and Decline', () => {

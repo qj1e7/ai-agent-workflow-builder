@@ -214,3 +214,24 @@ signs in, not what it does, which the class file already checked, so it is not a
 Also found while building: n8n adds a "Custom API Call" choice to every node with a key, which
 sends any request with that key, and makes a human-in-the-loop AI tool of the Slack, Teams,
 Outlook and Gmail nodes. The class file turns all of them off, and the pin check names each.
+
+## Amended on 25 Nov 2026: platform-api's own API key for n8n
+
+n8n 2.42.6 refuses a second API key with a label its user already holds: `POST /rest/api-keys`
+answers HTTP 500 "There is already an entry with this name". platform-api labelled every key
+`platform-api` and removed only keys older than a day. So a process that started within a day of
+another, as a deploy or a relink does, made no key, and each of its calls to n8n failed. The
+rules are now:
+
+- Each key platform-api makes, and the simulation gateway's in its own n8n, has a label of its
+  own: `platform-api` and a random id. If n8n still says the name is taken, platform-api tries
+  once more with a new id, then stops with a plain error.
+- A process makes a new key once its own is 12 hours old, so a key older than a day is no live
+  process's. When platform-api makes a key it removes only those: keys the owner account holds,
+  labelled `platform-api` alone or `platform-api` and an id. A key with any other label, or
+  anyone else's, stays.
+- Bootstrap no longer removes platform-api's keys at a deploy, since that took the key of a
+  process still running.
+- The credential sweep does not change. It never touches API keys, and each of its keys has a
+  fixed id on record in PostgreSQL, so a restart does not clash. Its lock is still in the
+  process, so item 11 holds: platform-api runs as one replica.
