@@ -974,7 +974,8 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
       <li>“Drafting a fix.” shows the Scenario writer and the Fix drafter as Orbs, and each hand-off lands in the step log in the platform’s own words. “A fix is ready” waits for a yes. Past its 20 minutes with nothing to show, it reads as handed back, never as spinning.</li>
       <li>“Handed back” shows the sentence the team lead chose, why it stopped, each round it tried, and what the person can do next.</li>
       <li>View as Bob and open the approval: the cause, the change, each scenario with the platform’s verdict, and the platform’s four checks. Alice sees why she can’t approve it. After Bob’s yes, Alice presses “Turn back on”, and the card shows the test run, then the result. “Test fails” plays the failed result.</li>
-      <li>The read-list sentence (“Once it is turned back on, … joins the team’s list of repositories any workflow may read.”) shows on the approval only when a fix adds a repository, so this sample has none.</li>
+      <li>“Handed back” asks which repository “Read release” should read, because a fix never changes a setting itself. Alice picks one and the fix waits for a yes again. The approval then says Alice answered, and the read-list sentence says which repository joins the team’s list. Bob reads “An Operator answers this.” instead of buttons.</li>
+      <li>To reach every outcome: set “A field moved”, press “Fix it for me” as Alice, switch “View as” to Bob (the fix stays), press “Review the fix” and Approve or Decline, then switch back to Alice for “Turn back on”. A no offers “Fix it for me” again. Choose Ready, Test fails or Handed back before pressing.</li>
       <li>The AI troubleshooter, Fix drafter and Scenario writer have cards on the Agents page in the app, which this sketch has no page for.</li>
     </ul>
   </section>
@@ -1363,11 +1364,15 @@ function fixHTML() {
   }
   if (f === 'drafting') return `<p class="fx-say" role="status">Drafting a fix.</p>${fixCrew()}`;
   if (f === 'back') {
-    return `<p class="fx-say">${FIX.back}</p>${fixCrew()}<dl class="qa"><div><dt>Why I stopped</dt><dd>A round made no progress. Nothing was changed.</dd></div><div><dt>What I tried</dt><dd><ul class="fx-rows"><li>Round 1: 0 of 3 scenarios passed.</li><li>Round 2: 0 of 3 scenarios passed, no better than before.</li></ul></dd></div><div><dt>What you can do</dt><dd>Open the workflow and change the block yourself, or report this to support.</dd></div></dl><div class="c-act"><button class="btn ghost sm" type="button" data-open="wf:fastapi">Open the workflow</button></div>`;
+    const ask = canEdit()
+      ? '<div class="c-act"><button class="btn ghost" type="button" data-fix="answer|fastapi/fastapi">fastapi/fastapi</button><button class="btn ghost" type="button" data-fix="answer|tiangolo/fastapi">tiangolo/fastapi</button></div>'
+      : '<p class="fx-note">An Operator answers this.</p>';
+    return `<p class="fx-say">${FIX.back}</p>${fixCrew()}<dl class="qa"><div><dt>Why I stopped</dt><dd>A round made no progress.</dd></div><div><dt>What I tried</dt><dd><ul class="fx-rows"><li>Round 1: 0 of 3 scenarios passed.</li><li>Round 2: 0 of 3 scenarios passed, no better than before.</li></ul></dd></div></dl><p><b>GitHub</b> Which repository should “Read release” read?</p>${ask}<p>Open the workflow and change it yourself, or report this to support.</p><div class="c-act"><button class="btn ghost sm" type="button" data-open="wf:fastapi">Open the workflow</button></div>`;
   }
   const say = { ready: 'A fix is ready. Nothing changes until an Approver says yes.', approved: FIX.approved, testing: FIX.testing, on: FIX.on, failed: FIX.failed, declined: FIX.declined }[f];
   let act = '';
   if (f === 'ready') act = `<button class="btn ${W.user === 'bob' ? '' : 'ghost'} sm" type="button" data-open="fixappr">${W.user === 'bob' ? 'Review the fix' : 'Open the approval'}</button>`;
+  if (f === 'declined') act = canEdit() ? '<button class="btn" type="button" data-fix="again">Fix it for me</button>' : '';
   if (f === 'approved') act = canEdit() ? '<button class="btn" type="button" data-fix="on">Turn back on</button>' : '<span class="c-left">An Operator turns it back on.</span>';
   const tone = f === 'on' ? 'okline' : f === 'failed' || f === 'declined' ? 'fx-say' : 'fx-say';
   return `<p class="${tone}"${['testing', 'ready'].includes(f) ? ' role="status"' : ''}>${f === 'on' ? ICON.check : ''}${say}</p>${f === 'ready' || f === 'testing' ? fixCrew() : ''}${act ? `<div class="c-act">${act}</div>` : ''}`;
@@ -1389,6 +1394,19 @@ function patchFix(el) {
   const html = fixHTML();
   el.hidden = !html;
   el.innerHTML = html;
+  const stage = el.closest('[data-stage]');
+  if (stage) fitFix(stage);
+}
+/* The stage has a set height, so it grows to hold the card, and the key stays below it. */
+function fitFix(stage) {
+  const card = $('.fix', stage);
+  const key = $('.key', stage);
+  if (!card || !key || card.hidden) { stage.style.removeProperty('height'); return; }
+  stage.style.height = `${Math.max(card.offsetTop + card.offsetHeight + key.offsetHeight + 28, stage.classList.contains('tall') ? 740 : 580)}px`;
+  if (!card._ro && typeof ResizeObserver === 'function') {
+    card._ro = new ResizeObserver(() => { if (card.isConnected) fitFix(stage); });
+    card._ro.observe(card);
+  }
 }
 /* The approval page: the change, the cause, each scenario with code’s verdict, and code’s checks. The AI’s summary is help, never the check. */
 function fixApprView() {
@@ -1405,7 +1423,7 @@ function fixApprView() {
     <div class="pv-head"><div><p class="pv-kind">Set-up approval, from Alice’s request for a fix</p><h3>FastAPI release check</h3></div><span class="pill lg" data-live="fix-pill"></span></div>
     <p class="pv-sent">A fix for a run that stopped. Nothing changes until an Approver says yes.</p>
     <div class="pv-sec"><h4>The cause</h4><p>GitHub answered, but the “Read release” block couldn’t find the field “tag”.</p></div>
-    <div class="pv-sec"><h4>What it changes</h4><p class="ba"><b>Read release</b><span class="muted">Field it reads</span><span class="was">tag</span><span class="arr" aria-hidden="true">→</span><b>tag_name</b></p></div>
+    <div class="pv-sec"><h4>What it changes</h4>${W.fixAns ? `<p class="ba"><b>Read release</b><span class="muted">Repository</span><span class="was">tiangolo/fastapi-old</span><span class="arr" aria-hidden="true">→</span><b>${W.fixAns}</b></p><p>Alice answered the question, and the platform made the change from the answer.</p><p>Once it is turned back on, ${W.fixAns} joins the team’s list of repositories any workflow may read.</p>` : '<p class="ba"><b>Read release</b><span class="muted">Field it reads</span><span class="was">tag</span><span class="arr" aria-hidden="true">→</span><b>tag_name</b></p>'}</div>
     <div class="pv-sec"><h4>Scenarios, on practice systems</h4><ul class="fx-sc"><li><span>Replay the stop</span><span class="v ok">Passed</span></li><li><span>A newer release</span><span class="v ok">Passed</span></li><li><span>No newer release</span><span class="v ok">Passed</span></li></ul></div>
     <div class="pv-sec"><h4>What the platform checked</h4><ul class="fx-sc"><li><span class="v ok">Passed</span><span>The change stays inside the blocks where the run stopped.</span></li><li><span class="v ok">Passed</span><span>Every scenario passed on practice systems.</span></li><li><span class="v ok">Passed</span><span>It passes the safety check.</span></li><li><span class="v ok">Passed</span><span>No setting a person filled changed.</span></li></ul></div>
     <p class="fx-note">These come from the platform’s own checks, never from the AI’s summary.</p>
@@ -3570,12 +3588,17 @@ async function playTask(t) {
 /* ---------- Controls ---------- */
 function press(group, attr, value) { $$(`[${attr}]`, group).forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute(attr) === value))); }
 function setSpeed(k) { K = k; document.documentElement.style.setProperty('--k', String(k)); press($('#speed'), 'data-k', String(k)); }
-const whoWorld = (u) => (u === 'bob' ? { user: 'bob', ...WAITING } : { maint: u === 'maint' });
+const causeNow = () => $('#causeSeg [aria-pressed="true"]')?.dataset.cause || 'quiet';
+/* With “A field moved” on, the run stays stopped for everyone, and switching person keeps the fix where it stands. */
+const whoWorld = (u, keepFix = false) => {
+  if (causeNow() === 'moved') return { user: u === 'bob' ? 'bob' : 'alice', maint: u === 'maint', cause: 'moved', ...(keepFix ? { fix: W.fix, fixAns: W.fixAns || '' } : {}) };
+  return u === 'bob' ? { user: 'bob', ...WAITING } : { maint: u === 'maint' };
+};
 const whoNow = () => $('#whoSeg [aria-pressed="true"]')?.dataset.u || 'alice';
 $('#speed').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setSpeed(parseFloat(b.dataset.k)); });
 $('#tasks').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) playTask(b.dataset.t); });
-$('#whoSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { press($('#tasks'), 'data-t', ''); scene(whoWorld(b.dataset.u), true); } });
-$('#causeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { press($('#causeSeg'), 'data-cause', b.dataset.cause); press($('#tasks'), 'data-t', ''); scene({ ...whoWorld(whoNow()), cause: b.dataset.cause }, true); } });
+$('#whoSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { press($('#tasks'), 'data-t', ''); scene(whoWorld(b.dataset.u, true), true); } });
+$('#causeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { press($('#causeSeg'), 'data-cause', b.dataset.cause); press($('#tasks'), 'data-t', ''); scene(whoWorld(whoNow()), true); } });
 $('#fixSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { FIXPLAN = b.dataset.fixplan; press($('#fixSeg'), 'data-fixplan', FIXPLAN); } });
 press($('#fixSeg'), 'data-fixplan', FIXPLAN);
 press($('#causeSeg'), 'data-cause', 'quiet');
@@ -3656,6 +3679,8 @@ app.addEventListener('click', (e) => {
     const a = pick('[data-fix]').dataset.fix;
     if (a === 'ask') quiet(fixAsk());
     if (a === 'ok') { W.fix = 'approved'; refresh(); }
+    if (a.startsWith('answer|')) { W.fixAns = a.slice(7); W.fix = 'ready'; refresh(); }
+    if (a === 'again') { W.fix = 'none'; W.fixAns = ''; quiet(fixAsk()); }
     if (a === 'no') { W.fix = 'declined'; refresh(); }
     if (a === 'on') quiet(fixOn());
     return;
