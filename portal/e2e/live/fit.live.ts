@@ -206,7 +206,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         'approval',
         'What needs me?',
         () => newest.locator(`[data-opens="approval:${facts.request}"]`),
-        () => [panel.getByRole('button', { name: 'Decline' }), panel.getByText('The platform can’t yet check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using.')],
+        () => [panel.getByRole('button', { name: 'Decline' }), panel.getByText('This run wants to create 1 Jira ticket in MOCK:')],
       ],
       ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => [panel.getByText('Safe to retry')]],
       ['software', 'Monitor LangGraph releases on the watchlist', () => newest.getByRole('button', { name: 'Open it' }), () => [panel.getByText('Checked by')]],

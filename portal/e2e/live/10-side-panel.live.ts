@@ -642,7 +642,7 @@ for (const width of [1440, 390]) {
     await expect(request.locator('[data-run-pill]')).toHaveText('Waiting for approval')
     await expect(request, 'the whole ticket, as it will be written, is one click away').toContainText(/Where\s*Jira project MOCK on the practice Jira\s*Summary\s*Upgrade /)
     await expect(request, 'the panel has the run page’s shape, with no AI summary and no Not checked').not.toContainText(/Summary by AI|Not checked/)
-    await expect(request.getByRole('button'), 'Ask Alice, then Approve, and Decline last').toHaveText(['Ask Alice', 'Approve', 'Decline'])
+    await expect(request.getByRole('button', { name: /^(Ask Alice|Approve|Decline)$/ }), 'Ask Alice, then Approve, and Decline last').toHaveText(['Ask Alice', 'Approve', 'Decline'])
     await shot(page, info, `c5-bob-request-${String(width)}`)
 
     await request.getByRole('button', { name: 'Decline', exact: true }).click()

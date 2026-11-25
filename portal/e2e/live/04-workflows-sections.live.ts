@@ -348,7 +348,7 @@ for (const user of ['alice', 'bob']) {
       await page.setViewportSize({ width, height: 900 })
       await page.goto('/workflows')
       await expect(watchlist).toBeVisible()
-      await expect(lastLine(watchlist), 'a waiting check says it waits for a yes, and is not a test run').toHaveText(/^(?:No schedule|Mon \d+:\d\d|Daily \d+:\d\d|Weekdays \d+:\d\d) · last run today, waiting for a yes$/)
+      await expect(lastLine(watchlist), 'a waiting check says it waits for approval, and is not a test run').toHaveText(/^(?:No schedule|Mon \d+:\d\d|Daily \d+:\d\d|Weekdays \d+:\d\d) · last run today, waiting for approval$/)
       await expect(watchlist.getByText(user === 'alice' ? 'On · waiting for an Approver’s yes' : 'Needs you', { exact: true })).toBeVisible()
       await expect(watchlist.getByText('Test run', { exact: true }), 'Check now is not a test run').toHaveCount(0)
       const fit = await lineFits(lastLine(rows))
