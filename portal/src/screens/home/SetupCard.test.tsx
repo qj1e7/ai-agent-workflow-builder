@@ -11,6 +11,7 @@ import success from '../../../../contracts/fixtures/runs/success.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import setupCross from '../../../../contracts/fixtures/planner/answer.setup_card.cross.json'
 import simulated from '../../../../contracts/fixtures/builder/drafted.simulated.json'
+import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
@@ -24,7 +25,7 @@ import { BuildPanel } from './BuildPanel'
 import { cardFrom, planView, taskWithoutSchedule } from './card'
 import { PartsList } from './PartsList'
 import { CardMemoryContext, newCardMemory, type CardKept } from './cardMemory'
-import { frozenParts, SetupCard } from './SetupCard'
+import { frozenParts, SetupCard, type CardStart } from './SetupCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator'] }
 const CREATED = created as UseCaseCreated
@@ -52,13 +53,17 @@ interface World {
   readonly projects?: readonly string[]
   /** What the software finder answered for a name, as POST /api/v1/watchlist/find gives it. */
   readonly found?: { readonly name: string; readonly answer: FindOut }
+  /** The finder's call failed, as the platform or the network answered it. */
+  readonly findFailed?: { readonly name: string; readonly error: Error }
+  /** Who is signed in. Alice, an Operator, unless a test says otherwise. */
+  readonly who?: Me
 }
 
 const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, simulation, projects, found }: World = {}): string {
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, simulation, projects, found, findFailed, who = ALICE }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
-  queryClient.setQueryData(['me', scope], ALICE)
+  queryClient.setQueryData(['me', scope], who)
   if (run) queryClient.setQueryData(keys.run(scope, run.run_id), run)
   if (unread) queryClient.getQueryCache().build(queryClient, { queryKey: keys.useCase(scope, useCase.use_case_id) }).setState({ status: 'error', error: new Error('no answer'), fetchStatus: 'idle' })
   else queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
@@ -66,6 +71,7 @@ function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread =
   if (watched) queryClient.setQueryData(keys.watchlist(scope), watched)
   if (projects) queryClient.setQueryData(keys.tools(), { tools: [], jira_projects: projects })
   if (found) queryClient.setQueryData(keys.softwareFind(scope, found.name), found.answer)
+  if (findFailed) queryClient.getQueryCache().build(queryClient, { queryKey: keys.softwareFind(scope, findFailed.name) }).setState({ status: 'error', error: findFailed.error, fetchStatus: 'idle' })
   if (made) queryClient.setQueryData(keys.made(scope, made.key), made.made)
   if (simulation) queryClient.setQueryData(keys.useCaseSimulation(scope, simulation.use_case_id), simulation)
   const memory = newCardMemory()
@@ -195,7 +201,7 @@ describe('the Jira step of the set-up card', () => {
     expect(text(html)).toContain('Pick 1 more to finish')
   })
 
-  it('says each ticket waits for an Approver’s yes in Teams under the project question, in place of After a yes', () => {
+  it('says each ticket needs an Approver’s approval in Teams under the project question, in place of the old line', () => {
     const html = render(card(reply, TICKET), { projects: ['MOCK'] })
     expect(text(html)).not.toContain('After a yes')
     expect(partText(html, 'Then')).toContain('Each ticket needs an Approver’s approval in Teams.')
@@ -272,6 +278,82 @@ describe('the repository row of the set-up card', () => {
     const html = render(card(reply, TYPED_WORDS))
     expect(partText(html)).toContain('Looking for the repository')
     expect(text(html)).toContain('Pick 1 more to finish')
+  })
+})
+
+describe('the finder’s trouble and the agent’s own boxes on the set-up card', () => {
+  const ROWS: SetupCardReply['rows'] = [
+    { kind: 'schedule', text: 'Every weekday at 9am', state: 'understood', note: null },
+    { kind: 'look_for', text: 'New releases of FastAPI', state: 'understood', note: null },
+    { kind: 'do', text: 'Create a Jira ticket for each new one', state: 'understood', note: null },
+    { kind: 'where', text: 'In the MOCK project', state: 'understood', note: null },
+  ]
+  const reply: SetupCardReply = { ...SETUP, rows: ROWS, parts: [] }
+  const WORDS = 'Every weekday at 9am, check FastAPI for new releases and create a Jira ticket in MOCK'
+  const watchText = (html: string) => text((html.split('data-part="Watch"')[1] ?? '').split('data-part=')[0]?.replace(/^[^>]*>/, '').replace(/<[^>]*$/, '') ?? '')
+  const withPlan = (): CardStart => {
+    const form = cardFrom(reply.name, ROWS, WORDS, [])
+    const answer = {
+      decision: 'use_one',
+      agents: [
+        {
+          card: {
+            card_id: 'crd_checker',
+            name: 'Release checker',
+            inputs: [
+              { name: 'GitHub repository', kind: 'github_repo', what: 'The repository to read.', example: 'langchain-ai/langgraph' },
+              { name: 'Jira project', kind: 'jira_project', what: 'The Jira project that gets the ticket.', example: 'MOCK' },
+            ],
+            blocks: [{ say: 'Read the releases.', tool: 'github.read_releases' }, { say: 'Create a ticket.', tool: 'jira.create_ticket' }],
+          },
+          values: { 'GitHub repository': 'fastapi/fastapi', 'Jira project': 'MOCK' },
+          part: '',
+          missing: [],
+        },
+      ],
+      reason: '',
+      questions: [],
+    } as unknown as PlanOut
+    return { form: { ...form, typed: { github_repo: 'fastapi/fastapi', github_repo_found: '1' } }, plan: { task: taskWithoutSchedule(form.rows), answer }, draftId: null, similar: null }
+  }
+
+  it('draws no text box for the agent’s Jira project or GitHub repository once the plan is loaded', () => {
+    const html = render(<SetupCard start={withPlan()} />, { projects: ['MOCK'] })
+    expect(html).not.toMatch(/<input[^>]*type="text"/)
+    expect(text(html)).not.toContain('The Jira project that gets the ticket.')
+    expect(text(html)).not.toContain('The repository to read.')
+    expect(watchText(html)).toContain('fastapi/fastapi')
+  })
+
+  it('says GitHub did not check, in the finder’s own message, with Another repository', () => {
+    const html = render(card(reply, WORDS), { found: { name: 'FastAPI', answer: { status: 'not_checked', message: 'GitHub did not answer.' } } })
+    expect(watchText(html)).toContain('GitHub did not answer.')
+    expect(watchText(html)).not.toContain('The public repository to watch')
+    expect(html).toMatch(/<input[^>]*type="text"/)
+  })
+
+  it('says it is only for an Operator when the platform refuses (403), and still lets the key be typed', () => {
+    const html = render(card(reply, WORDS), { findFailed: { name: 'FastAPI', error: new ApiError(403, { detail: 'Operators only' }) } })
+    expect(watchText(html)).toContain('Only an Operator can look a repository up.')
+    expect(html).toMatch(/<input[^>]*type="text"/)
+  })
+
+  it('says GitHub could not be reached when the network fails, never “no match”', () => {
+    const html = render(card(reply, WORDS), { findFailed: { name: 'FastAPI', error: new TypeError('Failed to fetch') } })
+    expect(watchText(html)).toContain('I couldn’t reach GitHub just now.')
+    expect(watchText(html)).not.toContain('I don’t know it')
+  })
+
+  it('does not ask the finder, and says why, for someone who is not an Operator', () => {
+    const html = render(card(reply, WORDS), { who: { id: 'bob', display: 'Bob', roles: ['approver'] } })
+    expect(watchText(html)).toContain('Only an Operator can look a repository up.')
+    expect(watchText(html)).not.toContain('Looking for the repository')
+  })
+
+  it('offers Another repository at once while it looks, so nobody waits on the finder', () => {
+    const html = render(card(reply, WORDS))
+    expect(watchText(html)).toContain('Looking for the repository on GitHub…')
+    expect(html).toMatch(/<input[^>]*type="text"/)
   })
 })
 
@@ -450,7 +532,7 @@ describe('Building in n8n', () => {
     expect(text(html)).toContain('Saved as a draft in n8n.')
     expect(html).toContain('<svg')
     expect(text(html)).toContain('The blocks fit together.')
-    expect(text(html)).toContain('Every write waits for a yes.')
+    expect(text(html)).toContain('Every write waits for approval.')
     expect(text(html)).toContain('The builder saves a draft. It can’t publish by itself.')
     expect(text(html)).not.toContain('Only our blocks')
   })

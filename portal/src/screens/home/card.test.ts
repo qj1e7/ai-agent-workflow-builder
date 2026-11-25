@@ -27,6 +27,9 @@ import {
   chooseRepo,
   effectiveRepo,
   REPO_CHOICE,
+  REPO_FOUND,
+  JIRA_CHOICE,
+  hasTicketWrite,
   setUpWords,
   secondName,
   timeWords,
@@ -64,6 +67,7 @@ import {
   type PlanView,
   type PartResult,
   type PlanAgent,
+  type RepoFind,
   type Row,
   type SetUpCalls,
 } from './card'
@@ -81,6 +85,7 @@ const ROWS: Answered = {
   ],
 }
 const NEW_AGENT = newAgent as PlanOut
+const TICKET_PLAN = planView({ ...(NEW_AGENT as object), project: null } as PlanOut, [])
 const USE_ONE = useOne as PlanOut
 const CANNOT = cannotDo as PlanOut
 const TEAMS: Answered = {
@@ -704,11 +709,11 @@ describe('the Planner’s set-up card', () => {
     })
 
     it('asks which Jira project the ticket goes in, with the projects the platform may use as choices, in place of where the result goes', () => {
-      expect(nextQuestion(ticket(), null, ['MOCK'])).toEqual({ kind: 'project', index: 3, words: 'Create 1 Jira ticket in which project?', choices: ['MOCK'] })
+      expect(nextQuestion(ticket(), TICKET_PLAN, ['MOCK'])).toEqual({ kind: 'project', index: 3, words: 'Create 1 Jira ticket in which project?', choices: ['MOCK'] })
     })
 
     it('still asks, with no choices, when the platform names no project, so a key can be typed', () => {
-      expect(nextQuestion(ticket(), null)).toMatchObject({ kind: 'project', words: 'Create 1 Jira ticket in which project?', choices: [] })
+      expect(nextQuestion(ticket(), TICKET_PLAN)).toMatchObject({ kind: 'project', words: 'Create 1 Jira ticket in which project?', choices: [] })
     })
 
     it('asks where the result goes, as before, when nothing in the request is a Jira ticket', () => {
@@ -746,25 +751,25 @@ describe('the Planner’s set-up card', () => {
     const blank = () => cardFrom('x', [missing('schedule'), missing('look_for', 'New releases of langchain-ai/langgraph'), missing('do', 'Create a Jira ticket'), missing('where')], '')
 
     it('lists How often?, At what time? and the Jira project together, in the order of the card', () => {
-      expect(questionsOf(blank(), null, ['MOCK']).map((q) => q.words)).toEqual(['How often?', 'At what time?', 'Create 1 Jira ticket in which project?'])
+      expect(questionsOf(blank(), TICKET_PLAN, ['MOCK']).map((q) => q.words)).toEqual(['How often?', 'At what time?', 'Create 1 Jira ticket in which project?'])
     })
 
     it('asks the day beside the time once every week is chosen, and no time for Only when I run it', () => {
       const weekly = answerWhen(blank(), { often: 'week' })
-      expect(questionsOf(weekly, null, []).map((q) => q.words).slice(0, 2)).toEqual(['Which day?', 'At what time?'])
+      expect(questionsOf(weekly, TICKET_PLAN, []).map((q) => q.words).slice(0, 2)).toEqual(['Which day?', 'At what time?'])
       const manual = answerWhen(blank(), { often: 'manual' })
-      expect(questionsOf(manual, null, []).map((q) => q.words)).toEqual(['Create 1 Jira ticket in which project?'])
+      expect(questionsOf(manual, TICKET_PLAN, []).map((q) => q.words)).toEqual(['Create 1 Jira ticket in which project?'])
     })
 
     it('never guesses a time: a day without one still asks At what time?', () => {
       const day = answerWhen(blank(), { often: 'weekdays' })
-      expect(questionsOf(day, null, []).map((q) => q.words)).toContain('At what time?')
+      expect(questionsOf(day, TICKET_PLAN, []).map((q) => q.words)).toContain('At what time?')
     })
 
     it('is empty once nothing is left to ask, and the first of the list is the next question', () => {
       const done = chooseProject(answerWhen(blank(), { often: 'weekdays', at: '09:00' }), 'MOCK')
-      expect(questionsOf(done, null, ['MOCK'])).toEqual([])
-      expect(nextQuestion(blank(), null, ['MOCK'])).toEqual(questionsOf(blank(), null, ['MOCK'])[0])
+      expect(questionsOf(done, TICKET_PLAN, ['MOCK'])).toEqual([])
+      expect(nextQuestion(blank(), TICKET_PLAN, ['MOCK'])).toEqual(questionsOf(blank(), TICKET_PLAN, ['MOCK'])[0])
     })
 
     it('counts the open parts, not the questions: When is one part', () => {
@@ -819,12 +824,118 @@ describe('the Planner’s set-up card', () => {
       expect(questionsOf(cleared, null, [], { state: 'found', matches: one })[0]).toMatchObject({ kind: 'repo', choices: one })
     })
 
-    it('fills the agent’s GitHub repository input from the choice', () => {
-      const chosen = chooseRepo(fastapi(), 'fastapi/fastapi', true)
-      const plan = planView({ ...(NEW_AGENT as object), project: null } as PlanOut, chosen.rows)
-      const agent = plan.kind === 'agents' ? plan.agents.find((one) => one.inputs.some((input) => input.kind === 'github_repo')) : undefined
-      const name = agent?.inputs.find((input) => input.kind === 'github_repo')?.name
-      if (agent && name) expect(valueOf(chosen, agent, name)).toBe('fastapi/fastapi')
+  })
+
+  describe('what Change and the finder do to the repository and the project', () => {
+    const missing = (kind: RowKind, text = '') => ({ kind, text, state: (text === '' ? 'missing' : 'understood') as RowState, note: null })
+    const watch = (text: string) => answerWhen(cardFrom('x', [missing('schedule', 'Every weekday at 9am'), missing('look_for', text), missing('do', 'Tell me here'), missing('where', 'Here in the chat')], ''), { often: 'weekdays', at: '09:00' })
+    const AGENT = (kinds: readonly ('github_repo' | 'jira_project')[] = ['github_repo']) =>
+      planView(
+        {
+          decision: 'use_one',
+          agents: [{ card: { card_id: 'c1', name: 'Release check', inputs: kinds.map((kind) => ({ name: kind === 'github_repo' ? 'GitHub repository' : 'Jira project', kind, what: 'It reads this.' })), blocks: [] }, values: {}, part: '', missing: [] }],
+          reason: '',
+          questions: [],
+        } as unknown as PlanOut,
+        [],
+      )
+    const input = (plan: PlanView, name: string) => {
+      const agent = plan.kind === 'agents' ? plan.agents[0] : undefined
+      if (!agent) throw new Error('no agent')
+      return { agent, name }
+    }
+
+    it('sends the agent the repository the finder filled, and nothing stale once the Watch part is changed to other software', () => {
+      const plan = AGENT()
+      const { agent, name } = input(plan, 'GitHub repository')
+      const filled = chooseRepo(watch('New releases of FastAPI'), 'fastapi/fastapi', true)
+      expect(valueOf(filled, agent, name)).toBe('fastapi/fastapi')
+      const changed = changeRow(filled, 1, 'New releases of React')
+      expect(changed.typed[REPO_CHOICE], 'the old choice is gone').toBeUndefined()
+      expect(changed.typed[REPO_FOUND]).toBeUndefined()
+      expect(softwareOf(changed)).toBe('React')
+      expect(repoMissing(changed), 'the finder is asked again for the new software').toBe(true)
+      expect(valueOf(changed, agent, name), 'no stale repository goes to the agent').toBe('')
+    })
+
+    it('sends the agent the owner/name the person types in the Watch part', () => {
+      const plan = AGENT()
+      const { agent, name } = input(plan, 'GitHub repository')
+      const filled = chooseRepo(watch('New releases of FastAPI'), 'fastapi/fastapi', true)
+      const typed = changeRow(filled, 1, 'django/django')
+      expect(softwareOf(typed), 'owner/name is a repository, not a name to look up').toBeNull()
+      expect(repoMissing(typed)).toBe(false)
+      expect(effectiveRepo(typed)).toBe('django/django')
+      expect(valueOf(typed, agent, name)).toBe('django/django')
+    })
+
+    it('keeps the repository cleared by Change cleared: the agent gets none until one is picked', () => {
+      const plan = AGENT()
+      const { agent, name } = input(plan, 'GitHub repository')
+      const cleared = chooseRepo(chooseRepo(watch('New releases of FastAPI'), 'fastapi/fastapi', true), '')
+      expect(valueOf(cleared, agent, name)).toBe('')
+      expect(repoMissing(cleared)).toBe(true)
+    })
+
+    it('sends only the software name to the finder, not the words around it', () => {
+      expect(softwareOf(watch('New releases of LangGraph on GitHub'))).toBe('LangGraph')
+      expect(softwareOf(watch('New releases of FastAPI from GitHub'))).toBe('FastAPI')
+      const typed = changeRow(watch('New releases of FastAPI'), 1, 'React')
+      expect(softwareOf(typed), 'a bare name the person typed in the Watch part').toBe('React')
+      expect(softwareOf(watch('Tickets closed this week in MOCK'))).toBeNull()
+    })
+
+    it('asks no text box of the agent’s Jira project or GitHub repository: the row’s choice is the one source', () => {
+      const plan = AGENT(['github_repo', 'jira_project'])
+      const form = chooseProject(chooseRepo(watch('New releases of FastAPI'), 'fastapi/fastapi', true), 'MOCK')
+      expect(plan.kind === 'agents' && plan.agents[0]?.inputs.map((one) => valueOf(form, plan.agents[0] as PlanAgent, one.name))).toEqual(['fastapi/fastapi', 'MOCK'])
+      expect(questionsOf(form, plan, ['MOCK'], { state: 'found', matches: [] })).toEqual([])
+      expect(JIRA_CHOICE).toBe('jira_project')
+    })
+
+    it('counts one number: the lead and the footer read the same function, with the plan and the finder’s fill in it', () => {
+      const plan = AGENT(['github_repo'])
+      const open = watch('New releases of FastAPI')
+      expect(openParts(open, plan)).toBe(1)
+      expect(answerFirst(setupLeft(open, plan))).toBe('Pick 1 more to finish')
+      const filled = chooseRepo(open, 'fastapi/fastapi', true)
+      expect(openParts(filled, plan)).toBe(0)
+      expect(answerFirst(setupLeft(filled, plan))).toBeNull()
+    })
+
+    it('never guesses a ticket write: a Jira word in a read is not a write, and only a plan with the write asks the project', () => {
+      const reads = cardFrom('x', [missing('schedule', 'Every Friday at 5pm'), missing('look_for', 'The Jira tickets we closed this week'), missing('do', 'Sum up the Jira tickets we closed'), missing('where')], '')
+      const form = answerWhen(reads, { often: 'week', day: 'friday', at: '17:00' })
+      const readPlan = planView({ decision: 'use_one', agents: [{ card: { card_id: 'c', name: 'Summary', inputs: [], blocks: [{ say: 'Find them.', tool: 'jira.search' }] }, values: {}, part: '', missing: [] }], reason: '', questions: [] } as unknown as PlanOut, [])
+      expect(hasTicketWrite(readPlan)).toBe(false)
+      expect(nextQuestion(form, readPlan, ['MOCK'])).toEqual({ kind: 'row', index: 3, words: 'Where should the result go?' })
+      const writePlan = planView({ ...(NEW_AGENT as object), project: null } as PlanOut, [])
+      expect(hasTicketWrite(writePlan)).toBe(true)
+      expect(nextQuestion(form, writePlan, ['MOCK'])).toMatchObject({ kind: 'project', index: 3, choices: ['MOCK'] })
+    })
+
+    it('waits for the plan before asking where the result goes, so no empty chip flashes', () => {
+      const form = answerWhen(cardFrom('x', [missing('schedule', 'Every Friday at 5pm'), missing('look_for', 'Closed tickets'), missing('do', 'Create a Jira ticket'), missing('where')], ''), { often: 'week', day: 'friday', at: '17:00' })
+      expect(questionsOf(form, null, ['MOCK'], null, true)).toEqual([])
+    })
+
+    it('shows each finder trouble in its own words, never the words for no match', () => {
+      const form = watch('New releases of FastAPI')
+      const asked = (repos: RepoFind) => questionsOf(form, null, [], repos)[0]
+      expect(asked({ state: 'none' })).toMatchObject({ kind: 'repo', note: null, checking: false })
+      expect(asked({ state: 'trouble', words: 'GitHub did not answer.' })).toMatchObject({ kind: 'repo', note: 'GitHub did not answer.', checking: false })
+      expect(asked({ state: 'checking' })).toMatchObject({ kind: 'repo', checking: true, note: null })
+    })
+
+    it('does not send a picked project back through the Planner’s check when a draft reopens', () => {
+      const chosen = chooseProject(
+        answerWhen(cardFrom('x', [missing('schedule', 'Every Friday at 5pm'), missing('look_for', 'Closed tickets'), missing('do', 'Create a Jira ticket'), missing('where')], ''), { often: 'week', day: 'friday', at: '17:00' }),
+        'MOCK',
+      )
+      const saved = draftContent(chosen, null)
+      const reopened = restoreDraft({ draft_id: 'd1', step: 2, content: saved, created_at: '2026-11-03T07:00:00Z', saved_at: '2026-11-03T07:00:00Z' } as DraftView)
+      expect(reopened.form.rows.find((row) => row.kind === 'where')).toMatchObject({ text: 'In the MOCK project', state: 'edited' })
+      expect(reopened.form.rows.some((row) => row.state === 'checking')).toBe(false)
     })
   })
 
