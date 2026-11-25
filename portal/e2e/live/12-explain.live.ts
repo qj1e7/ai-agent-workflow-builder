@@ -23,7 +23,7 @@ interface Made {
   readonly name: string
 }
 
-/** A release check that reads one repository and creates Jira tickets in MOCK after a yes, as the Planner's version checker lays it out. */
+/** A release check that reads one repository and creates Jira tickets in MOCK after approval, as the Planner's version checker lays it out. */
 async function releaseCheck(backend: Backend, name: string, repository: string): Promise<Made> {
   const agents = [{ card_id: 'crd_version_checker', values: { 'GitHub repository': repository, 'Jira project': 'MOCK' } }]
   const made = await backend.post<{ use_case_id: string }>('alice', '/api/v1/agent-use-cases', { name, instruction: `Check ${repository} for a new release and raise a ticket in MOCK.`, agents, schedule: DAILY_8, on: true }, undefined, [201])

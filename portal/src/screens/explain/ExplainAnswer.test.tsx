@@ -82,10 +82,10 @@ describe('the Explain answer in the chat', () => {
 
     it('shows the reworded In short with the pill Reworded and a button to code’s wording, the sections in code’s words', () => {
       const html = draw(ONE, { held: [SMOOTH] })
-      expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after a yes, and changes nothing else.')
+      expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after approval, and changes nothing else.')
       expect(text(html)).toContain('Reworded')
       expect(buttons(html)).toEqual(['Show code’s wording', 'Open the workflow'])
-      expect(text(html)).toContain('Writes after a yes')
+      expect(text(html)).toContain('Writes after approval')
     })
 
     it('shows code’s wording with the pill Code’s wording after the swap, and the swap stays when Home comes back', () => {

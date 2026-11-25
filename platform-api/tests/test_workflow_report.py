@@ -235,8 +235,8 @@ def test_the_fastapi_release_check_reads_github_and_writes_jira_after_a_yes() ->
         ("Read release", True, "Reads GitHub"),
         ("Compare", True, "Runs an agent"),
         ("Newer?", False, "Shapes the data"),
-        ("Ask for a yes", True, "Waits for a yes"),
-        ("Create ticket", True, "Writes after a yes"),
+        ("Ask for a yes", True, "Waits for approval"),
+        ("Create ticket", True, "Writes after approval"),
         ("Nothing to change", False, "Ends the run"),
     ], "in run order, without the sticky note"
     assert [(t.action, t.system, t.place, t.block.text) for t in report.touches] == [
@@ -247,7 +247,7 @@ def test_the_fastapi_release_check_reads_github_and_writes_jira_after_a_yes() ->
     ]
     assert text(report.in_short) == (
         "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
-        "It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else."
+        "It can create Jira tickets in “MOCK”, each after approval. It changes nothing else."
     )
     assert [(text((a.block,)), a.decides, a.words) for a in report.approves] == [
         (
@@ -339,8 +339,8 @@ def test_a_block_our_n8n_doesn_t_load_or_holds_off_can_t_run_whatever_an_approva
     )
     assert text(report.in_short) == (
         "Every Monday at 9:00, it reads GitHub “fastapi/fastapi”. "
-        "It could change data in Jira through “Open an issue”, with no yes on each run. "
-        "It posts what “Read FastAPI” returned in Slack “C0TEAM”, with no yes on each run. "
+        "It could change data in Jira through “Open an issue”, with no approval on each run. "
+        "It posts what “Read FastAPI” returned in Slack “C0TEAM”, with no approval on each run. "
         "It could change or send data through “Call the hook”, but it can't run on this "
         "platform yet. It changes nothing else."
     )
@@ -474,7 +474,8 @@ def test_a_write_with_its_yes_taken_away_is_refused_and_says_so() -> None:
     ]
     [write] = [t for t in report.touches if t.action == "writes"]
     assert text(write.phrase) == (
-        "would create Jira tickets in “MOCK”, but our platform refuses it with no yes before it"
+        "would create Jira tickets in “MOCK”, but our platform refuses it, as nothing asks for "
+        "approval before it"
     )
     assert [f.rule for f in report.flags] == ["no_yes_before_write"]
 
@@ -745,13 +746,13 @@ def test_a_write_whose_card_names_no_place_says_so() -> None:
         {"name": "GitHub repository", "value": "fastapi/fastapi"}
     ]
     [write] = [t for t in report_of(document).touches if t.action == "writes"]
-    assert (write.place, text(write.phrase)) == (None, "can create Jira tickets, each after a yes")
+    assert (write.place, text(write.phrase)) == (None, "can create Jira tickets, each after approval")
 
 
 def test_a_write_with_no_card_before_it_asks_one_approver_and_makes_what_was_approved() -> None:
     report = report_of(json.loads((GOLDEN / "watchlist.json").read_text()))
     [write] = [t for t in report.touches if t.action == "writes"]
-    assert text(write.phrase) == "can make the changes approved in the run, each after a yes"
+    assert text(write.phrase) == "can make the changes approved in the run, each after approval"
     assert [a.decides for a in report.approves] == [EachRun(1)]
 
 

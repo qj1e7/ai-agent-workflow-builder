@@ -116,14 +116,9 @@ describe('the rail', () => {
     }
   })
 
-  it('sends an old Explain address to the workflow’s page, never to a blank page or an Explain page', () => {
+  it('sends an old Explain address to the workflow’s page, which EXPLAIN-gone follows in the browser', () => {
     expect(oldExplainDestination('uc_1')).toBe('/workflows/uc_1')
     expect(oldExplainDestination('uc a')).toBe('/workflows/uc%20a')
-    for (const path of ['/workflows/uc_1/explain', '/workflows/uc_1/explain?version=2', '/workflows/uc_1/explain#flags']) {
-      const html = render({ path })
-      expect(html, path).toContain('<main')
-      expect(text(mainOf(html)), path).not.toMatch(/Page not found|Explain|Reading the workflow/)
-    }
   })
 
   it('sends the old Agent library address to How it works for an Operator, keeping the agent and the tab, and Home for anyone else', () => {

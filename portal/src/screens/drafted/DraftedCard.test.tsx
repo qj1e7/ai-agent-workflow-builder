@@ -420,6 +420,27 @@ describe('the set-up approval page', () => {
     expect(shown).not.toMatch(/More details|\bExplain\b|Step by step/)
   })
 
+  it('shows each setting with where it came from, the key for each write block, a guess marked as guessed, and code’s checks, in view', () => {
+    const base = bobSetUp as SetUpApprovalView
+    const key = { label: [{ text: 'Write key for ', quoted: false }, { text: 'Close it', quoted: true }], value: [{ text: 'GitLab ops', quoted: true }], mark: 'filled', said: 'Chosen by Alice' } as const
+    const guess = { label: [{ text: 'The Jira project', quoted: true }], value: [{ text: 'MOCK', quoted: true }], mark: 'guessed', said: 'Guessed, and can be changed' } as const
+    const view = { ...base, report: { ...base.report, settings: [key, guess] } } as SetUpApprovalView
+    const html = render(<SetUpApproval view={view} />)
+    const shown = text(html)
+    expect(shown).toContain('Settings')
+    expect(shown, 'the key the write block uses, and who chose it').toContain('Write key for “Close it” “GitLab ops” Chosen by Alice')
+    expect(shown).toContain('The Jira project” “MOCK” Guessed, and can be changed')
+    expect(html, 'a guess is marked, never shown as given').toMatch(/data-mark="guessed"[^>]*>Guessed, and can be changed</)
+    expect(shown).toContain('Safety checks')
+    expect(shown).toContain('Fixed for you')
+    for (const fixed of base.report.fixed) expect(shown).toContain(fixed.words)
+    expect(shown).toContain('Passed')
+    for (const passed of base.report.passed) expect(shown).toContain(passed.words)
+    expect(html, 'all in view, never behind a disclosure').not.toMatch(/<details/)
+    expect(shown.indexOf('Who approves each write')).toBeLessThan(shown.indexOf('Settings'))
+    expect(shown.indexOf('Settings')).toBeLessThan(shown.indexOf('Safety checks'))
+  })
+
   it('gives the person who asked for it the reason in place of Approve and Decline', () => {
     const html = render(<SetUpApproval view={carolSetUp as SetUpApprovalView} />)
     expect(text(html)).toContain('You can\'t approve it. You asked for it, changed it, answered its questions or sent it.')

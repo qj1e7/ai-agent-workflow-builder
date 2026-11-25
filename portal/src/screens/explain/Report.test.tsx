@@ -29,7 +29,7 @@ describe('the report, as layout B draws it', () => {
       ['Settings', `${REPORT.settings.length} settings`],
       ['Approval', 'None needed'],
     ])
-    expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else.')
+    expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after approval. It changes nothing else.')
   })
 
   it('draws each row as a disclosure a click or the keyboard opens, closed to begin with', () => {
@@ -120,7 +120,7 @@ describe('Reworded and code’s wording', () => {
 
   it('shows the reworded In short with the pill Reworded and a button back to code’s wording', () => {
     const html = draw(REWORDED, { onWording: () => undefined })
-    expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after a yes, and changes nothing else.')
+    expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after approval, and changes nothing else.')
     expect(html).toMatch(/<span class="[^"]*label[^"]*">Reworded<\/span>/)
     expect(buttons(html)).toEqual(['Show code’s wording'])
   })

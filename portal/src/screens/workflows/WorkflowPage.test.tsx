@@ -426,7 +426,7 @@ describe('a workflow page', () => {
     for (const me of [ALICE, BOB]) {
       const main = mainOf(render({ me, useCase: held }))
       const banner = /<div[^>]*data-tone="bad"[\s\S]*?<\/p><\/div>/.exec(main)?.[0] ?? ''
-      expect(text(banner), me.id).toBe(`Needs a fix: ${findings.join(' ')}`)
+      expect(text(banner), me.id).toBe(`Needs a fix: ${findings.join(' ')} Anyone with n8n access can fix it in n8n.`)
       expect(banner, 'nothing to press: the findings say what to fix').not.toMatch(/<(?:a|button)\b/)
       expect(main, me.id).not.toContain('/explain')
       expect(text(main), me.id).not.toMatch(/\bExplain\b/)

@@ -42,12 +42,12 @@ describe('the workflow page’s banner for a graded version', () => {
     expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run. Another.', action: { kind: 'undo', to: 3, inUse: 4 } })
   })
 
-  it('says the findings with nothing to press when the page has no fix of its own to offer', () => {
+  it('says the findings and who can clear them, with nothing to press, when the page has no fix of its own to offer', () => {
     const fix = { ...on, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.'] } as UseCaseView
-    const said = { tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run.', action: null }
+    const said = { tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run. Anyone with n8n access can fix it in n8n.', action: null }
     expect(bannerOf(facts({ ...fix, version: 1 })), 'there is no version before the first').toEqual(said)
     expect(bannerOf(facts(fix, BOB)), 'an Approver reads the findings too').toEqual(said)
-    expect(bannerOf(facts({ ...fix, version: 1, findings: [] })).text, 'with no finding on record').toBe('Needs a fix: it can’t run as the platform expects.')
+    expect(bannerOf(facts({ ...fix, version: 1, findings: [] })).text, 'with no finding on record').toBe('Needs a fix: it can’t run as the platform expects. Anyone with n8n access can fix it in n8n.')
   })
 
   it('draws the findings alone, with no link or button', () => {
@@ -95,7 +95,7 @@ describe('the workflow page’s banner for a graded version', () => {
   it('offers nothing the platform would refuse while someone has it open in n8n, so the hold line can say why', () => {
     const held = { id: 'carol', name: 'Carol', since: '2026-11-09T02:02:00Z' }
     const fix = { ...on, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.'], held_in_n8n: held } as UseCaseView
-    expect(bannerOf(facts(fix)), 'Undo would publish, so the banner says the findings alone').toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run.', action: null })
+    expect(bannerOf(facts(fix)), 'Undo would publish, so the banner says the findings and who can clear them').toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run. Anyone with n8n access can fix it in n8n.', action: null })
     setTeamZone('Europe/London')
     expect(bannerOf(facts({ ...fix, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } })).action, 'so would Save the schedule again').toBeNull()
     setTeamZone(undefined)
