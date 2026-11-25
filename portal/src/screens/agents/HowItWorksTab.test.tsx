@@ -119,7 +119,7 @@ describe('the Agents tab list', () => {
     const main = mainOf(html)
     expect(main).toContain('Platform agents')
     expect(main).toContain('Specialist agents')
-    expect(main.match(/Platform agent/g)?.length).toBe(4)
+    expect(main.match(/Platform agent\b/g)?.length).toBe(4)
     expect(main).toContain('Changes data after a yes 5 tools')
     expect(main).toContain('Reads only 1 tool')
     expect(main).toContain('No access to other systems')
