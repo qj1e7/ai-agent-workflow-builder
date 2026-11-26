@@ -91,7 +91,8 @@ export function TeamsDecide({ approval, decision }: { approval: ApprovalView | u
   if (!approval) return null
   const busy = decision.pending !== null
   if (decision.recorded !== null) return <p role="status">{decision.recorded === 'approve' ? 'You approved this.' : 'You declined this.'}</p>
-  if (!canDecideNow(approval, decision)) return null
+  // After a conflict the next read hides the buttons, and the person still needs to know why.
+  if (!canDecideNow(approval, decision)) return decision.error ? <p role="alert">{decision.error}</p> : null
   return (
     <>
       <div className={styles['buttons']}>

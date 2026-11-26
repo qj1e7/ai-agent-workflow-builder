@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useErrorWords } from '../../api/context'
-import { useRun, useUseCase } from '../../api/queries'
+import { useModelOff, useRun, useUseCase } from '../../api/queries'
 import { useSetUp, useStartTest, useTestRunMarks, useTurnOn, type SetUp } from '../../api/workflowQueries'
 import type { UseCaseView } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
@@ -19,6 +19,7 @@ import { scheduleShort, type StageTone } from '../run/words'
 import { firstRunWhen } from '../workflows/times'
 import { RUN_NOW_ONLY, runsOnlyByHand } from '../workflows/workflow'
 import { UseCaseSimulation } from '../workflows/UseCaseSimulation'
+import { CAN_TEST_AGAIN } from './home'
 import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, turnOnStep, type BuildStage, type PillTone, type Replay } from './build'
 import { useShowBesideOnWide } from './autoOpen'
 import { PartsList, type Part } from './PartsList'
@@ -196,7 +197,10 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
   const whyStopped = useWhyTestStopped(runId, test)
   const result = test ? testStatus(test, whyStopped) : null
   // The platform's own fact, the same one the run page and Home read: a stop it says cannot be retried would only stop again.
-  const canRetry = test?.phase.state === 'failed' && test.phase.retryable
+  // With no AI model a retry would stop again, so the card holds it back as the run page and Home do (spec 5.4).
+  const modelOff = useModelOff()
+  const canRetry = test?.phase.state === 'failed' && test.phase.retryable && !modelOff
+  const waitsForModel = test?.phase.state === 'failed' && test.phase.retryable && modelOff
 
   let status: ReactNode
   let actions: ReactNode
@@ -247,7 +251,11 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
       ) : undefined
       break
     case 'stopped':
-      status = <span className={styles['bad']}>{result?.text} Nothing was written. It stays a Draft.</span>
+      status = (
+        <span className={styles['bad']}>
+          {result?.text} Nothing was written. It stays a Draft.{waitsForModel ? ` ${CAN_TEST_AGAIN}` : ''}
+        </span>
+      )
       actions = (
         <>
           {canRetry ? (
