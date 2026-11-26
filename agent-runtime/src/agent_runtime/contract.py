@@ -1616,8 +1616,9 @@ class RemoveSoftwareAnswer(WireModel):
 
 class ExplainAnswer(WireModel):
     """A request to explain a workflow the person has (ADR 0051). The platform matches the words
-    to one of the person's workflows and shows its report. It changes nothing, so both roles may
-    ask."""
+    to one of the person's workflows, and the Portal answers with the sentence the workflow's
+    page shows. Code reads a request only to explain with no model call. It changes nothing, so
+    both roles may ask."""
 
     kind: Literal["explain"] = "explain"
     workflow_words: str | None = Field(

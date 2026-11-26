@@ -275,26 +275,6 @@ export function useVersions(useCaseId: string, version: number) {
 }
 
 /**
- * The chat's Explain answer: the report of the version in use, with In short as the AI smoothed it when it passed every check. A refusal
- * (404, 409) carries words to show, so it is not tried again.
- */
-export function useExplain(useCaseId: string) {
-  const client = useApiClient()
-  const user = useCacheScope()
-  return useQuery({
-    queryKey: keys.explained(user, useCaseId),
-    queryFn: async () =>
-      unwrap(
-        await client.GET('/api/v1/use-cases/{use_case_id}/explain', {
-          params: { path: { use_case_id: useCaseId }, query: { reworded: true } },
-        }),
-      ),
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  })
-}
-
-/**
  * What Set up made, held for the set-up card and the build panel: the platform's answer with its build log and blocks, when it came,
  * which the log's replay counts from, and the test run the card started. Only the card writes it. The panel reads it.
  */

@@ -11,7 +11,6 @@ from fastapi import FastAPI
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
 from platform_api.builder.drafted_workflows import DraftedWorkflows
-from platform_api.builder.explain import Explainer
 from platform_api.builder.fix_parts import FixLayouts, FixParts
 from platform_api.builder.fixes import Fixes, FixLive, FixSettings, FixTrying
 from platform_api.builder.key_sweep import KeySweep
@@ -144,7 +143,6 @@ class Services:
     node_calls: NodeCalls
     builder: Builder
     planner_front: PlannerFront
-    explainer: Explainer
     cause_finder: RunCauses
     simulation_model: SimulationModel
     drafted: DraftedWorkflows
@@ -237,7 +235,6 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.node_calls = services.node_calls
     app.state.builder = services.builder
     app.state.planner_front = services.planner_front
-    app.state.explainer = services.explainer
     app.state.cause_finder = services.cause_finder
     app.state.simulation_model = services.simulation_model
     app.state.drafted = services.drafted
@@ -706,7 +703,6 @@ async def build(settings: Settings) -> Services:
             drafted=drafted,
             ready_here=ready_here,
         ),
-        explainer=Explainer(db, builder, ExplainWordings(db, model_settings, agents)),
         cause_finder=RunCauses(db, model_settings, agents, RunsInN8n(db, n8n.landing)),
         simulation_model=simulation_model,
         drafted=drafted,

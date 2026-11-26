@@ -616,9 +616,9 @@ class ExplainChoice(WireModel):
 
 
 class ExplainReply(Reply):
-    """A workflow to explain, matched by its words. The Portal shows it with GET
-    /api/v1/use-cases/{use_case_id}/explain?reworded=true. Explaining changes nothing, so
-    anyone signed in may ask."""
+    """A workflow to explain, matched by its words. The Portal answers with the sentence the
+    workflow's page shows and a way to open that page, built by code with no model call.
+    Explaining changes nothing, so anyone signed in may ask."""
 
     answer: Literal["explain"] = "explain"
     use_case_id: str | None = Field(

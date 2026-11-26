@@ -80,9 +80,7 @@
   "report": {
     "use_case_id": "uc_01JDRAFTRELEASE",
     "name": "Release check",
-    "version": null,
     "grade": "safe",
-    "then": null,
     "in_short": [
       {
         "text": "Every Monday at 9:00",
@@ -142,37 +140,31 @@
       {
         "name": "Every Monday",
         "ours": false,
-        "block_type": null,
         "tag": "Starts it"
       },
       {
         "name": "Start from the Portal",
         "ours": true,
-        "block_type": null,
         "tag": "Starts it"
       },
       {
         "name": "Read new releases",
         "ours": true,
-        "block_type": null,
         "tag": "Reads GitHub"
       },
       {
         "name": "Propose a ticket",
         "ours": true,
-        "block_type": null,
         "tag": "Shapes the change"
       },
       {
         "name": "Ask for approval",
         "ours": true,
-        "block_type": null,
         "tag": "Waits for approval"
       },
       {
         "name": "Make the ticket",
         "ours": true,
-        "block_type": null,
         "tag": "Writes after approval"
       }
     ],

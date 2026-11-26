@@ -2,19 +2,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
-import current from '../../../../contracts/fixtures/builder/explain.json'
-import reworded from '../../../../contracts/fixtures/builder/explain.reworded.json'
+import turnedOn from '../../../../contracts/fixtures/builder/use-case.turned-on.json'
 import explainOne from '../../../../contracts/fixtures/planner/answer.explain.json'
 import explainSeveral from '../../../../contracts/fixtures/planner/answer.explain.choices.json'
 import explainMissing from '../../../../contracts/fixtures/planner/answer.explain.missing.json'
 import explainIt from '../../../../contracts/fixtures/planner/answer.explain.it.json'
+import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
+import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
-import type { ExplainReply, WorkflowExplained } from '../../api/types'
+import type { ExplainReply, UseCaseView } from '../../api/types'
 import type { Page } from '../home/AnswerCards'
 import { CardMemoryContext, newCardMemory, NO_MEMORY, type CardMemory } from '../home/cardMemory'
 import { sayOf, wordsOnly } from '../home/answers'
 import { leftoverParts } from '../home/parts'
+import { sentenceOf } from '../workflows/workflow'
 import { ExplainAnswer, MOST_WHICH } from './ExplainAnswer'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
@@ -25,15 +27,30 @@ const MISSING = explainMissing as ExplainReply
 const FASTAPI = 'uc_01JFASTAPI'
 const REACT = 'uc_01JB8'
 
-interface Held {
-  readonly id: string
-  readonly report: WorkflowExplained
+const LANGGRAPH = turnedOn as UseCaseView
+/** The FastAPI release check as its page reads it: the turned-on release check, watching fastapi/fastapi. */
+const FASTAPI_VIEW: UseCaseView = {
+  ...LANGGRAPH,
+  use_case_id: FASTAPI,
+  name: 'FastAPI release check',
+  agents: LANGGRAPH.agents.map((agent) => ({ ...agent, values: { ...agent.values, 'GitHub repository': 'fastapi/fastapi' } })),
 }
 
-function draw(reply: ExplainReply, { focus = null, held = [], memory = NO_MEMORY }: { focus?: string | null; held?: readonly Held[]; memory?: CardMemory } = {}): string {
+interface Drawn {
+  readonly focus?: string | null
+  /** The workflows the Portal has read, as their pages read them. */
+  readonly held?: readonly UseCaseView[]
+  /** A workflow whose read failed, with how. */
+  readonly failed?: { readonly id: string; readonly error: Error }
+  readonly memory?: CardMemory
+}
+
+function draw(reply: ExplainReply, { focus = null, held = [], failed, memory = NO_MEMORY }: Drawn = {}): string {
   const session = createDevSession(null)
+  const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
-  for (const { id, report } of held) queryClient.setQueryData(['use-case', session.cacheScope(), id, 'explain'], report)
+  for (const view of held) queryClient.setQueryData(keys.useCase(scope, view.use_case_id), view)
+  if (failed) queryClient.getQueryCache().build(queryClient, { queryKey: keys.useCase(scope, failed.id) }).setState({ status: 'error', error: failed.error, fetchStatus: 'idle' })
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -50,10 +67,9 @@ function draw(reply: ExplainReply, { focus = null, held = [], memory = NO_MEMORY
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1] ?? ''))
 const title = (html: string) => text(/<h3\b[^>]*>([\s\S]*?)<\/h3>/.exec(html)?.[1] ?? '')
-const short = (html: string) => (/<p class="[^"]*short[^"]*"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '').replace(/<[^>]*>/g, '')
+const paragraphs = (html: string) => [...html.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/g)].map((m) => text(m[1] ?? ''))
 
-const PLAIN: Held = { id: FASTAPI, report: current as WorkflowExplained }
-const SMOOTH: Held = { id: FASTAPI, report: reworded as WorkflowExplained }
+const FASTAPI_SAYS = 'Every Monday at 8:00, check fastapi/fastapi on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after approval.'
 
 describe('the Explain answer in the chat', () => {
   it('says nothing above its card, drawn as cards and not as words, with no part dropped', () => {
@@ -64,43 +80,46 @@ describe('the Explain answer in the chat', () => {
   })
 
   describe('one workflow named', () => {
-    it('shows a short line while the report comes, under the workflow’s name, with nothing yet to open', () => {
+    it('shows a short line while the workflow loads, under its name, with nothing yet to open', () => {
       const html = draw(ONE)
       expect(title(html)).toBe('FastAPI release check')
-      expect(text(html)).toContain('Reading the workflow')
+      expect(text(html)).toContain('Loading the workflow')
       expect(buttons(html)).toEqual([])
     })
 
-    it('shows the report under the workflow’s name, with Open the workflow, once it came', () => {
-      const html = draw(ONE, { held: [PLAIN] })
+    it('answers with the sentence the workflow’s page shows, and one button to open that page', () => {
+      const html = draw(ONE, { held: [FASTAPI_VIEW] })
       expect(title(html)).toBe('FastAPI release check')
-      expect(short(html)).toContain('Every day at 8:00, it reads GitHub')
-      expect(text(html)).toContain('Step by step 8 blocks')
+      expect(paragraphs(html)).toEqual([sentenceOf(FASTAPI_VIEW)])
+      expect(sentenceOf(FASTAPI_VIEW)).toBe(FASTAPI_SAYS)
       expect(buttons(html)).toEqual(['Open the workflow'])
       expect(html).toContain('href="/workflows/uc_01JFASTAPI"')
     })
 
-    it('shows the reworded In short with the pill Reworded and a button to code’s wording, the sections in code’s words', () => {
-      const html = draw(ONE, { held: [SMOOTH] })
-      expect(short(html)).toBe('Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after approval, and changes nothing else.')
-      expect(text(html)).toContain('Reworded')
-      expect(buttons(html)).toEqual(['Show code’s wording', 'Open the workflow'])
-      expect(text(html)).toContain('Writes after approval')
+    it('shows no report: no sections, no reworded wording and nothing to swap', () => {
+      const html = draw(ONE, { held: [FASTAPI_VIEW] })
+      expect(text(html)).not.toMatch(/Step by step|Reworded|Code’s wording|Flags|Who approves each write/)
+      expect(html).not.toContain('<details')
     })
 
-    it('shows code’s wording with the pill Code’s wording after the swap, and the swap stays when Home comes back', () => {
-      const memory = newCardMemory()
-      memory.wording.keep(true)
-      const html = draw(ONE, { held: [SMOOTH], memory })
-      expect(short(html)).toContain('It changes nothing else.')
-      expect(text(html)).toContain('Code’s wording')
-      expect(buttons(html)).toEqual(['Show the reworded one', 'Open the workflow'])
+    it('keeps the Operator’s own words for a workflow that isn’t a release check, as its page does', () => {
+      const own: UseCaseView = { ...FASTAPI_VIEW, agents: [], instruction: 'Post the closed bugs to the team every Friday.' }
+      const html = draw(ONE, { held: [own] })
+      expect(paragraphs(html)).toEqual(['Post the closed bugs to the team every Friday.'])
     })
 
-    it('shows code’s wording with no pill when nothing came reworded, as for a workflow that reads facebook/react', () => {
-      const html = draw(ONE, { held: [PLAIN] })
-      expect(text(html)).not.toMatch(/Reworded|Code’s wording/)
-      expect(buttons(html).filter((label) => label.includes('wording'))).toEqual([])
+    it('says a workflow deleted since is not there, with nothing to open', () => {
+      const html = draw(ONE, { failed: { id: FASTAPI, error: new ApiError(404, { detail: 'No such use case' }) } })
+      expect(title(html)).toBe('FastAPI release check')
+      expect(text(html)).toContain('That workflow isn’t here any more.')
+      expect(buttons(html)).toEqual([])
+    })
+
+    it('says so when the workflow could not be loaded, with Try again', () => {
+      const html = draw(ONE, { failed: { id: FASTAPI, error: new ApiError(503, null) } })
+      expect(text(html)).toContain('The workflow could not be loaded.')
+      expect(html).toContain('role="alert"')
+      expect(buttons(html)).toEqual(['Try again'])
     })
   })
 
@@ -131,9 +150,10 @@ describe('the Explain answer in the chat', () => {
   })
 
   describe('“explain it”', () => {
-    it('explains the workflow in focus, by the name its choices carry', () => {
-      const html = draw(IT, { focus: FASTAPI, held: [PLAIN] })
+    it('explains the workflow in focus with its page’s sentence, by the name its choices carry', () => {
+      const html = draw(IT, { focus: FASTAPI, held: [FASTAPI_VIEW] })
       expect(title(html)).toBe('FastAPI release check')
+      expect(paragraphs(html)).toEqual([FASTAPI_SAYS])
       expect(buttons(html)).toEqual(['Open the workflow'])
     })
 
@@ -145,8 +165,8 @@ describe('the Explain answer in the chat', () => {
 
     it('keeps the workflow it explained when the focus changes later, so the card in the chat stays', () => {
       const memory = newCardMemory()
-      draw(IT, { focus: FASTAPI, held: [PLAIN], memory })
-      const later = draw(IT, { focus: REACT, held: [PLAIN], memory })
+      draw(IT, { focus: FASTAPI, held: [FASTAPI_VIEW], memory })
+      const later = draw(IT, { focus: REACT, held: [FASTAPI_VIEW], memory })
       expect(title(later)).toBe('FastAPI release check')
     })
 

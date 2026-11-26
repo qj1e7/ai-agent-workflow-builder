@@ -1,14 +1,10 @@
-import logging
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+from typing import Literal, Protocol
 
 from pydantic import Field, ValidationError
 
-from platform_api.builder.card_store import CardLibrary
-from platform_api.builder.models import CardView
-from platform_api.builder.versions import NoSuchVersion, Version, authors_of, versions_of
 from platform_api.builder.workflow_report import (
     CHANGES_NOTHING,
     CHANGES_NOTHING_ELSE,
@@ -18,45 +14,28 @@ from platform_api.builder.workflow_report import (
     AtSetUp,
     CantRunYet,
     EachRun,
-    Older,
     Quoted,
     Refused,
-    SetUp,
-    Team,
     Touch,
     Words,
     WorkflowReport,
     WriteApproval,
-    workflow_report,
 )
-from platform_api.db import Database
 from platform_api.orchestration import (
     ApproverMayAccept,
     CantRun,
     Clears,
     CodeWording,
     ExplainFact,
-    ExplainReworded,
     ExplainWordingResult,
     FixedForYou,
     Grade,
-    ModelProblem,
     NeedsAnAnswer,
     NeedsASetting,
     NoModel,
     RuntimeDown,
-    Unreadable,
-    read_flow,
 )
-from platform_api.shared import Principal
 from platform_api.wire import WireModel
-
-log = logging.getLogger(__name__)
-
-NOTHING_TO_EXPLAIN = (
-    "Nothing to explain: this version ran on the shared n8n workflow, so the platform kept no "
-    "copy of its blocks."
-)
 
 
 class Segment(WireModel):
@@ -70,9 +49,6 @@ class Segment(WireModel):
 class ExplainStep(WireModel):
     name: str
     ours: bool = Field(description="A block of our node pack. False for one of n8n's own.")
-    block_type: str | None = Field(
-        description="n8n's type of the block. Null unless you have n8n access."
-    )
     tag: str = Field(description="What it does, such as Reads Jira or Writes after approval.")
 
 
@@ -136,32 +112,22 @@ class ExplainSetting(WireModel):
     said: str = Field(description="Where it was set, or its mark, in words to show.")
 
 
-class ExplainThen(WireModel):
-    number: int
-    grade: Grade = Field(description="The grade it had when it was published.")
-
-
 class WorkflowExplained(WireModel):
-    """One version of a workflow, explained from the report code builds. In in_short, phrase,
-    label and value, each string from the plan or the document is a quoted segment, so a block
-    named "Security approved" can't read as code's verdict."""
+    """A drafted workflow or a fix, explained from the report code builds, as its card and its
+    set-up approval show it. In in_short, phrase, label and value, each string from the plan or
+    the document is a quoted segment, so a block named "Security approved" can't read as code's
+    verdict."""
 
     use_case_id: str
     name: str
-    version: int | None = Field(description="Null for a draft, which has no published version.")
     grade: Grade = Field(description="The safety checker's grade under today's rules.")
-    then: ExplainThen | None = Field(
-        description="An older version's number and the grade it had when it was published. Null "
-        "for the version in use and for a draft."
-    )
     in_short: list[Segment] = Field(
         description="One or two sentences in code's own words: when it runs, what it reads, what "
         "it changes or posts, and what waits for approval."
     )
     reworded: str | None = Field(
         description="In short as the AI model smoothed it, when asked with reworded=true and it "
-        "passed every check. Show it labelled Reworded, with a way back to in_short. Null "
-        "otherwise."
+        "passed every check. Null otherwise."
     )
     steps: list[ExplainStep] = Field(description="Each block in run order.")
     touches: list[ExplainTouch] = Field(description="What it reads, writes and posts.")
@@ -177,49 +143,20 @@ class WorkflowExplained(WireModel):
 
 
 @dataclass(frozen=True)
-class NoSuchWorkflow:
-    pass
-
-
-@dataclass(frozen=True)
-class NothingToExplain:
-    pass
-
-
-@dataclass(frozen=True)
 class TooLongToSmooth:
     pass
 
 
-type Explained = WorkflowExplained | NoSuchWorkflow | NoSuchVersion | NothingToExplain
-
-
 def view_of(
-    report: WorkflowReport,
-    use_case_id: str,
-    name: str,
-    version: int | None,
-    n8n_access: bool,
-    reworded: str | None = None,
+    report: WorkflowReport, use_case_id: str, name: str, reworded: str | None = None
 ) -> WorkflowExplained:
-    then = report.then
     return WorkflowExplained(
         use_case_id=use_case_id,
         name=name,
-        version=version,
         grade=report.grade,
-        then=None if then is None else ExplainThen(number=then.number, grade=then.grade),
         in_short=segments(report.in_short),
         reworded=reworded,
-        steps=[
-            ExplainStep(
-                name=s.name.text,
-                ours=s.ours,
-                block_type=s.block_type.text if n8n_access else None,
-                tag=s.tag,
-            )
-            for s in report.steps
-        ],
+        steps=[ExplainStep(name=s.name.text, ours=s.ours, tag=s.tag) for s in report.steps],
         touches=[_touch(t) for t in report.touches],
         flags=[
             ExplainFlag(
@@ -384,100 +321,5 @@ def to_smooth(report: WorkflowReport) -> CodeWording | TooLongToSmooth:
         return TooLongToSmooth()
 
 
-class Grading(Protocol):
-    async def todays_rules(self) -> Team: ...
-
-
 class Wordings(Protocol):
     async def reword(self, asked: CodeWording) -> ExplainWordingResult | NoModel | RuntimeDown: ...
-
-
-_WORKFLOW = """
-    SELECT u.current_version, u.draft, u.made_in_n8n_by, v.name
-    FROM builder.use_cases u
-    JOIN builder.use_case_versions v
-      ON v.use_case_id = u.use_case_id AND v.version = u.current_version
-    WHERE u.use_case_id = %s AND u.deleted_at IS NULL
-"""
-
-
-class Explainer:
-    def __init__(self, db: Database, grading: Grading, wordings: Wordings) -> None:
-        self._db = db
-        self._grading = grading
-        self._wordings = wordings
-        self._cards = CardLibrary(db)
-
-    async def explain(
-        self,
-        use_case_id: str,
-        viewer: Principal,
-        version: int | None = None,
-        reworded: bool = False,
-    ) -> Explained:
-        async with self._db.connection("builder") as conn:
-            row = await (await conn.execute(_WORKFLOW, (use_case_id,))).fetchone()
-            if row is None:
-                return NoSuchWorkflow()
-            versions = await versions_of(conn, use_case_id)
-        draft, current = bool(row["draft"]), int(row["current_version"])
-        asked = current if version is None else version
-        found = next((v for v in versions if v.number == asked), None)
-        if found is None or (draft and version is not None):
-            return NoSuchVersion()
-        if found.held is None:
-            return NothingToExplain()
-        laid = SetUp(
-            _laid_by(found, row["made_in_n8n_by"] is not None),
-            found.held.document,
-            await self._pinned_or_newest_cards(use_case_id, found.number, found.held.document),
-        )
-        source = laid if asked == current else Older(laid, asked, found.held.grade)
-        report = workflow_report(source, await self._grading.todays_rules())
-        return view_of(
-            report,
-            use_case_id,
-            str(row["name"]),
-            None if draft else asked,
-            viewer.n8n_access,
-            await self._reworded(report) if reworded else None,
-        )
-
-    async def _pinned_or_newest_cards(
-        self, use_case_id: str, version: int, document: Mapping[str, Any]
-    ) -> dict[str, CardView]:
-        pinned = await self._cards.agents_of([(use_case_id, version)])
-        cards = {a.card.card_id: a.card for a in pinned.get((use_case_id, version), [])}
-        for card_id in _agents_named(document):
-            if card_id not in cards and (card := await self._cards.get(card_id)) is not None:
-                cards[card_id] = card
-        return cards
-
-    async def _reworded(self, report: WorkflowReport) -> str | None:
-        asked = to_smooth(report)
-        if isinstance(asked, TooLongToSmooth):
-            return None
-        match await self._wordings.reword(asked):
-            case ExplainReworded(text=text):
-                return text
-            case RuntimeDown(detail=detail):
-                log.warning("Explain kept code's wording: %s", detail)
-            case ModelProblem(reason=reason):
-                log.warning("Explain kept code's wording: the model's answer was %s", reason)
-            case _:
-                pass
-        return None
-
-
-def _agents_named(document: Mapping[str, Any]) -> Sequence[str]:
-    try:
-        flow = read_flow(document)
-    except Unreadable:
-        return []
-    return [str(b.parameters.get("agent")) for b in flow.of_kind("agent")]
-
-
-def _laid_by(version: Version, made_in_n8n: bool) -> Literal["planner", "n8n"]:
-    saved_there = version.made is not None and version.made.kind == "settings_changed_in_n8n"
-    by_n8n = any(a.where == "n8n" for a in authors_of(version))
-    return "n8n" if made_in_n8n or saved_there or by_n8n else "planner"

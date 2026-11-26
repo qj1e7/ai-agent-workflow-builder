@@ -30,7 +30,6 @@ from platform_api.builder.workflow_report import (
     Filled,
     Guessed,
     Needed,
-    Older,
     Quoted,
     Refused,
     SetUp,
@@ -371,12 +370,11 @@ def test_a_made_in_n8n_workflow_says_what_each_of_n8n_s_blocks_reads_writes_and_
     ]
 
 
-def test_an_older_version_is_graded_again_under_today_s_rules_beside_its_grade_then() -> None:
-    older = react()
-    node(older, "Tell #releases")["parameters"]["text"] = "A new React release is out <!channel>"
-    report = workflow_report(Older(SetUp("planner", older, CARDS), 2, "safe"), TEAM)
-    assert report.then is not None
-    assert (report.then.number, report.then.grade) == (2, "safe")
+def test_a_post_that_calls_out_a_whole_channel_is_flagged_and_runs_on_the_set_up_approval():
+    calls_everyone = react()
+    tell = node(calls_everyone, "Tell #releases")
+    tell["parameters"]["text"] = "A new React release is out <!channel>"
+    report = workflow_report(SetUp("planner", calls_everyone, CARDS), TEAM)
     assert report.grade == "needs_a_fix"
     assert [(f.rule, f.block and f.block.text) for f in report.flags] == [
         ("calls_everyone", "Tell #releases")
@@ -384,11 +382,10 @@ def test_an_older_version_is_graded_again_under_today_s_rules_beside_its_grade_t
     assert [(a.block.text, a.decides) for a in report.approves] == [
         ("Tell #releases", CantRunYet())
     ]
-    later = workflow_report(Older(SetUp("planner", older, CARDS), 2, "safe"), OVERRIDES)
+    later = workflow_report(SetUp("planner", calls_everyone, CARDS), OVERRIDES)
     assert [(a.block.text, a.decides) for a in later.approves] == [("Tell #releases", AtSetUp())], (
         "a post that breaks the Tell rule runs on the set-up approval, once there is one"
     )
-    assert report_of(react()).then is None
 
 
 def test_fixed_for_you_lists_what_code_made_sure_of_only_when_code_laid_it_out() -> None:

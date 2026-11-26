@@ -1073,7 +1073,7 @@ class Fixes:
         return FixApproval(
             name=row.name,
             use_case_id=row.use_case_id,
-            report=view_of(laid.report, row.use_case_id, row.name, None, False, smoothed),
+            report=view_of(laid.report, row.use_case_id, row.name, smoothed),
             held=await self._held(row, laid),
             fix=await self._evidence(row, set_up, laid),
         )

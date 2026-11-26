@@ -1,15 +1,16 @@
 import { useContext, useState } from 'react'
-import { Link } from '../../ui/Link'
+import { ApiError } from '../../api/client'
+import { useUseCase } from '../../api/queries'
 import type { ExplainReply } from '../../api/types'
-import { useExplain } from '../../api/workflowQueries'
+import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
+import { Link } from '../../ui/Link'
 import { OpenButton } from '../../ui/OpenItem'
 import type { Page } from '../home/AnswerCards'
 import { CardMemoryContext } from '../home/cardMemory'
 import chat from '../home/Planner.module.css'
-import { Explained } from './Explained'
-import { explainAnswerOf, explainAsk, explainStateOf } from './explain'
-import { Report } from './Report'
+import { sentenceOf } from '../workflows/workflow'
+import { explainAnswerOf, explainAsk } from './explain'
 
 export const MOST_WHICH = 8
 
@@ -49,30 +50,37 @@ function Missing({ looked }: { looked: string }) {
   )
 }
 
-/** The workflow's report, asked for with the reworded In short. The sections are always code's words. */
+/**
+ * The workflow in the sentence its page shows, with Open the workflow. Code builds the sentence from what the platform stored, so no
+ * model words it, and the chat and the page never disagree. A workflow deleted since, or one that couldn't be loaded, says so instead.
+ */
 function ExplainCard({ useCaseId, name }: { useCaseId: string; name: string | null }) {
-  const memory = useContext(CardMemoryContext)
-  const [code, setCode] = useState(() => memory.wording.kept() ?? false)
-  const query = useExplain(useCaseId)
-  const state = explainStateOf(query)
-  const swap = () => {
-    memory.wording.keep(!code)
-    setCode(!code)
-  }
+  const useCase = useUseCase(useCaseId)
+  const view = useCase.data
   return (
     <Card
-      title={state.kind === 'report' ? state.report.name : (name ?? 'The workflow')}
+      title={view?.name ?? name ?? 'The workflow'}
       actions={
-        state.kind === 'report' ? (
+        view ? (
           <OpenButton item={{ kind: 'workflow', id: useCaseId }} to={`/workflows/${encodeURIComponent(useCaseId)}`}>
             Open the workflow
           </OpenButton>
         ) : undefined
       }
     >
-      <Explained state={state} retry={() => void query.refetch()}>
-        {(report) => <Report report={report} code={code} onWording={swap} />}
-      </Explained>
+      {view ? (
+        <p>{sentenceOf(view)}</p>
+      ) : useCase.error instanceof ApiError && useCase.error.status === 404 ? (
+        <p className="muted">That workflow isn’t here any more.</p>
+      ) : useCase.isError ? (
+        <p role="alert">
+          The workflow could not be loaded. <Button onClick={() => void useCase.refetch()}>Try again</Button>
+        </p>
+      ) : (
+        <p className="muted" role="status">
+          Loading the workflow
+        </p>
+      )}
     </Card>
   )
 }

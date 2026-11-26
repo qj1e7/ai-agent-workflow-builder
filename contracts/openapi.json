@@ -6594,7 +6594,7 @@
       },
       "ExplainReply": {
         "additionalProperties": false,
-        "description": "A workflow to explain, matched by its words. The Portal shows it with GET\n/api/v1/use-cases/{use_case_id}/explain?reworded=true. Explaining changes nothing, so\nanyone signed in may ask.",
+        "description": "A workflow to explain, matched by its words. The Portal answers with the sentence the\nworkflow's page shows and a way to open that page, built by code with no model call.\nExplaining changes nothing, so anyone signed in may ask.",
         "properties": {
           "answer": {
             "const": "explain",
@@ -6738,18 +6738,6 @@
       "ExplainStep": {
         "additionalProperties": false,
         "properties": {
-          "block_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "n8n's type of the block. Null unless you have n8n access.",
-            "title": "Block Type"
-          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -6768,29 +6756,9 @@
         "required": [
           "name",
           "ours",
-          "block_type",
           "tag"
         ],
         "title": "ExplainStep",
-        "type": "object"
-      },
-      "ExplainThen": {
-        "additionalProperties": false,
-        "properties": {
-          "grade": {
-            "$ref": "#/components/schemas/Grade",
-            "description": "The grade it had when it was published."
-          },
-          "number": {
-            "title": "Number",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "number",
-          "grade"
-        ],
-        "title": "ExplainThen",
         "type": "object"
       },
       "ExplainTouch": {
@@ -18705,7 +18673,7 @@
       },
       "WorkflowExplained": {
         "additionalProperties": false,
-        "description": "One version of a workflow, explained from the report code builds. In in_short, phrase,\nlabel and value, each string from the plan or the document is a quoted segment, so a block\nnamed \"Security approved\" can't read as code's verdict.",
+        "description": "A drafted workflow or a fix, explained from the report code builds, as its card and its\nset-up approval show it. In in_short, phrase, label and value, each string from the plan or\nthe document is a quoted segment, so a block named \"Security approved\" can't read as code's\nverdict.",
         "properties": {
           "approval": {
             "description": "Whether its set-up needed an approval, in words to show.",
@@ -18774,7 +18742,7 @@
                 "type": "null"
               }
             ],
-            "description": "In short as the AI model smoothed it, when asked with reworded=true and it passed every check. Show it labelled Reworded, with a way back to in_short. Null otherwise.",
+            "description": "In short as the AI model smoothed it, when asked with reworded=true and it passed every check. Null otherwise.",
             "title": "Reworded"
           },
           "settings": {
@@ -18792,17 +18760,6 @@
             "title": "Steps",
             "type": "array"
           },
-          "then": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ExplainThen"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "An older version's number and the grade it had when it was published. Null for the version in use and for a draft."
-          },
           "touches": {
             "description": "What it reads, writes and posts.",
             "items": {
@@ -18814,26 +18771,12 @@
           "use_case_id": {
             "title": "Use Case Id",
             "type": "string"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Null for a draft, which has no published version.",
-            "title": "Version"
           }
         },
         "required": [
           "use_case_id",
           "name",
-          "version",
           "grade",
-          "then",
           "in_short",
           "reworded",
           "steps",
@@ -26698,138 +26641,6 @@
           }
         ],
         "summary": "Add The Yes Back",
-        "tags": [
-          "builder"
-        ]
-      }
-    },
-    "/api/v1/use-cases/{use_case_id}/explain": {
-      "get": {
-        "description": "One version of a workflow, explained from the report code builds (ADR 0051, section 6): In short, each step, what it reads, writes and posts, every flag, who approves each write, its settings and its approval. Anyone signed in may ask. Block types come only to people with n8n access. An older version is checked again under today's rules, with the grade it had when it was published beside it. With reworded=true the AI model may smooth In short, and reworded holds its text only when it passed every check. Anything else leaves reworded null, and the answer is still 200. It writes nothing, starts nothing and asks no Approver.",
-        "operationId": "explain_workflow_api_v1_use_cases__use_case_id__explain_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "use_case_id",
-            "required": true,
-            "schema": {
-              "title": "Use Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "The version to explain, as the versions list numbers it. Leave it out for the version in use, or for a draft.",
-            "in": "query",
-            "name": "version",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The version to explain, as the versions list numbers it. Leave it out for the version in use, or for a draft.",
-              "title": "Version"
-            }
-          },
-          {
-            "description": "Ask the AI model to smooth In short, as the chat card does.",
-            "in": "query",
-            "name": "reworded",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Ask the AI model to smooth In short, as the chat card does.",
-              "title": "Reworded",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowExplained"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Signed in, but not on the People list. Ask an Operator to add you"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "No such workflow, or it is deleted, or no such version"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Nothing to explain: this version ran on the shared n8n workflow, so the platform kept no copy of its blocks."
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
-          }
-        },
-        "security": [
-          {
-            "DevUser": []
-          },
-          {
-            "OidcBearer": []
-          }
-        ],
-        "summary": "Explain Workflow",
         "tags": [
           "builder"
         ]

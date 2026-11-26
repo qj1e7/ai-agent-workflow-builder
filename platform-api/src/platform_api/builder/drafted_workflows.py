@@ -979,7 +979,7 @@ class DraftedWorkflows:
             name=revision.plan.name,
             digest=state.request.digest,
             approval=_approval_view(state),
-            report=view_of(checked.report, kept.use_case_id, revision.plan.name, None, False),
+            report=view_of(checked.report, kept.use_case_id, revision.plan.name),
             you_can_decide=why_not is None,
             why_not=why_not,
             decline_reasons=list(DECLINE_REASONS),
@@ -1442,7 +1442,7 @@ class DraftedWorkflows:
             update={
                 "state": lived,
                 "blocks": blocks_of(newest.document),
-                "report": view_of(report, kept.use_case_id, newest.plan.name, None, False),
+                "report": view_of(report, kept.use_case_id, newest.plan.name),
                 "needed": needed,
                 "flags": flags,
                 "settings": setting_views(
