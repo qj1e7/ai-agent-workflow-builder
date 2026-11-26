@@ -77,24 +77,17 @@ export function approvalPill(standing: Standing, canDecide: boolean): Pill {
   }
 }
 
-/** A rule with two Approvers says whose turn it is: "Step 1 of 2…", then "Step 2 of 2. Carol said yes first.". Null for one. */
+/** A rule with two Approvers says whose turn it is: "Step 1 of 2…", then "Step 2 of 2. Carol approved first.". Null for one. */
 export function turnWords(standing: Standing, nameOf: NameOf): string | null {
   if (standing.is !== 'open' || standing.steps < 2) return null
   const at = `Step ${String(standing.step + 1)} of ${String(standing.steps)}.`
   if (standing.step === 0) return `${at} It needs two Approvers, one after the other.`
-  return standing.approvedBy.length > 0 ? `${at} ${andList(standing.approvedBy.map(nameOf))} said yes first.` : at
-}
-
-/** Why this person may say yes, and which of two yeses is theirs. Who said yes first is in the turn line, so it isn't said again. */
-export function whyYouWords(standing: Standing): string {
-  const own = 'No one can approve their own work.'
-  if (standing.is !== 'open' || standing.steps < 2) return own
-  return `${own} Your yes is the ${standing.step === 0 ? 'first' : 'second'} of two.`
+  return standing.approvedBy.length > 0 ? `${at} ${andList(standing.approvedBy.map(nameOf))} approved first.` : at
 }
 
 const WHY_NOT: Partial<Record<Refusal, string>> = {
   own_work: 'You can’t approve your own work.',
-  decided_earlier_step: 'You said yes to the step before, and no one says yes twice.',
+  decided_earlier_step: 'You approved the step before, and no one approves twice.',
   not_an_approver: 'Only an Approver can decide.',
   not_eligible: 'You aren’t one of the people who can decide this step.',
 }
@@ -125,10 +118,10 @@ const orList = (names: readonly string[]) => (names.length < 2 ? names.join('') 
  * Bob’s yes.", once the platform names them, and otherwise that it waits for an Approver.
  */
 export function leadWords(requests: number, yours: boolean, waiting: readonly string[] = []): string {
-  if (yours) return requests === 1 ? 'This needs your yes.' : 'These need your yes.'
-  if (requests !== 1) return 'These wait for an Approver’s yes.'
-  if (waiting.length === 1) return `This waits for ${waiting.join('')}’s yes.`
-  return waiting.length > 1 ? `This waits for a yes from ${orList(waiting)}.` : 'This waits for an Approver’s yes.'
+  if (yours) return requests === 1 ? 'This needs your approval.' : 'These need your approval.'
+  if (requests !== 1) return 'These wait for an Approver.'
+  if (waiting.length === 1) return `This waits for ${waiting.join('')}.`
+  return waiting.length > 1 ? `This waits for ${orList(waiting)}.` : 'This waits for an Approver.'
 }
 
 /** The page's Sent row, in the sketch's words: "Today, 9:01, in Teams", or that it couldn't be sent. Null before it is tried. */
@@ -168,7 +161,7 @@ export function recordWords(standing: Standing, facts: StageFacts | null, nameOf
       return `${who}${when(standing.at)}${reason ? `: ${quickOrTyped(reason, quick)}` : '.'} Nothing was written.`
     }
     case 'expired':
-      return 'No one said yes in time. Nothing was written, and it can’t be decided now.'
+      return 'No one approved in time. Nothing was written, and it can’t be decided now.'
     case 'cancelled':
       return 'The workflow was deleted before anyone decided. Nothing was written, and it can’t be decided now.'
     case 'closed':

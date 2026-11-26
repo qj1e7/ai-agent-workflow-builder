@@ -630,6 +630,23 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
 .now-sub { margin-top: 4px; color: var(--text-2); padding-inline-start: 28px; }
 .change { margin-top: 14px; padding: 12px 14px; border-radius: var(--r-md); background: var(--subtle); border: 1px solid var(--line); }
 .change .kicker { margin-bottom: 4px; }
+/* Decision first (25 Nov): what was found, what it wants to do, who decides, then the history folded. */
+.d-found { font-size: var(--fs-head); font-weight: 600; line-height: 1.35; }
+.d-wants { margin-top: 10px; color: var(--text-2); }
+.d-ticket { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--subtle); }
+.d-ticket > summary { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 12px 14px; cursor: pointer; list-style: none; }
+.d-ticket > summary::-webkit-details-marker { display: none; }
+.d-ticket .d-t { display: grid; gap: 2px; min-width: 0; }
+.d-ticket .d-g { color: var(--text-2); font-size: var(--fs-small); }
+.d-ticket .d-more { flex: none; font-size: var(--fs-small); font-weight: 600; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.d-ticket .chg { padding: 0 14px 14px; }
+.d-who { margin-top: 14px; }
+.d-who .pv-foot { margin-top: 10px; }
+.d-fold { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.d-fold > summary { cursor: pointer; font-weight: 600; font-size: var(--fs-small); color: var(--text-2); }
+.d-fold .log { margin-top: 8px; }
+.d-fold .log.agent b { color: var(--ai-text); }
+.d-fold .log[hidden] { display: none; }
 .play .pk.p0 { animation: pk .8s cubic-bezier(.45, 0, .55, 1) both; animation-delay: var(--dl, 0s); }
 .play .bub { animation: bub .35s ease-out both; animation-delay: var(--dl, 0s); }
 .play .st.done .node, .play .st.wait .node, .play .st.err .node, .play .st.no .node { animation: stdone 1s linear both; animation-delay: var(--dl, 0s); }
@@ -1480,7 +1497,7 @@ const QA = {
   declined: [['Found', FOUND], ['Result', '']],
 };
 const TODAY = { get stopped() { return stopWhy(); }, retrying: 'Retrying', waiting: 'Waiting for Bob to approve', writing: 'Creating the ticket', done: 'MOCK-22 created', declined: 'Declined. Nothing was written.' };
-const RUNPILL = { stopped: ['Stopped', 'err'], retrying: ['Running', 'run'], waiting: ['Waiting for approval', 'wait'], writing: ['Running', 'run'], done: ['Done', 'ok'], declined: ['Declined', 'idle'] };
+const RUNPILL = { stopped: ['Stopped', 'err'], retrying: ['Running', 'run'], waiting: ['Waiting for approval', 'wait'], writing: ['Approved by Bob', 'run'], done: ['Done', 'ok'], declined: ['Declined', 'idle'] };
 const QA_MOVED = [['What happened', 'GitHub answered, but the “Read release” block couldn’t find the field “tag”.'], ['Affected', 'Nothing. No ticket was written.'], ['Safe to retry', 'No. It would stop in the same place.']];
 const qaHTML = () => (W.stage === 'stopped' && moved() ? QA_MOVED : QA[W.stage]).map(([k, v]) => `<div><dt>${k}</dt><dd>${k === 'Result' && W.stage === 'declined' ? `Bob declined${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.` : v}</dd></div>`).join('');
 const runCard = () => `<div class="card" data-live="run" data-spec="run">
@@ -1496,37 +1513,63 @@ const runHeadFull = () => `<div class="pg-head"><div><p class="pv-kind">Today’
 /* The full page is the light stage, with Now, what will be written and the timed log beside it. The side panel stays a summary. */
 const runView = (full = false) => (full ? `<div class="pv" data-live="run">${runHeadFull()}
   ${W.maint ? n8nTabs('Steps') : ''}
-  <div class="pv-pane" data-pane="sum"><div class="live-body">${stageHTML()}<aside class="live-side" aria-label="This run"><section data-live="run-now"></section><div class="pv-sec"><h4>Step by step</h4><ol class="log" data-live="run-log"></ol></div></aside></div></div>
+  <div class="pv-pane" data-pane="sum"><div class="live-body">${stageHTML()}<aside class="live-side" aria-label="This run"><section data-live="run-now"></section>${foldHTML(false)}</aside></div></div>
   ${W.maint ? `<div class="pv-pane" data-pane="n8n" hidden>${canvasSVG('fastapi', { live: true })}</div>` : ''}
 </div>` : `<div class="pv" data-live="run">${runHead}
-  ${runLine()}
+  <section data-live="run-now"></section>
   <dl class="qa" data-live="run-qa"></dl>
+  ${foldHTML(true)}
   <div class="pv-foot"><span></span><span class="c-act" data-live="run-act"></span></div>
   <div class="fx" data-live="run-fix" hidden></div>
 </div>`);
-function logRows() {
-  const l = [['8:00:00', 'Started on schedule.'], ['8:00:01', 'Version checker asked GitHub for FastAPI’s newest release.'], ['8:00:31', STOP_LOG(), 'bad']];
-  if (W.stage !== 'stopped') l.push(['9:01:10', 'Retried from Read release, after a short wait. Daily 8:00 didn’t run again.']);
-  if (['waiting', 'writing', 'done', 'declined'].includes(W.stage)) l.push(['9:01:12', 'Found 0.121.0. You run 0.115.2.'], ['9:01:13', 'Asked an Approver for approval in Teams.', W.stage === 'waiting' ? 'now' : '']);
-  if (['writing', 'done'].includes(W.stage)) l.push(['9:04:02', 'Bob approved.']);
-  if (W.stage === 'done') l.push(['9:04:03', 'Created MOCK-22 in Jira project MOCK.']);
-  if (W.stage === 'declined') l.push(['9:04:02', `Bob declined${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.`]);
-  if (W.stage === 'stopped') l.push(...fixLogRows());
-  return l.map(([t, s, c]) => `<li${c ? ` class="${c}"` : ''}><span class="t">${t}</span><span>${s}</span></li>`).join('');
+/* Decision first (25 Nov). Plain steps are built from the run's events. The agents' own words sit behind "Show agent messages", for support. */
+const RUN_TICKET = { title: 'Upgrade FastAPI from 0.115.2 to 0.121.0', gist: 'Links the release notes. Suggests reviewing whether to upgrade.', body: 'FastAPI 0.121.0 is out. The team runs 0.115.2.\ngithub.com/fastapi/fastapi/releases/tag/0.121.0' };
+const DECISION_STAGES = ['waiting', 'writing', 'done', 'declined'];
+function stepRows() {
+  if (!DECISION_STAGES.includes(W.stage)) {
+    const l = [['8:00:00', 'Started on schedule.'], ['8:00:01', 'Version checker asked GitHub for FastAPI’s newest release.'], ['8:00:31', STOP_LOG(), 'bad']];
+    if (W.stage !== 'stopped') l.push(['9:01:10', 'Retried from Read release, after a short wait. Daily 8:00 didn’t run again.']);
+    if (W.stage === 'stopped') l.push(...fixLogRows());
+    return l;
+  }
+  const l = [['9:01:11', 'Checked GitHub: found 0.121.0'], ['9:01:12', 'Drafted 1 Jira ticket'], ['9:01:13', 'Asked an Approver in Teams', W.stage === 'waiting' ? 'now' : '']];
+  if (['writing', 'done'].includes(W.stage)) l.push(['9:04:02', 'Bob approved']);
+  if (W.stage === 'done') l.push(['9:04:03', 'Created MOCK-22']);
+  if (W.stage === 'declined') l.push(['9:04:02', `Bob declined${W.reason ? `: ${lower(W.reason)}` : ''}`]);
+  return l;
+}
+const logRows = () => stepRows().map(([t, s, c]) => `<li${c ? ` class="${c}"` : ''}><span class="t">${t}</span><span>${s}</span></li>`).join('');
+const agentRows = () => [['9:01:10', 'Planner', 'Please run your plan with these inputs. GitHub repository: fastapi/fastapi; Jira project: MOCK.'], ['9:01:12', 'Version checker', 'FastAPI 0.121.0 is the newest release and MOCK has no ticket for it, so I proposed one ticket for an Approver to check.']]
+  .map(([t, who, s]) => `<li><span class="t">${t}</span><span><b>${who}</b> ${s}</span></li>`).join('');
+const foldHTML = (withLine) => `<details class="d-fold" data-live="run-fold"><summary data-live="run-fold-sum"></summary>${withLine ? runLine() : ''}
+  <ol class="log" aria-label="Run history" data-live="run-log"></ol>
+  <p><button class="linkbtn" type="button" data-agent-msgs aria-expanded="false">Show agent messages</button></p>
+  <ol class="log agent" aria-label="Agent messages" data-live="run-agent" hidden></ol></details>`;
+const foldCount = () => `Run history (${stepRows().length} steps)`;
+const ticketHTML = () => `<details class="d-ticket"><summary><span class="d-t"><b>${RUN_TICKET.title}</b><span class="d-g">${RUN_TICKET.gist}</span></span><span class="d-more">${nw('Show full text')}</span></summary>
+    <dl class="chg"><div><dt>Where</dt><dd>Jira project MOCK</dd></div><div><dt>Summary</dt><dd>${RUN_TICKET.title}</dd></div><div><dt>Details</dt><dd class="body">${RUN_TICKET.body}</dd></div><div><dt>Fields</dt><dd class="fields">Task · Medium · upgrade, fastapi</dd></div></dl></details>`;
+/* The same shape in every state: what was found, what the run wants to do or did, who decides, then the folded history. */
+function decisionHTML() {
+  const st = W.stage;
+  const lead = { waiting: 'This run wants to create 1 Jira ticket in MOCK:', writing: 'This run is creating 1 Jira ticket in MOCK:', done: 'This run created 1 Jira ticket in MOCK:', declined: 'This run wanted to create 1 Jira ticket in MOCK:' }[st];
+  const ticket = ticketHTML();
+  const who = {
+    waiting: () => `<p>${nw('An Approver decides in Teams (asked 9:01).')}${W.user === 'bob' ? '' : ' You can’t approve your own run.'}</p>${W.user === 'bob' && W.appr === 'waiting' ? `<div class="pv-foot" data-live="appr-foot">${apprFoot()}</div>` : ''}`,
+    writing: () => '<p>Bob approved at 9:04. The platform is writing now.</p>',
+    done: () => `<p class="c-left okline done-line">${ICON.check}Approved by Bob at 9:04. MOCK-22 created.</p>`,
+    declined: () => `<p>Declined by Bob at 9:04${W.reason ? `: ${lower(W.reason)}` : ''}. Nothing was written.</p>`,
+  }[st]();
+  return `<p class="d-found">${nw('FastAPI 0.121.0 is out (18 Nov).')}</p><p class="d-wants">${nw(lead)}</p>${ticket}<div class="d-who">${who}</div>`;
 }
 const NOW = {
   stopped: ['err', () => 'Stopped before anything was written.'],
   retrying: ['run', () => 'Retrying after a short wait…'],
-  waiting: ['wait', () => `Sent to Bob in Teams.${W.user === 'bob' ? '' : ' You can’t approve your own work.'}`],
-  writing: ['run', () => 'Bob approved. Creating the ticket…'],
-  done: ['ok', () => 'MOCK-22 created after Bob approved.'],
-  declined: ['idle', () => `Declined by Bob at 9:04${W.reason ? `: ${lower(W.reason)}` : ''}.`],
 };
 function runNowHTML() {
+  if (DECISION_STAGES.includes(W.stage)) return decisionHTML();
   const [tone, sub] = NOW[W.stage];
-  const icon = { err: ICON.x, run: ICON.rec, wait: ICON.gate, ok: ICON.check, idle: ICON.stop }[tone];
-  const change = ['waiting', 'writing'].includes(W.stage) ? '<div class="change"><p class="kicker">What will be written</p><p><b>Create 1 Jira ticket</b></p><p class="muted">Upgrade FastAPI from 0.115.2 to 0.121.0</p></div>' : '';
-  return `<p class="kicker">Now</p><p class="now-title" data-tone="${tone}">${icon}<span>${TODAY[W.stage]}</span></p><p class="now-sub">${sub()}</p>${change}`;
+  const icon = { err: ICON.x, run: ICON.rec }[tone];
+  return `<p class="kicker">Now</p><p class="now-title" data-tone="${tone}">${icon}<span>${TODAY[W.stage]}</span></p><p class="now-sub">${sub()}</p>`;
 }
 
 /* ---------- The light stage: the agents' faces on the steps, hand-offs as glowing dots, the gate that waits, and a stop with the troubleshooter ----------
@@ -1717,16 +1760,9 @@ const apprCard = () => `<div class="card" data-live="appr">
 /* The summary never trims what will be written: an Approver decides on the whole change. */
 const apprView = (full = false) => `<div class="pv" data-live="appr">
   <div class="pv-head"><div><p class="pv-kind">Approval, from Alice’s FastAPI release check</p><h3>Create 1 Jira ticket</h3></div><span class="pill lg" data-live="appr-pill"></span></div>
-  <div class="pv-sec"><h4>What will be written</h4><dl class="chg">
-    <div><dt>Where</dt><dd>Jira project MOCK</dd></div>
-    <div><dt>Summary</dt><dd>Upgrade FastAPI from 0.115.2 to 0.121.0</dd></div>
-    <div><dt>Details</dt><dd class="body">FastAPI 0.121.0 is out. The team runs 0.115.2.
-github.com/fastapi/fastapi/releases/tag/0.121.0</dd></div>
-    <div><dt>Fields</dt><dd class="fields">Task · Medium · upgrade, fastapi</dd></div>
-  </dl></div>
-  <div class="pv-sec"><h4>Not checked</h4><p>Security advisories. I can’t read them yet.</p></div>
-  ${full ? `<p class="ai-sum"><b>Summary by AI.</b> 3 bug fixes, no breaking changes listed. Decide on the change above, not this.</p>
-  <dl class="dl2"><div><dt>Sent</dt><dd>Today, 9:01, in Teams</dd></div><div><dt>Why you</dt><dd>No one can approve their own work.</dd></div></dl>
+  <p class="d-found">${nw('FastAPI 0.121.0 is out (18 Nov).')}</p><p class="d-wants">${nw('This run wants to create 1 Jira ticket in MOCK:')}</p>${ticketHTML()}
+  <p class="d-who">${nw('An Approver decides in Teams (asked 9:01).')}</p>
+  ${full ? `<dl class="dl2"><div><dt>Sent</dt><dd>Today, 9:01, in Teams</dd></div><div><dt>Why you</dt><dd>No one can approve their own work.</dd></div></dl>
   <div class="pv-actions"><button class="btn ghost" type="button" data-open="run">See the run</button></div>` : ''}
   <div data-live="appr-thread"></div>
   <div class="pv-foot" data-live="appr-foot"></div>
@@ -2006,8 +2042,10 @@ function patchRun(el) {
   $$('[data-cv-live] .ce', el).forEach((e) => e.classList.toggle('ok', W.run[e.dataset.from] === 'done' && ['done', 'now', 'wait', 'err'].includes(W.run[e.dataset.to] || '')));
   const [pt, ps] = RUNPILL[W.stage];
   $$('[data-live="run-pill"]', el).forEach((p) => { p.textContent = pt; p.dataset.s = ps; });
-  $$('[data-live="run-qa"]', el).forEach((p) => { p.innerHTML = qaHTML(); });
+  $$('[data-live="run-qa"]', el).forEach((p) => { p.innerHTML = qaHTML(); p.hidden = DECISION_STAGES.includes(W.stage) && !p.closest('.stage'); });
   $$('[data-live="run-log"]', el).forEach((p) => { p.innerHTML = logRows(); });
+  $$('[data-live="run-agent"]', el).forEach((p) => { p.innerHTML = agentRows(); });
+  $$('[data-live="run-fold-sum"]', el).forEach((p) => { p.textContent = foldCount(); });
   $$('[data-live="run-now"]', el).forEach((p) => { p.innerHTML = runNowHTML(); });
   $$('[data-stage]', el).forEach((s) => { patchStage(s); stageRO?.observe(s); });
   setFace(el, 'trouble', TR_FACE[W.stage]);
@@ -3798,6 +3836,7 @@ app.addEventListener('click', (e) => {
   if (pick('[data-open]')) { quiet(openView(pick('[data-open]').dataset.open, inP)); return; }
   if (pick('.p-close')) { closePanel(); return; }
   if (pick('.retry')) { quiet(retry()); return; }
+  if (pick('[data-agent-msgs]')) { const b = pick('[data-agent-msgs]'); const list = b.parentElement.nextElementSibling; list.hidden = !list.hidden; b.textContent = list.hidden ? 'Show agent messages' : 'Hide agent messages'; b.setAttribute('aria-expanded', String(!list.hidden)); return; }
   if (pick('.approve')) { quiet(approve()); return; }
   if (pick('[data-appr-ui]')) { setApprUI(pick('[data-appr-ui]').dataset.apprUi); return; }
   if (pick('[data-reason]')) { setReason(pick('[data-reason]').dataset.reason); return; }

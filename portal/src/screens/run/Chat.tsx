@@ -6,18 +6,15 @@ import { TicketKeys } from '../jira/TicketKeys'
 import type { LogRow } from './words'
 import styles from './Chat.module.css'
 
-/** Past this many rows the log folds behind a button, as the plan keeps a disclosure only for a long log. */
-export const LONG_LOG = 12
-
 /**
- * The run page's Step by step (the sketch's `.log`): one row for each thing that happened, the time to the second and one sentence.
- * No bubbles. An agent's own words carry its name in its colour. A row the gate's decision landed on takes focus.
+ * The run page's Run history (the sketch's `.log`): one row for each thing that happened, the time to the second and one
+ * sentence. No bubbles. An agent's own words carry its name in its colour. A row the gate's decision landed on takes focus.
  */
-export function StepLog({ rows, loadedUpTo, ref }: { rows: readonly LogRow[]; loadedUpTo: number; ref?: Ref<HTMLOListElement> }) {
+export function StepLog({ rows, loadedUpTo, ref, label = 'Run history' }: { rows: readonly LogRow[]; loadedUpTo: number; ref?: Ref<HTMLOListElement>; label?: string }) {
   const pauseUnseen = usePauseUnseen()
   return (
     <div ref={pauseUnseen}>
-      <ol className={styles['log']} aria-label="Step by step" ref={ref}>
+      <ol className={styles['log']} aria-label={label} ref={ref}>
         {rows.map((row) => (
           <li
             key={row.seq}

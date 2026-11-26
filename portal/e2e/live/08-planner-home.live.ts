@@ -1616,7 +1616,7 @@ test.describe('bob asks the Planner questions only', () => {
 
     await chips.first().click()
     if (/needs? your approval$/.test(line)) {
-      await expect(said(page), 'only requests wait, so the answer is the requests themselves, as the sketch’s cards').toHaveText(/^(This needs|These need) your yes\.$/)
+      await expect(said(page), 'only requests wait, so the answer is the requests themselves, as the sketch’s cards').toHaveText(/^(This needs|These need) your approval\.$/)
       await expect(newest(page).locator('[data-approval-pill]').first()).toHaveText('Needs your yes')
       await expect(newest(page).getByRole('heading', { level: 3 }).first()).toHaveText(/^Create \d+ Jira tickets?$/)
     } else {

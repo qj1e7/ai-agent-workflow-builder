@@ -312,7 +312,13 @@ def work_leg_to_announcement(tl: Timeline) -> None:
         "Version checker read LangGraph. 2 releases newer than 1.2.14.",
         AgentStepFinishedData(
             step="read_source",
-            result={"software_id": LANGGRAPH_ID, "state": "behind", "newest": NEWEST},
+            result={
+                "software_id": LANGGRAPH_ID,
+                "state": "behind",
+                "newest": NEWEST,
+                "software": "LangGraph",
+                "source": "GitHub",
+            },
         ),
     )
     tl.add(
@@ -490,7 +496,14 @@ def failure_events() -> Timeline:
         "Version checker could not read LangGraph.",
         AgentStepFinishedData(
             step="read_source",
-            result={"software_id": LANGGRAPH_ID, "state": "cant_check", "newest": None},
+            result={
+                "software_id": LANGGRAPH_ID,
+                "state": "cant_check",
+                "newest": None,
+                "software": "LangGraph",
+                "source": "GitHub",
+                "problem": "GitHub returned 503 Service Unavailable three times.",
+            },
         ),
     )
     tl.add(

@@ -111,7 +111,14 @@ export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
   | { readonly kind: 'declined'; readonly record: Declined }
   | { readonly kind: 'stopped'; readonly stage: FailureStage }
   | { readonly kind: 'reported'; readonly by: string; readonly requestId: string }
-  | { readonly kind: 'found'; readonly text: string }
+  /**
+   * An agent read a release source. The newest release it found, or null when there was none. A read that failed carries why
+   * (an empty string when the platform gave no reason), and is never the same as a read that found nothing. `source` is where it
+   * read, such as npm, Maven Central or GitHub, and `software` which software or repository.
+   */
+  | { readonly kind: 'checked'; readonly newest: string | null; readonly problem: string | null; readonly reason: string | null; readonly source: string | null; readonly software: string | null }
+  /** The agents drafted these writes for approval. */
+  | { readonly kind: 'drafted'; readonly count: number; readonly connector: string | null; readonly operation: string | null; readonly allTickets: boolean }
   /** What a Tell block did, in the platform's own words: sent, not confirmed, what a test run would have sent, or nothing to report. */
   | { readonly kind: 'told'; readonly line: string; readonly bad: boolean }
   /** A step of a fix, in the sentence the platform wrote from its fields. The speaker is the agent, or nobody for who asked. */
@@ -150,12 +157,47 @@ export interface RunModel {
   readonly retriedBy: readonly string[]
   /** What the agents said they found, from the step that closed their work. Kept after the approval stops carrying it. */
   readonly found: string
+  /** The newest release the run read, and the day it came out when the read says. The page's found line is built from this, never from the agents' words. */
+  readonly release: Release | null
   /** The reports to support about this stop, one for each request. A retry starts the list again. */
   readonly reports: readonly { readonly requestId: string; readonly by: string }[]
   /** The fix on this stop, once someone asked for one. A retry forgets it. It never moves the run. */
   readonly fix: FixState | null
   readonly people: Readonly<Record<string, string>>
   readonly chat: readonly ChatItem[]
+}
+
+/** The newest release a run read: its version, and the day it came out when the event carries one. */
+export interface Release {
+  readonly version: string
+  readonly at: string | null
+}
+
+/** What a read of releases found, from the two shapes agents report it in: a card's tags, or the software check's newest. */
+interface ReadOf {
+  readonly read: boolean
+  readonly release: Release | null
+  readonly problem: string | null
+  readonly reason: string | null
+  readonly source: string | null
+  readonly software: string | null
+}
+
+const NOT_A_READ: ReadOf = { read: false, release: null, problem: null, reason: null, source: null, software: null }
+
+function readOf(data: { readonly step: string; readonly result: Readonly<Record<string, unknown>> }): ReadOf {
+  const { step, result } = data
+  if (step !== 'github_read_releases' && step !== 'read_source') return NOT_A_READ
+  const text = (key: string) => (typeof result[key] === 'string' && result[key] !== '' ? result[key] : null)
+  const source = text('source') ?? (step === 'github_read_releases' ? 'GitHub' : null)
+  const software = text('software') ?? text('repo')
+  const problem = typeof result['problem'] === 'string' ? result['problem'] : null
+  const reason = typeof result['reason'] === 'string' ? result['reason'] : result['state'] === 'cant_check' && problem === null ? '' : null
+  const tags = Array.isArray(result['tags']) ? result['tags'] : []
+  const newest = typeof result['newest'] === 'string' ? result['newest'] : tags.find((tag): tag is string => typeof tag === 'string')
+  if (problem !== null || reason !== null || newest === undefined || newest === '') return { read: true, release: null, problem, reason, source, software }
+  const day = result['newest_published_at']
+  return { read: true, release: { version: newest, at: typeof day === 'string' && day !== '' ? day : null }, problem: null, reason: null, source, software }
 }
 
 export const emptyModel: RunModel = {
@@ -179,6 +221,7 @@ export const emptyModel: RunModel = {
   declineReason: null,
   retriedBy: [],
   found: '',
+  release: null,
   reports: [],
   fix: null,
   people: {},
@@ -412,8 +455,13 @@ function apply(model: RunModel, event: RunEvent): RunModel {
         bad: false,
       })
     case 'agent_step_started':
-    case 'agent_step_finished':
       return touch(model, actorRef(event), event)
+    case 'agent_step_finished': {
+      const touched = touch(model, actorRef(event), event)
+      const { read, release, problem, reason, source, software } = readOf(event.data)
+      if (!read) return touched
+      return say({ ...touched, release: release ?? touched.release }, { kind: 'checked', seq: event.seq, at: event.at, newest: release?.version ?? null, problem, reason, source, software })
+    }
     case 'agent_failed': {
       const touched = touch(model, actorRef(event), event)
       const failedAt = placeAgent(touched, actorRef(event)).spot
@@ -422,7 +470,10 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'write_action_proposed': {
       const phase = model.phase.state === 'pending' || model.phase.state === 'working' ? { state: 'proposed' as const } : model.phase
       const { actions } = event.data
-      return { ...model, phase, proposed: actions.length, operations: actions.map((action) => action.operation), connector: actions[0]?.connector ?? model.connector }
+      const first = actions[0]
+      const moved = { ...model, phase, proposed: actions.length, operations: actions.map((action) => action.operation), connector: first?.connector ?? model.connector }
+      const allTickets = actions.length > 0 && actions.every((action) => action.connector === 'jira' && action.operation === 'create_ticket')
+      return say(moved, { kind: 'drafted', seq: event.seq, at: event.at, count: actions.length, connector: first?.connector ?? null, operation: first?.operation ?? null, allTickets })
     }
     case 'approval_requested': {
       const steps = event.data.steps.map((s) => ({ index: s.index, label: s.label, status: s.status, by: s.decided_by ?? null }))
@@ -467,7 +518,8 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'step_finished': {
       const { step, outcome, detail } = event.data
       if (step !== 'run_agents' || !FOUND_OUTCOMES.has(outcome) || !detail) return model
-      return say({ ...model, found: detail }, { kind: 'found', seq: event.seq, at: event.at, text: detail })
+      // The agents' report is kept for the troubleshooter's rows, and is not a log item: it only repeats what they said.
+      return { ...model, found: detail }
     }
     case 'support_reported':
       return reported(model, event)

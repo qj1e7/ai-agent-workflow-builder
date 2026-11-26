@@ -30,8 +30,8 @@
 .head {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px 14px;
+  align-items: baseline;
+  gap: 4px 12px;
   min-width: 0;
 }
 
@@ -39,6 +39,19 @@
   font-size: 1.45rem;
   font-weight: 800;
   line-height: 1.2;
+}
+
+/* "run by Carol", after the name. */
+.by {
+  color: var(--muted);
+  font-weight: 600;
+  min-width: 0;
+}
+
+/* The status sits at the right of the top line, and wraps under it on a narrow window. */
+.head > [data-run-pill] {
+  align-self: center;
+  margin-left: auto;
 }
 
 .kind {
@@ -115,23 +128,59 @@
   min-height: 0;
 }
 
-.log {
-  display: grid;
-  gap: 8px;
+.history {
   margin-top: 22px;
+  border-top: 1px solid var(--rule);
 }
 
-.log h2 {
-  font-size: 0.95rem;
-  font-weight: 800;
+.history > details > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.log > details > summary {
-  list-style: none;
+.history > details > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: var(--r-ctl);
 }
 
-.log > details > summary::-webkit-details-marker {
-  display: none;
+.historyBody {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding-bottom: 6px;
+}
+
+.linkButton {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.linkButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-ctl);
+}
+
+.found {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .trouble {
@@ -151,25 +200,6 @@
   flex: 1;
   gap: 10px;
   min-width: 0;
-}
-
-.detailToggle {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  margin-bottom: 16px;
-  padding: 0 16px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-ctl);
-  background: var(--surface);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .detailToggle:hover {
-    background: var(--sunk);
-  }
 }
 
 .panelView {

@@ -76,15 +76,15 @@ describe('the run line', () => {
 
   it('draws only the workflow’s blocks, says each step’s state in words, and marks the gate as the current step while it waits', () => {
     const html = line(replay(success, 15))
-    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Waiting for a yes: Ask for a yes Sent to Bob in Teams', 'Not reached yet: Create Jira tickets'])
+    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Waiting for approval: Ask for approval Sent to Bob in Teams', 'Not reached yet: Create Jira tickets'])
     expect(html.match(/aria-current="step"/g)).toHaveLength(1)
     expect(html).toMatch(/aria-current="step"[^>]*data-state="wait"/)
   })
 
   it('says who the request went to under the waiting gate, only once the platform says it is in Teams', () => {
-    expect(stepsSaid(line(replay(success, 14)))[2]).toBe('Waiting for a yes: Ask for a yes')
-    expect(stepsSaid(line(replay(success, 15)))[2]).toBe('Waiting for a yes: Ask for a yes Sent to Bob in Teams')
-    expect(stepsSaid(line(replay(success, 15), { small: true }))[2]).toBe('Waiting for a yes: Ask for a yes Sent to Bob')
+    expect(stepsSaid(line(replay(success, 14)))[2]).toBe('Waiting for approval: Ask for approval')
+    expect(stepsSaid(line(replay(success, 15)))[2]).toBe('Waiting for approval: Ask for approval Sent to Bob in Teams')
+    expect(stepsSaid(line(replay(success, 15), { small: true }))[2]).toBe('Waiting for approval: Ask for approval Sent to Bob')
     expect(stepItems(line(replay(success, 16)))[2], 'nothing is said once Bob has decided').not.toContain('Sent to')
   })
 
@@ -99,7 +99,7 @@ describe('the run line', () => {
       data: { approval_id: 'apr_01JB8', channel: 'CODESparks Ops', message: 'Teams is down' },
     }
     const said = stepsSaid(line(replay([...success.filter((item) => item.seq <= 14), gaveUp])))[2]
-    expect(said).toBe('Waiting for a yes: Ask for a yes Couldn’t send to Teams')
+    expect(said).toBe('Waiting for approval: Ask for approval Couldn’t send to Teams')
   })
 
   it('says how long the step at work has been working, once a second has passed', () => {
@@ -114,10 +114,10 @@ describe('the run line', () => {
 
   it('reads all done once the ticket is written, puts the ticket under its step as a link, and says how the run settled', () => {
     const html = line(replay(success))
-    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Done: Ask for a yes', 'Done: Create Jira tickets MOCK-142'])
+    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Done: Ask for approval', 'Done: Create Jira tickets MOCK-142'])
     expect(stepItems(html)[3]).toMatch(/<a\b[^>]*href="\/jira\/MOCK-142"[^>]*>MOCK-142<\/a>/)
     expect(stepItems(html)[3], 'a key too long for its step is cut short on screen, never in its title').toContain('title="MOCK-142"')
-    expect(text(html)).toContain('Done at 10:20 · MOCK-142 created after Bob’s yes')
+    expect(text(html)).toContain('Done at 10:20 · MOCK-142 created after Bob approved')
   })
 
   it('gives every step done a tick, the stopped step a stop mark, and no other step a mark', () => {
@@ -130,14 +130,14 @@ describe('the run line', () => {
 
   it('shows a declined gate, a skipped write that says nothing was written, no step after them, and the settled line', () => {
     const html = line(replay(rejected))
-    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Declined: Ask for a yes', 'Skipped: Create Jira tickets Nothing written'])
+    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Done: Read every source', 'Declined: Ask for approval', 'Skipped: Create Jira tickets Nothing written'])
     expect(text(html)).toContain('Ended at 10:18 · Bob declined: wrong version. Nothing was written.')
     expect(html).not.toMatch(/created|href="\/jira\//)
   })
 
   it('marks where a failed run stopped, with no settled line', () => {
     const html = line(replay(failure))
-    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Stopped here: Read every source', 'Not reached yet: Ask for a yes', 'Not reached yet: Create Jira tickets'])
+    expect(stepsSaid(html)).toEqual(['Done: Started by Alice', 'Stopped here: Read every source', 'Not reached yet: Ask for approval', 'Not reached yet: Create Jira tickets'])
     expect(html).not.toMatch(/Done at|Ended at/)
   })
 
@@ -272,17 +272,17 @@ describe('the words on the line', () => {
   })
 
   it('settle a done run on its time, its tickets and who said yes', () => {
-    expect(settledOf(replay(success), nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)).toEqual({ tone: 'ok', text: 'Done at 10:20 · MOCK-142 created after Bob’s yes' })
+    expect(settledOf(replay(success), nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)).toEqual({ tone: 'ok', text: 'Done at 10:20 · MOCK-142 created after Bob approved' })
     expect(settledOf(replay(success), nameOf, new Date('2026-11-04T09:00:00Z'), QUICK), 'another day says its day').toEqual({
       tone: 'ok',
-      text: 'Done on Tue 3 Nov at 10:20 · MOCK-142 created after Bob’s yes',
+      text: 'Done on Tue 3 Nov at 10:20 · MOCK-142 created after Bob approved',
     })
     const twoYeses = { ...replay(success), approvedBy: ['carol', 'bob'] }
-    expect(settledOf(twoYeses, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text).toBe('Done at 10:20 · MOCK-142 created after Carol and Bob said yes')
+    expect(settledOf(twoYeses, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text).toBe('Done at 10:20 · MOCK-142 created after Carol and Bob approved')
     const page = { ...replay(success), written: [{ connector: 'confluence', operation: 'update_page', ref: 'PAGE-9' }] }
-    expect(settledOf(page, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text).toBe('Done at 10:20 · PAGE-9 written after Bob’s yes')
+    expect(settledOf(page, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text).toBe('Done at 10:20 · PAGE-9 written after Bob approved')
     const noKey = { ...replay(success), written: [{ connector: 'jira', operation: 'create_ticket', ref: '' }] }
-    expect(settledOf(noKey, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text, 'a write with no key is counted, never shown as an empty key').toBe('Done at 10:20 · 1 ticket created after Bob’s yes')
+    expect(settledOf(noKey, nameOf, new Date('2026-11-03T09:00:00Z'), QUICK)?.text, 'a write with no key is counted, never shown as an empty key').toBe('Done at 10:20 · 1 ticket created after Bob approved')
     expect(line(noKey), 'and puts no empty chip under the write').not.toMatch(/_chip_/)
   })
 
@@ -298,7 +298,7 @@ describe('the words on the line', () => {
     expect(settledOf(declined, nameOf, SAME_DAY, QUICK)).toEqual({ tone: 'off', text: 'Ended at 10:18 · Bob declined: wrong version. Nothing was written.' })
     expect(said({ ...declined, declineReason: 'FastAPI 0.121 breaks our build.' })).toBe('Ended at 10:18 · Bob declined: FastAPI 0.121 breaks our build. Nothing was written.')
     expect(said({ ...declined, declineReason: null })).toBe('Ended at 10:18 · Bob declined. Nothing was written.')
-    expect(said({ ...declined, approvedBy: ['carol'] })).toBe('Ended at 10:18 · Carol said yes, then Bob declined: wrong version. Nothing was written.')
+    expect(said({ ...declined, approvedBy: ['carol'] })).toBe('Ended at 10:18 · Carol approved, then Bob declined: wrong version. Nothing was written.')
   })
 
   it('leave a run that is still going, or stopped, unsettled', () => {
@@ -320,16 +320,13 @@ describe('the Step by step', () => {
       return `${row.match(/<time[^>]*>([^<]*)<\/time>/)?.[1] ?? '-'} ${text(row.replace(/<time[\s\S]*?<\/time>/, ''))}`
     })
 
-  it('tells a done run one sentence a row, with the gate’s words, and never repeats the ticket the settled line names', () => {
+  it('tells a done run in plain steps, with the gate’s words, and never repeats the ticket the settled line names or the agents’ words', () => {
     expect(rowsOf(steps(replay(success).chat))).toEqual([
-      '10:14:00 Alice started the run.',
-      '10:14:02 Planner Please check LangGraph for new releases.',
-      '10:14:05 Version checker LangGraph has a new release: 1.2.16. I suggest one ticket.',
-      "10:14:05 Planner Agreed. I'll draft one ticket for an Approver to check.",
-      '10:14:05 LangGraph has a new release: 1.2.16.',
-      '10:14:08 Asked an Approver for a yes in Teams.',
-      '10:20:23 Bob said yes.',
-      '10:20:26 Created MOCK-142 in Jira.',
+      '10:14:04 Checked GitHub: found 1.2.16',
+      '10:14:05 Drafted 1 Jira ticket',
+      '10:14:08 Asked an Approver in Teams',
+      '10:20:23 Bob approved',
+      '10:20:26 Created MOCK-142',
     ])
     expect(steps(replay(success).chat)).not.toMatch(/n8n|execution|workflow step|room lead|release checker|use case/i)
   })
@@ -348,10 +345,10 @@ describe('the Step by step', () => {
   })
 
   it('animates only what arrived while the page watched', () => {
-    const model = replay(success, 9)
+    const model = replay(success, 10)
     const animated = (html: string) => (html.match(/class="[^"]*_in_[^"]*"/g) ?? []).length
     expect(animated(steps(model.chat, model.seq))).toBe(0)
-    expect(animated(steps(model.chat, 7))).toBe(2)
+    expect(animated(steps(model.chat, 7))).toBe(1)
   })
 
   it('says the day again on a row from another day', () => {
@@ -361,7 +358,6 @@ describe('the Step by step', () => {
       { kind: 'declined', seq: 3, at: at('2026-10-27T16:01:00Z'), record: { by: 'bob', approvedBy: [], reason: null } },
     ])
     expect([...html.matchAll(/<time[^>]*dateTime="([^"]+)"[^>]*>([^<]*)<\/time>/gi)].map((match) => `${match[1] ?? ''} ${match[2] ?? ''}`)).toEqual([
-      '2026-10-27T00:00:00.000Z 8:00:00',
       '2026-10-27T15:59:00.000Z 23:59:00',
       '2026-10-27T16:01:00.000Z Wed 28 Oct, 0:01:00',
     ])
@@ -388,7 +384,7 @@ describe('the pill', () => {
   it('says where the run stands, in the same words as a list’s row', () => {
     const pill = (model: RunModel) => runPill(stageFactsOf(model))
     expect(pill(replay(success, 6))).toEqual({ label: 'Running', tone: 'new' })
-    expect(pill(replay(success, 15))).toEqual({ label: 'Waiting for a yes', tone: 'wait' })
+    expect(pill(replay(success, 15))).toEqual({ label: 'Waiting for approval', tone: 'wait' })
     expect(pill(replay(success))).toEqual({ label: 'Done', tone: 'ok' })
     expect(pill(replay(rejected))).toEqual({ label: 'Declined', tone: 'quiet' })
     expect(pill(replay(failure))).toEqual({ label: 'Stopped', tone: 'bad' })

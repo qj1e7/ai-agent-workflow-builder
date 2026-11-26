@@ -3,12 +3,13 @@ import { PRODUCT } from '../../shell/product'
 import rejectedView from '@contracts/fixtures/views/rejected.final.json'
 import type { ApprovalStepView, RunViewOf } from '../../api/types'
 import type { LiveRun } from './liveRun'
+import card from '@contracts/fixtures/runs/card.json'
 import failure from '@contracts/fixtures/runs/failure.json'
 import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { emptyModel, foldWire, type ChatItem, type RunModel } from './runModel'
 import { stageAnswers } from './stageAnswers'
-import { declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, runKind, runPill, scheduleShort, speakerName, stageFactsOf, stageWords, type StageFacts } from './words'
+import { announcementOf, declinedBy, declinedNext, declinedNowWords, declinedOfSteps, declinedRecord, declinedWithNext, declineTail, feedTroubleOf, lineOf, logRowsOf, messageRowsOf, runKind, runPill, scheduleShort, speakerName, stageFactsOf, stageWords, type StageFacts } from './words'
 
 describe('the run chat', () => {
   it('names the app by its full name', () => {
@@ -143,7 +144,7 @@ describe('a run followed from its own events, in the same stage words', () => {
   it('reads where a run stands from its events, and calls a run retried after a stop Retrying', () => {
     expect(words(replay(failure)), 'the events carry no troubleshooter sentence, so a stop reads Stopped').toBe('Stopped')
     expect(words(replay(success, 6))).toBe('Running')
-    expect(words(replay(success, 15))).toBe('Waiting for a yes')
+    expect(words(replay(success, 15))).toBe('Waiting for approval')
     expect(words(replay(success, 18))).toBe('Creating the ticket')
     expect(words(replay(success))).toBe('MOCK-142 created, approved by Bob')
     expect(words(replay(rejected))).toBe('Declined by Bob. Nothing was written.')
@@ -160,10 +161,10 @@ describe('a run followed from its own events, in the same stage words', () => {
   it('gives the troubleshooter’s Now row in the same words, naming every Approver who said yes', () => {
     const now = (model: RunModel) => stageAnswers(model, '', named).find((answer) => answer.label === 'Now')?.text
     expect(now(replay(success, 6))).toBe('Running…')
-    expect(now(replay(success, 15))).toBe('Waiting for a yes.')
-    expect(now(replay(success, 18))).toBe('Bob said yes. Creating the ticket…')
-    expect(now(replay(pageUpdate(success), 18))).toBe('Bob said yes. Writing the changes…')
-    expect(now(replay(twoYeses(success), 19))).toBe('Carol and Bob said yes. Creating the ticket…')
+    expect(now(replay(success, 15))).toBe('Waiting for approval.')
+    expect(now(replay(success, 18))).toBe('Bob approved. Creating the ticket…')
+    expect(now(replay(pageUpdate(success), 18))).toBe('Bob approved. Writing the changes…')
+    expect(now(replay(twoYeses(success), 19))).toBe('Carol and Bob approved. Creating the ticket…')
     expect(stageAnswers(replay(success), 'Found 1.2.16.', named)).toEqual([])
   })
 
@@ -183,25 +184,28 @@ describe('the first line over a run', () => {
   })
 })
 
-describe('the Step by step log', () => {
+describe('What happened, in plain steps', () => {
   const rows = (model: RunModel) => logRowsOf(model.chat, named, QUICK).map((row) => `${row.time} ${row.agent ? `${row.agent.display}: ` : ''}${row.text}`)
 
-  it('tells an approved run in one sentence a row, with the time to the second and no row for who joined or that it finished', () => {
-    const told = rows(replay(success))
-    expect(told[0]).toBe('10:14:00 Alice started the run.')
-    expect(told).toContain('10:14:08 Asked an Approver for a yes in Teams.')
-    expect(told).toContain('10:20:23 Bob said yes.')
-    expect(told.at(-1)).toBe('10:20:26 Created MOCK-142 in Jira.')
-    expect(told.join(' ')).not.toMatch(/joined|Done\./)
+  it('tells an approved run in plain steps, each with its time to the second, built from the events and not from the agents’ words', () => {
+    expect(rows(replay(success))).toEqual([
+      '10:14:04 Checked GitHub: found 1.2.16',
+      '10:14:05 Drafted 1 Jira ticket',
+      '10:14:08 Asked an Approver in Teams',
+      '10:20:23 Bob approved',
+      '10:20:26 Created MOCK-142',
+    ])
   })
 
-  it('keeps what the agents found as its own row, after they spoke and before the ask, once the run is decided too', () => {
-    for (const told of [rows(replay(success)), rows(replay(rejected))]) {
-      const found = told.indexOf('10:14:05 LangGraph has a new release: 1.2.16.')
-      expect(found).toBeGreaterThan(0)
-      expect(found).toBeLessThan(told.indexOf('10:14:08 Asked an Approver for a yes in Teams.'))
+  it('has no row for who started the run, who joined, that it finished, or what the agents said or reported', () => {
+    for (const model of [replay(success), replay(rejected), replay(card)]) {
+      const told = rows(model).join(' ')
+      expect(told).not.toMatch(/started the run|joined|Done\.|Planner|Version checker|Please |I suggest|LangGraph has a new release/)
     }
-    expect(rows(replay(failure)).join(' '), 'a run that stopped before the agents finished found nothing').not.toMatch(/new release: 1\.2\.16\.$/)
+  })
+
+  it('never says yes as a noun', () => {
+    for (const model of [replay(success), replay(rejected)]) expect(rows(model).join(' ')).not.toMatch(/\bsaid yes\b|\ba yes\b|\byour yes\b/i)
   })
 
   it('ends a declined run on the one row that says who declined and that nothing was written', () => {
@@ -213,6 +217,33 @@ describe('the Step by step log', () => {
 
   it('says a stopped run stopped before anything was written', () => {
     expect(rows(replay(failure)).at(-1)).toMatch(/The run stopped\. Nothing was written\.$/)
+  })
+
+  it('reads a card run’s releases and its drafted ticket the same way', () => {
+    expect(rows(replay(card))).toContain('10:14:04 Checked GitHub: found 1.2.16')
+    expect(rows(replay(card))).toContain('10:14:09 Drafted 1 Jira ticket')
+  })
+})
+
+describe('the agents’ own words, for support', () => {
+  const messages = (model: RunModel) => messageRowsOf(model.chat).map((row) => `${row.time} ${row.agent ? `${row.agent.display}: ` : ''}${row.text}`)
+
+  it('gives what each agent said, with its name, in order, and nothing the plain steps already say', () => {
+    expect(messages(replay(success))).toEqual([
+      '10:14:02 Planner: Please check LangGraph for new releases.',
+      '10:14:05 Version checker: LangGraph has a new release: 1.2.16. I suggest one ticket.',
+      "10:14:05 Planner: Agreed. I'll draft one ticket for an Approver to check.",
+    ])
+  })
+
+  it('never repeats the agents’ report as an unlabelled line', () => {
+    for (const model of [replay(success), replay(rejected)]) {
+      for (const row of messageRowsOf(model.chat)) expect(row.agent, row.text).not.toBeNull()
+    }
+  })
+
+  it('has nothing when no agent spoke', () => {
+    expect(messages(replay(success, 1))).toEqual([])
   })
 })
 
@@ -233,7 +264,7 @@ describe('the stage words, one function for the row, the banner, the strip and R
   })
 
   it('says a run that waits needs a yes, and a run in progress is running', () => {
-    expect(stage({ state: 'awaiting_approval', count: 1 })).toBe('Waiting for a yes')
+    expect(stage({ state: 'awaiting_approval', count: 1 })).toBe('Waiting for approval')
     for (const state of ['pending', 'working', 'proposed'] as const) expect(stage({ state })).toBe('Running')
   })
 
@@ -256,7 +287,7 @@ describe('the stage words, one function for the row, the banner, the strip and R
   })
 
   it('says a test run passed and wrote nothing, never that it is done or found nothing new', () => {
-    expect(stage({ outcome: 'test_passed' })).toBe('Test run passed up to the yes. Nothing was written.')
+    expect(stage({ outcome: 'test_passed' })).toBe('Test run passed up to the approval step. Nothing was written.')
     expect(stage({ outcome: 'nothing_to_write', test: true })).toBe('Test run passed. There was nothing new to write.')
     expect(runPill({ ...base, outcome: 'test_passed' })).toEqual({ label: 'Test run passed', tone: 'ok' })
     expect(runPill({ ...base, outcome: 'nothing_to_write', test: true })).toEqual({ label: 'Test run passed', tone: 'ok' })
@@ -265,13 +296,13 @@ describe('the stage words, one function for the row, the banner, the strip and R
   it('reads a test run’s outcome from its own events', () => {
     const end = { run_id: 'run_01JB8', seq: 9, ts: '2026-11-03T02:14:06Z', actor: { kind: 'platform', id: 'platform', display: 'Platform' }, summary: '', kind: 'run_succeeded', data: { outcome: 'test_passed' } }
     const passed = foldWire(emptyModel, [...success.slice(0, 8), end], 'run_01JB8')
-    expect(stageWords(stageFactsOf(passed), (id) => id)).toBe('Test run passed up to the yes. Nothing was written.')
+    expect(stageWords(stageFactsOf(passed), (id) => id)).toBe('Test run passed up to the approval step. Nothing was written.')
   })
 
   it('has one pill for each run state, in the sketch’s words', () => {
     expect(runPill({ ...base, state: 'failed' })).toEqual({ label: 'Stopped', tone: 'bad' })
     expect(runPill({ ...base, state: 'working' })).toEqual({ label: 'Running', tone: 'new' })
-    expect(runPill({ ...base, state: 'awaiting_approval' })).toEqual({ label: 'Waiting for a yes', tone: 'wait' })
+    expect(runPill({ ...base, state: 'awaiting_approval' })).toEqual({ label: 'Waiting for approval', tone: 'wait' })
     expect(runPill({ ...base, count: 1 })).toEqual({ label: 'Done', tone: 'ok' })
     expect(runPill(base)).toEqual({ label: 'Nothing new', tone: 'quiet' })
     expect(runPill({ ...base, state: 'rejected' })).toEqual({ label: 'Declined', tone: 'quiet' })
@@ -283,5 +314,54 @@ describe('a schedule in few words', () => {
     expect(scheduleShort({ day: 'every_day', at: '08:00' })).toBe('Daily 8:00')
     expect(scheduleShort({ day: 'weekdays', at: '09:30' })).toBe('Weekdays 9:30')
     expect(scheduleShort({ day: 'monday', at: '13:00' })).toBe('Mon 13:00')
+  })
+})
+
+describe('a read in the plain steps', () => {
+  const at = Date.parse('2026-11-25T02:00:00Z') as ChatItem['at']
+  const read = (seq: number, over: Partial<Extract<ChatItem, { kind: 'checked' }>>): ChatItem => ({ kind: 'checked', seq, at, newest: null, problem: null, reason: null, source: 'GitHub', software: null, ...over })
+  const texts = (items: ChatItem[]) => logRowsOf(items, named, QUICK).map((row) => row.text)
+
+  it('says a read that failed was not read, and why, and never that no release was found', () => {
+    expect(texts([read(1, { software: 'fastapi/fastapi', problem: 'GitHub answered 404 Not Found.' })])).toEqual(['Couldn’t read fastapi/fastapi on GitHub: GitHub answered 404 Not Found.'])
+  })
+
+  it('says a read that worked but could not be checked was not checked, with its reason, never not read', () => {
+    expect(texts([read(1, { software: 'FastAPI', reason: 'Our version x is not a version number.' })])).toEqual(['Couldn’t check FastAPI: Our version x is not a version number.'])
+  })
+
+  it('names the right source: npm, Maven Central or GitHub', () => {
+    expect(texts([read(1, { source: 'npm', software: 'Express', newest: '5.1.0' })])).toEqual(['Checked npm: found 5.1.0'])
+    expect(texts([read(1, { source: 'Maven Central', software: 'Guava', problem: 'Maven Central answered 503 Service Unavailable.' })])).toEqual(['Couldn’t read Guava on Maven Central: Maven Central answered 503 Service Unavailable.'])
+  })
+
+  it('names each software when the run read more than one, and says nothing of the name when it read one', () => {
+    const two = texts([read(1, { software: 'fastapi/fastapi', newest: '0.165.0' }), read(2, { software: 'langchain-ai/langgraph', newest: '1.2.16' })])
+    expect(two).toEqual(['Checked fastapi/fastapi on GitHub: found 0.165.0', 'Checked langchain-ai/langgraph on GitHub: found 1.2.16'])
+    expect(texts([read(1, { software: 'fastapi/fastapi', newest: '0.165.0' })])).toEqual(['Checked GitHub: found 0.165.0'])
+  })
+
+  it('says a read that found no stable release as that', () => {
+    expect(texts([read(1, { software: 'fastapi/fastapi' })])).toEqual(['Checked GitHub: no stable releases found'])
+  })
+})
+
+describe('what the live region speaks', () => {
+  const asOf = (model: RunModel, kind: ChatItem['kind']) => model.chat.findLast((item) => item.kind === kind)
+
+  it('never speaks an agent’s words as the app’s own, or as anyone’s', () => {
+    const said = asOf(replay(success), 'said')
+    if (!said) throw new Error('the fixture has agent messages')
+    expect(announcementOf(said, named, null)).toBeNull()
+  })
+
+  it('speaks what the platform did, with who says it', () => {
+    const asked = asOf(replay(success), 'asked')
+    if (!asked) throw new Error('the fixture asks')
+    expect(announcementOf(asked, named, null)).toBe('Approval gate: Asked for approval in Teams, in CODESparks Ops. Nothing is written until an Approver approves.')
+  })
+
+  it('has nothing to say before anything arrives', () => {
+    expect(announcementOf(undefined, named, null)).toBeNull()
   })
 })

@@ -361,7 +361,7 @@ class WatchlistChecker:
                 read = package_candidates(releases, item.our_version)
             finding = with_address(decide(item, read), address)
             findings.append(finding)
-            write(_read_finished(item, finding))
+            write(_read_finished(item, finding, unreadable=isinstance(read, TaskError)))
             if finding.state == "cant_check":
                 unreadable = isinstance(read, TaskError)
                 write(_cannot_check(item, finding, unreadable=unreadable, more=position < last))
@@ -449,7 +449,7 @@ def _nothing_readable(
     )
 
 
-def _read_finished(item: SoftwareToCheck, finding: Finding) -> Draft:
+def _read_finished(item: SoftwareToCheck, finding: Finding, *, unreadable: bool) -> Draft:
     what = (
         f"could not read {item.name}."
         if finding.state == "cant_check"
@@ -459,7 +459,12 @@ def _read_finished(item: SoftwareToCheck, finding: Finding) -> Draft:
         "software_id": item.id,
         "state": finding.state,
         "newest": finding.newest,
+        "software": item.name,
+        "source": source_name(item),
     }
+    if finding.state == "cant_check":
+        # A failed read carries its problem. A read that worked but cannot be checked, its reason.
+        result["problem" if unreadable else "reason"] = finding.detail
     return finished("read_source", what, result)
 
 

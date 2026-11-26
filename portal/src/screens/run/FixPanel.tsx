@@ -9,7 +9,7 @@ import { askFix, fixLeads, fixLine, fixStageOf, HANDED_BACK_HEAD, handedBackWord
 import type { FixState } from './runModel'
 import styles from './FixPanel.module.css'
 
-const ASK_HINT = 'Drafts a change to the failed block, and proves it on practice systems. Nothing changes until an Approver says yes.'
+const ASK_HINT = 'Drafts a change to the failed block, and proves it on practice systems. Nothing changes until an Approver approves.'
 const OPERATOR_TURNS_ON = 'An Operator turns it back on.'
 const NO_ROUND = 'No round finished.'
 

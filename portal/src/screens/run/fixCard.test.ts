@@ -14,7 +14,7 @@ const view = (over: Partial<FixView> = {}): FixView => ({
   use_case_id: 'uc_01JB9',
   name: 'Release check',
   state: 'waiting',
-  said: 'Waiting for a yes. Nothing changes until an Approver says yes.',
+  said: 'Waiting for a yes. Nothing changes until an Approver approves.',
   asked_by: 'alice',
   asked_by_name: 'Alice',
   ends_by: new Date(ENDS).toISOString(),
@@ -51,12 +51,12 @@ describe('where a fix stands', () => {
 describe('the sentence under the stop', () => {
   it('is the platform’s own once it answers, and the activity’s until then', () => {
     expect(fixLine(fix(), undefined, BEFORE)).toBe('Drafting a fix.')
-    expect(fixLine(fix({ ended: 'proposed' }), view(), BEFORE)).toBe('Waiting for a yes. Nothing changes until an Approver says yes.')
+    expect(fixLine(fix({ ended: 'proposed' }), view(), BEFORE)).toBe('Waiting for a yes. Nothing changes until an Approver approves.')
     expect(fixLine(fix(), view({ fix_id: 'fix_01OTHER' }), BEFORE)).toBe('Drafting a fix.')
   })
 
   it('says it couldn’t fix this once time is up, whatever the platform last said', () => {
-    expect(fixLine(fix(), view({ state: 'drafting', said: 'Drafting a fix. Nothing changes until an Approver says yes.' }), ENDS)).toBe("I couldn't fix this.")
+    expect(fixLine(fix(), view({ state: 'drafting', said: 'Drafting a fix. Nothing changes until an Approver approves.' }), ENDS)).toBe("I couldn't fix this.")
   })
 })
 

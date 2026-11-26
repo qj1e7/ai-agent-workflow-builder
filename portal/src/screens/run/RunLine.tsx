@@ -10,10 +10,10 @@ import { sentToWords, UNSENT_WORDS, workingWords, type Settled } from './words'
 import styles from './RunLine.module.css'
 
 /** The state in words, for a screen reader: the line shows it by shape and colour. */
-const STATE_WORDS: Readonly<Record<StationState, string>> = {
+export const STATE_WORDS: Readonly<Record<StationState, string>> = {
   todo: 'Not reached yet: ',
   now: 'Now: ',
-  wait: 'Waiting for a yes: ',
+  wait: 'Waiting for approval: ',
   done: 'Done: ',
   err: 'Stopped here: ',
   no: 'Declined: ',

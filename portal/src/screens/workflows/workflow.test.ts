@@ -103,7 +103,7 @@ describe('the status words', () => {
 
   it('read a run as the same stage words the row and the banner use', () => {
     expect(stageOfRun(run(waiting))).toMatchObject({ state: 'awaiting_approval', count: 1, tickets: true })
-    expect(stageWords(stageOfRun(run(threeWaiting)), nameOf)).toBe('Waiting for a yes')
+    expect(stageWords(stageOfRun(run(threeWaiting)), nameOf)).toBe('Waiting for approval')
     expect(stageWords(stageOfRun(run(failed)), nameOf)).toBe("GitHub didn't answer")
   })
 
@@ -118,8 +118,8 @@ describe('the status words', () => {
 
   it('say a run skipped while an earlier one waits for a yes, and need nobody', () => {
     const skipped = run(failed, { state: 'skipped', waiting_run_id: 'run_06' })
-    expect(stageWords(stageOfRun(skipped), nameOf)).toBe('Skipped. An earlier run is still waiting for a yes.')
-    expect(rowLine({ schedule: null, ...lastOf({ state: 'skipped' }) }, NOW, nameOf)).toBe('No schedule · last run Mon 26 Oct, skipped. An earlier run is still waiting for a yes.')
+    expect(stageWords(stageOfRun(skipped), nameOf)).toBe('Skipped. An earlier run is still waiting for approval.')
+    expect(rowLine({ schedule: null, ...lastOf({ state: 'skipped' }) }, NOW, nameOf)).toBe('No schedule · last run Mon 26 Oct, skipped. An earlier run is still waiting for approval.')
   })
 
   it('say a run nobody answered, and a run n8n lost after the yes, wrote nothing', () => {
@@ -165,7 +165,7 @@ describe('a workflow row’s line', () => {
 
   it('gives its schedule, then the day of the last run and where it stands', () => {
     expect(line({ state: 'failed', declined_by: null, reason: 'AgentError', at: '2026-11-04T00:00:00Z', stop: { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED } })).toBe('Daily 8:00 · last run today, an agent could not finish its work')
-    expect(line({ state: 'awaiting_approval', declined_by: null })).toBe('Daily 8:00 · last run Mon 26 Oct, waiting for a yes')
+    expect(line({ state: 'awaiting_approval', declined_by: null })).toBe('Daily 8:00 · last run Mon 26 Oct, waiting for approval')
   })
 
   it('says why a run stopped in the troubleshooter’s words from the platform, never a guess from the reason code', () => {
@@ -219,7 +219,7 @@ describe('a workflow row’s line', () => {
     for (const state of ['rejected', 'succeeded', 'skipped', 'expired'] as const) expect(say(state), state).toEqual({ four: 'on', label: 'On', tone: undefined })
     expect(statusOf({ ...UC, state: 'draft' })).toEqual({ four: 'draft', label: 'Draft', tone: undefined })
     expect(statusOf({ ...UC, state: 'paused' })).toEqual({ four: 'paused', label: 'Paused', tone: undefined })
-    const words = ['Done', 'Nothing new', 'Declined', 'Skipped', 'Stopped', 'Needs a fix', 'Waiting for a yes', 'Held']
+    const words = ['Done', 'Nothing new', 'Declined', 'Skipped', 'Stopped', 'Needs a fix', 'Waiting for approval', 'Held']
     for (const state of ['rejected', 'succeeded', 'skipped', 'expired', 'failed', 'lost', 'awaiting_approval', 'working'] as const) expect(words, state).not.toContain(say(state).label)
   })
 
@@ -459,7 +459,7 @@ describe('a draft’s test run, in the same words everywhere', () => {
   const passed: LastRun = { ...LAST, state: 'succeeded', test: true, declined_by: null, proposed: 1, outcome: 'test_passed' }
 
   it('says a test run that stopped at the yes passed and wrote nothing, on the row and in Recent runs, never Nothing new', () => {
-    expect(stageWords(stageOfLast(passed), (id) => id)).toBe('Test run passed up to the yes. Nothing was written.')
+    expect(stageWords(stageOfLast(passed), (id) => id)).toBe('Test run passed up to the approval step. Nothing was written.')
     expect(runPill(stageOfLast(passed)).label).toBe('Test run passed')
     expect(testPassed(passed)).toBe(true)
     expect(testPassed({ ...passed, test: false, outcome: 'nothing_to_write' }), 'a real run with nothing new is no test').toBe(false)
@@ -846,12 +846,12 @@ describe('the status banner', () => {
     expect(bannerOf(facts({ useCase, viewer: BOB }))).toEqual(bannerOf(facts({ useCase })))
   })
 
-  it('for a run waiting for a yes, offers Review and decide only when the platform says the person may decide', () => {
+  it('for a run waiting for approval, offers Review and decide only when the platform says the person may decide', () => {
     const mayDecide = withLast({ state: 'awaiting_approval', you_can_decide: true })
     const mayNot = withLast({ state: 'awaiting_approval', you_can_decide: false })
     expect(bannerOf(facts({ useCase: mayDecide })).action).toEqual({ kind: 'decide', runId: 'run_07' })
     expect(bannerOf(facts({ useCase: mayNot })).action, 'someone who may not decide can still open the run, as in the sketch').toEqual({ kind: 'open', runId: 'run_07' })
-    expect(bannerOf(facts({ useCase: mayNot }))).toMatchObject({ tone: 'wait', text: 'Waiting for a yes.' })
+    expect(bannerOf(facts({ useCase: mayNot }))).toMatchObject({ tone: 'wait', text: 'Waiting for approval.' })
   })
 
   it('says a held schedule is not running, and why', () => {
@@ -861,7 +861,7 @@ describe('the status banner', () => {
 
   /** Every state a run can end its stage in, with the workflow's pill and banner the page draws for it. They must say the same state. */
   const EVERY_STATE: Record<LastRun['state'], { readonly pill: string; readonly banner: string; readonly tone: string; readonly opens: boolean }> = {
-    awaiting_approval: { pill: 'On · waiting for approval', banner: 'Waiting for a yes.', tone: 'wait', opens: true },
+    awaiting_approval: { pill: 'On · waiting for approval', banner: 'Waiting for approval.', tone: 'wait', opens: true },
     failed: { pill: 'Needs you', banner: 'Stopped today at 8:00. An agent could not finish its work.', tone: 'bad', opens: true },
     lost: { pill: 'On', banner: 'Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.', tone: 'bad', opens: true },
     expired: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },

@@ -132,7 +132,11 @@ def tool_answers(chat: ScriptedChat) -> list[dict[str, Any]]:
 
 
 def test_a_card_run_tells_the_story_the_contract_fixture_records():
-    room = Room(ScriptedChat(script=releases_then_search_then_create()), jira=FakeJira())
+    source = FakeSource(langgraph_tags()[:8])
+    source.releases[0] = Release(tag="1.2.16", published_at="2026-11-12T08:00:00Z")
+    room = Room(
+        ScriptedChat(script=releases_then_search_then_create()), source=source, jira=FakeJira()
+    )
     result = room.run()
     assert isinstance(result, TaskFinished)
     assert without_timestamps(result) == without_timestamps(card_finished())
@@ -373,7 +377,7 @@ def test_releases_github_cannot_serve_stop_the_agent_before_it_can_propose():
     assert source.calls == [REPO] * 3
     assert steps_started(result) == [READ]
     finished = [e.data.result for e in result.events if isinstance(e, AgentStepFinishedEvent)]
-    assert finished == [{"problem": gave_up}]
+    assert finished == [{"problem": gave_up, "source": "GitHub", "repo": REPO}]
     failed = result.events[-1]
     assert isinstance(failed, AgentFailedEvent)
     assert failed.summary == f"Version checker failed: {REPO} could not be checked."
@@ -840,3 +844,70 @@ def test_today_and_the_first_day_of_2000_are_accepted(name):
         )
         Room(chat, jira=jira, request=request_with("jira.search")).run()
         assert len(jira.searches) == 1
+
+
+def test_the_read_of_releases_carries_the_day_the_newest_came_out_when_github_says():
+    source = FakeSource(langgraph_tags()[:8])
+    source.releases[0] = Release(tag=source.releases[0].tag, published_at="2026-11-18T08:00:00Z")
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    result = Room(ScriptedChat(script=script), source=source).run()
+    assert isinstance(result, TaskFinished)
+    [read] = [
+        e
+        for e in result.events
+        if e.kind == "agent_step_finished" and e.data.step == "github_read_releases"
+    ]
+    assert read.data.result["newest_published_at"] == "2026-11-18T08:00:00Z"
+
+
+def test_the_read_of_releases_leaves_the_day_out_when_github_gives_none():
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    result = Room(ScriptedChat(script=script)).run()
+    assert isinstance(result, TaskFinished)
+    [read] = [
+        e
+        for e in result.events
+        if e.kind == "agent_step_finished" and e.data.step == "github_read_releases"
+    ]
+    assert "newest_published_at" not in read.data.result
+
+
+def _read_result(result):
+    [read] = [
+        e
+        for e in result.events
+        if e.kind == "agent_step_finished" and e.data.step == "github_read_releases"
+    ]
+    return read.data.result
+
+
+def test_the_read_counts_only_stable_releases_the_tag_rule_accepts_and_dates_the_newest_of_them():
+    source = FakeSource(["1.3.0", "nightly", "1.2.16", "1.2.15"])
+    source.releases[0] = Release(tag="1.3.0", prerelease=True, published_at="2026-11-20T08:00:00Z")
+    source.releases[2] = Release(tag="1.2.16", published_at="2026-11-18T08:00:00Z")
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    result = Room(ScriptedChat(script=script), source=source).run()
+    assert isinstance(result, TaskFinished)
+    read = _read_result(result)
+    assert read["tags"] == ["1.2.16", "1.2.15"]
+    assert read["newest_published_at"] == "2026-11-18T08:00:00Z"
+
+
+def test_the_read_names_where_it_read_and_which_repository():
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    result = Room(ScriptedChat(script=script)).run()
+    assert isinstance(result, TaskFinished)
+    read = _read_result(result)
+    assert read["source"] == "GitHub"
+    assert read["repo"] == REPO
+
+
+def test_a_read_that_failed_says_so_with_its_source_repository_and_problem():
+    script = [asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Read it.")]
+    source = FakeSource(langgraph_tags(), failures=[503] * 3)
+    result = Room(ScriptedChat(script=script), source=source).run()
+    read = _read_result(result)
+    assert read["source"] == "GitHub"
+    assert read["repo"] == REPO
+    assert "problem" in read
+    assert "tags" not in read

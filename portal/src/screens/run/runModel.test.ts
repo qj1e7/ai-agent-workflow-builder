@@ -68,18 +68,18 @@ describe('a run that was approved and wrote its ticket', () => {
 
   it('names the steps from the plan, the gate as asking for a yes, and puts the agent above its step', () => {
     const stations = line(model)
-    expect(stations.map((s) => s.label)).toEqual(['Started by Alice', 'Read every source', 'Ask for a yes', 'Create Jira tickets'])
+    expect(stations.map((s) => s.label)).toEqual(['Started by Alice', 'Read every source', 'Ask for approval', 'Create Jira tickets'])
     expect(stations.map((s) => s.icon)).toEqual(['person', 'read', 'gate', 'write'])
     expect(stations.map((s) => s.agent)).toEqual([null, { id: 'version_checker', display: 'Version checker' }, null, null])
   })
 
   it('says the version checker’s step in the sketch’s words, and the write in the plan’s', () => {
     const cardRun = replay(card)
-    expect(line(cardRun, planOf(cardUseCase.plan)).map((s) => s.label)).toEqual(['Started by Alice', 'Check release', 'Ask for a yes', 'Create Jira tickets'])
+    expect(line(cardRun, planOf(cardUseCase.plan)).map((s) => s.label)).toEqual(['Started by Alice', 'Check release', 'Ask for approval', 'Create Jira tickets'])
   })
 
   it('draws the same line without a plan, naming steps after their agents', () => {
-    expect(line(model, null).map((s) => s.label)).toEqual(['Started by Alice', 'Version checker', 'Ask for a yes', 'Write in Jira'])
+    expect(line(model, null).map((s) => s.label)).toEqual(['Started by Alice', 'Version checker', 'Ask for approval', 'Write in Jira'])
   })
 
   it('starts with the schedule’s clock when the schedule started the run', () => {
@@ -89,7 +89,7 @@ describe('a run that was approved and wrote its ticket', () => {
   })
 
   it('tells the run as a chat, with no workflow plumbing in it', () => {
-    expect(model.chat.map((item) => item.kind)).toEqual(['started', 'joined', 'said', 'said', 'said', 'found', 'asked', 'decided', 'written', 'finished'])
+    expect(model.chat.map((item) => item.kind)).toEqual(['started', 'joined', 'said', 'checked', 'said', 'said', 'drafted', 'asked', 'decided', 'written', 'finished'])
     const asked = model.chat.find((item) => item.kind === 'asked')
     expect(asked).toMatchObject({ channel: 'CODESparks Ops', posted: true })
     expect(model.chat.find((item) => item.kind === 'decided')).toMatchObject({ by: 'bob', verdict: 'approve', step: null })
@@ -428,5 +428,70 @@ describe('a run n8n waits on that ends with no answer, or that n8n lost after th
     expect(model.phase).toEqual({ state: 'lost' })
     expect(isFinished(model.phase)).toBe(true)
     expect([ended(model, 'gate'), ended(model, 'write')]).toEqual(['done', 'skip'])
+  })
+})
+
+describe('what a run found, for the page’s found line and plain steps', () => {
+  const checker = { kind: 'agent', id: 'version_checker', display: 'Version checker' }
+
+  it('keeps the newest release a card’s GitHub read found, and when it came out when the event says', () => {
+    const read = event(1, 'agent_step_finished', { step: 'github_read_releases', result: { releases: 2, tags: ['0.165.0', '0.164.0'], newest_published_at: '2026-11-18T08:00:00Z' } }, checker)
+    const model = foldAll(emptyModel, [read])
+    expect(model.release).toEqual({ version: '0.165.0', at: '2026-11-18T08:00:00Z' })
+    expect(model.chat.map((item) => item.kind)).toEqual(['checked'])
+  })
+
+  it('leaves the day out when the event carries none, and reads the software check’s newest release the same way', () => {
+    expect(replay(card).release).toEqual({ version: '1.2.16', at: '2026-11-12T08:00:00Z' })
+    expect(replay(success).release).toEqual({ version: '1.2.16', at: null })
+  })
+
+  it('has no release before the run read one, or when the read found none', () => {
+    expect(replay(success, 5).release).toBeNull()
+    const none = event(1, 'agent_step_finished', { step: 'github_read_releases', result: { releases: 0, tags: [] } }, checker)
+    expect(foldAll(emptyModel, [none]).release).toBeNull()
+  })
+
+  it('adds a row for what the agents drafted, with how many and what they write', () => {
+    const drafted = replay(success).chat.filter((item) => item.kind === 'drafted')
+    expect(drafted).toMatchObject([{ kind: 'drafted', count: 1, connector: 'jira', operation: 'create_ticket' }])
+  })
+})
+
+describe('a read that failed, and where each read came from', () => {
+  const checker = { kind: 'agent', id: 'version_checker', display: 'Version checker' }
+  const fold = (data: Record<string, unknown>, step = 'github_read_releases') => foldAll(emptyModel, [event(1, 'agent_step_finished', { step, result: data }, checker)])
+
+  it('keeps what the agents reported as the model’s found text, and no longer as a log item', () => {
+    const model = replay(success)
+    expect(model.found).not.toBe('')
+    expect(model.chat.some((item) => (item.kind as string) === 'found')).toBe(false)
+  })
+
+  it('says a card’s read that failed with its problem, source and repository, and finds no release in it', () => {
+    const model = fold({ problem: 'GitHub answered 404 Not Found.', source: 'GitHub', repo: 'fastapi/fastapi' })
+    expect(model.release).toBeNull()
+    expect(model.chat).toMatchObject([{ kind: 'checked', newest: null, problem: 'GitHub answered 404 Not Found.', source: 'GitHub', software: 'fastapi/fastapi' }])
+  })
+
+  it('says a software check that could not read one as failed too, naming the software and where it looked', () => {
+    const model = fold({ software_id: 'sw_1', state: 'cant_check', newest: null, software: 'Express', source: 'npm', problem: 'npm answered 404 Not Found.' }, 'read_source')
+    expect(model.chat).toMatchObject([{ kind: 'checked', newest: null, problem: 'npm answered 404 Not Found.', source: 'npm', software: 'Express' }])
+  })
+
+  it('keeps a read that worked but could not be checked apart from a read that failed', () => {
+    const model = fold({ software_id: 'sw_1', state: 'cant_check', newest: '1.2.16', software: 'FastAPI', source: 'GitHub', reason: 'Our version x is not a version number.' }, 'read_source')
+    expect(model.chat).toMatchObject([{ kind: 'checked', problem: null, reason: 'Our version x is not a version number.', software: 'FastAPI' }])
+    expect(model.release).toBeNull()
+  })
+
+  it('keeps a failed read apart from a read that found no release', () => {
+    const none = fold({ releases: 0, tags: [], source: 'GitHub', repo: 'fastapi/fastapi' })
+    expect(none.chat).toMatchObject([{ kind: 'checked', newest: null, problem: null }])
+  })
+
+  it('names where a good read came from, and which software', () => {
+    const model = fold({ releases: 2, tags: ['0.165.0', '0.164.0'], source: 'GitHub', repo: 'fastapi/fastapi' })
+    expect(model.chat).toMatchObject([{ kind: 'checked', newest: '0.165.0', problem: null, source: 'GitHub', software: 'fastapi/fastapi' }])
   })
 })

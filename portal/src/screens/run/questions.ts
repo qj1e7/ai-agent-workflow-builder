@@ -17,7 +17,7 @@ export const STILL_WAITING = 'No reply yet. The request stays open.'
 export const NOT_ANSWERED = 'Not answered before the request was decided.'
 
 /** What a question or an answer says once the platform kept it, as the prototype's toast does. */
-export const sentWords = (to: string) => `Sent to ${to}. The request is still waiting for a yes.`
+export const sentWords = (to: string) => `Sent to ${to}. The request is still waiting for approval.`
 
 /** Why the platform refused a question. Asking follows the rule for deciding, but a question is not a decision. */
 export function askRefusalWords(refusal: Refusal): string {

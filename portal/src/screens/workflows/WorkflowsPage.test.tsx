@@ -104,7 +104,7 @@ describe('the Workflows list', () => {
     expect(text(bugs)).toContain('Morning bug report check')
     const watchlist = rowOf(html, 'uc_01JB7')
     expect(text(watchlist), 'Alice may not decide, so the row stays On').toContain('On · waiting for approval')
-    expect(watchlist).not.toMatch(/Waiting for a yes<\/span>/)
+    expect(watchlist).not.toMatch(/Waiting for approval<\/span>/)
     const paused = rowOf(html, 'uc_lang')
     expect(paused).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
   })
@@ -157,7 +157,7 @@ describe('the Workflows list', () => {
   it('marks a test run beside the status', () => {
     const tried = { ...BUGS, last_run: lr({ state: 'awaiting_approval', test: true, proposed: 1, tickets: true }) }
     const html = render({ useCases: [tried] })
-    expect(subOf(html, 'uc_bugs')).toContain('last run today, waiting for a yes')
+    expect(subOf(html, 'uc_bugs')).toContain('last run today, waiting for approval')
     expect(text(rowOf(html, 'uc_bugs'))).toContain('Test run')
   })
 

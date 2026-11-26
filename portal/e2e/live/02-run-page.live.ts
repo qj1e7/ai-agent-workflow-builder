@@ -8,7 +8,7 @@ import { holdRunAtWork, linkAnimations, marchReadings, runLinks } from './suppor
 import { connectMockModel } from './support/settings'
 import { setMockGithubMode, type Backend, type WaitingRun } from './support/stack'
 import { expect, test } from './support/test'
-import { decline, declineReasons, devContext, OUT, shot } from './support/ui'
+import { decline, declineReasons, devContext, OUT, shot, showHistory } from './support/ui'
 
 interface ApprovalAnswer {
   actions: { fields: { title: string } }[]
@@ -19,13 +19,14 @@ interface ApprovalAnswer {
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 /** The run's one state pill, beside the workflow's name. */
 const state = (page: Page) => page.locator('[data-run-pill]')
-const stepLog = (page: Page) => page.getByRole('list', { name: 'Step by step' })
+/** The plain steps under Run history. Open it first with showHistory. */
+const stepLog = (page: Page) => page.getByRole('list', { name: 'Run history', exact: true })
+/** The agents' own words, behind Show agent messages. */
+const agentMessages = (page: Page) => page.getByRole('list', { name: 'Agent messages', exact: true })
 const answer = (page: Page, name: string) => page.locator('dl', { has: page.locator('dt', { hasText: new RegExp(`^${name}$`) }) })
 /** A section of the approval, named by its heading: What will be written, or Not checked. */
 const part = (scope: Page | Locator, name: string) => scope.getByRole('region', { name, exact: true })
-/** The agents' summary, labelled as help, which only the page shows. */
-const aiSummary = (page: Page) => page.locator('p', { hasText: /^Summary by AI\./ })
-/** The approval's one pill: Needs your yes, Waiting for a yes, Approved, Declined, No answer or Cancelled. */
+/** The request's own pill, which the run page does not draw: its status is the run's pill in the top line. */
 const approvalPill = (scope: Page | Locator) => scope.locator('[data-approval-pill]')
 const APPROVE = { name: 'Approve', exact: true } as const
 /** Every animation that ends has ended. The dashes marching into a yes that waits loop, as they should. */
@@ -36,8 +37,6 @@ const faceTick = (step: Locator) => step.locator('[data-face] circle[fill="var(-
 /** Under the waiting gate, once the platform says the request is in Teams: who may decide it, never the person whose run it is. */
 const sentLine = (page: Page) => page.locator('li[data-state="wait"] [data-sent]')
 const SENT_TO_BOB = /^Sent to (.+, )?Bob( and .+|, .+)? in Teams$/
-/** The one line under a finished run's steps: "Done at 10:20 · …" or "Ended at 10:18 · …", with the day when it was not today. */
-const settledLine = (page: Page, rest: string) => page.getByText(new RegExp(`^(Done|Ended) (at|on \\w{3} \\d{1,2} \\w{3} at) \\d{1,2}:\\d{2} · ${rest.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
 
 test('alice starts a check; bob opens the waiting run, sees the ticket it will create, approves, and watches it reach Done', async ({ browser, backend }, info) => {
   const { runId, approvalId } = await backend.waitingRun('alice')
@@ -50,10 +49,10 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   const alice = await aliceContext.newPage()
   const aliceWatch = watchPage(alice)
   await alice.goto(`/runs/${runId}`)
-  await expect(state(alice)).toHaveText('Waiting for a yes')
+  await expect(state(alice)).toHaveText('Waiting for approval')
   await expect(alice.locator('#decision'), 'opening a waiting run lands on the decision').toBeFocused()
   await expect(alice.getByRole('main')).toContainText(title)
-  await expect(alice.getByRole('main')).toContainText('so another Approver must decide. Nobody approves their own work.')
+  await expect(alice.getByRole('main')).toContainText('You can’t approve your own run.')
   await expect(alice.getByRole('button', { name: /^(Approve|Decline)/ }), 'no dead button for her own work').toHaveCount(0)
   await shot(alice, info, 'p5-02-alice-own-run')
   assertClean(aliceWatch)
@@ -63,16 +62,21 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   const bob = await bobContext.newPage()
   const bobWatch = watchPage(bob)
   await bob.goto(`/runs/${runId}`)
-  await expect(state(bob)).toHaveText('Needs your yes')
-  await expect(heading(bob), 'the page is named for the workflow the check belongs to, with the kind of run above it').toHaveText('Software watchlist')
+  await expect(state(bob), 'the status is the same for everyone, in approval words').toHaveText('Waiting for approval')
+  await expect(heading(bob), 'the page is named for the workflow the check belongs to').toHaveText('Software watchlist')
   await expect(bob.locator('#decision')).toBeFocused()
   const main = bob.getByRole('main')
-  await expect(main).toContainText('Create 1 Jira ticket')
-  await expect(approvalPill(bob), 'the run page shows one pill, the one for the person who may say yes').toHaveCount(0)
-  await expect(part(bob, 'What will be written'), 'exactly what will be written, from the request').toContainText(new RegExp(`Where\\s*Jira project MOCK on the practice Jira\\s*Summary\\s*${escaped(title)}`))
-  await expect(bob.locator('li[aria-current="step"]')).toContainText('Waiting for a yes')
+  await expect(main).toContainText('This run wants to create 1 Jira ticket in MOCK:')
+  await expect(main, 'the page no longer carries the AI’s summary or Not checked').not.toContainText(/Summary by AI|Not checked/)
+  await expect(approvalPill(bob), 'the run page shows one pill, the run’s').toHaveCount(0)
+  await expect(bob.locator('#decision').getByText(title, { exact: true }).first(), 'the ticket is a small preview, its title first').toBeVisible()
+  await bob.getByText('Show full text', { exact: true }).click()
+  await expect(bob.locator('#decision'), 'exactly what will be written, from the request, once the full text is open').toContainText(new RegExp(`Where\\s*Jira project MOCK on the practice Jira\\s*Summary\\s*${escaped(title)}`))
+  await expect(bob.locator('#decision'), 'when the Approver was asked, and who decides').toContainText(/An Approver decides in Teams \(asked [^)]+\)\./)
+  await showHistory(bob)
+  await expect(bob.locator('li[aria-current="step"]')).toContainText('Waiting for approval')
   expect(await runLinks(bob), 'slow amber dashes march into the yes that waits, and the links into the steps done are solid').toEqual(['solid', 'wait+', 'todo'])
-  await expect(steps(bob), 'the line is the workflow’s blocks and nothing else').toHaveText([/Started by Alice$/, /Read every source$/, /Ask for a yes\s*Sent to .+ in Teams$/, /Create Jira tickets$/])
+  await expect(steps(bob), 'the line is the workflow’s blocks and nothing else').toHaveText([/Started by Alice$/, /Read every source$/, /Ask for approval\s*Sent to .+ in Teams$/, /Create Jira tickets$/])
   await expect(sentLine(bob), 'the gate says who the request went to in Teams, and never Alice, whose run it is').toHaveText(SENT_TO_BOB)
   expect(await faceTick(steps(bob).nth(1)), 'the agent that finished looks done when the page opens').toBe('1')
   await shot(bob, info, 'p5-02-bob-waiting')
@@ -87,16 +91,16 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   await expect.poll(() => runLinks(bob), { message: 'every link is solid once the run is done' }).toEqual(['solid', 'solid', 'solid'])
   await expect.poll(() => faceTick(steps(bob).nth(1)), { message: 'and still looks done after the run moved on' }).toBe('1')
   const said = bob.locator('[data-gate-said]').last()
-  await expect(said, 'the log is always open, so after the yes focus moves to Bob’s row in it').toBeFocused()
-  await expect(said).toContainText('Bob said yes.')
-  await expect(said.locator('time'), 'the yes has its time to the second, with its day only if the day changed').toHaveText(/^(\w{3} \d{1,2} \w{3}, )?\d{1,2}:\d{2}:\d{2}$/)
+  await expect(said, 'Bob opened Run history, so after his approval focus moves to his row in it').toBeFocused()
+  await expect(said).toContainText('Bob approved')
+  await expect(said.locator('time'), 'the approval has its time to the second, with its day only if the day changed').toHaveText(/^(\w{3} \d{1,2} \w{3}, )?\d{1,2}:\d{2}:\d{2}$/)
 
   const written = (await backend.tickets()).filter((ticket) => ticket.run_id === runId)
   expect(written.map((ticket) => ticket.title)).toEqual([title])
-  await expect(stepLog(bob)).toContainText(`Created ${written[0]?.key ?? ''} in Jira.`)
+  await expect(stepLog(bob)).toContainText(`Created ${written[0]?.key ?? ''}`)
   const key = written[0]?.key ?? ''
   await expect(steps(bob).last().getByRole('link', { name: key }), 'the ticket pops out under its step and opens it').toHaveAttribute('href', new RegExp(`/${key}$`))
-  await expect(settledLine(bob, `${key} created after Bob’s yes`), 'the run settles in one line under its steps').toBeVisible()
+  await expect(bob.locator('#decision'), 'the decision says who approved, and what was created').toContainText(new RegExp(`Approved by Bob (at|on \\w{3} \\d{1,2} \\w{3} at) \\d{1,2}:\\d{2}\\. ${key} created\\.`))
   expect((await backend.run(runId)).state).toBe('succeeded')
   await shot(bob, info, 'p5-02-bob-done')
   assertClean(bobWatch)
@@ -129,7 +133,7 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
 
   await decline(page)
   await expect(state(page)).toHaveText('Declined', { timeout: 60_000 })
-  await expect(page.getByText(/^Ended (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · Bob declined/)).toBeVisible()
+  await expect(page.locator('#decision')).toContainText(/Declined by Bob (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2}\./)
   await expect(page.getByRole('main')).toContainText('Nothing was written.')
   expect(await runLinks(page), 'faint dots lead into the write that was not needed').toEqual(['solid', 'solid', 'dead'])
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId)).toEqual([])
@@ -140,7 +144,7 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
 for (const phone of [false, true]) {
   const width = phone ? '390' : '1440'
 
-  test(`scenario C at ${width} px: bob sees what will be written, what wasn’t checked, the AI’s summary as help, and why him, with the steps below`, async ({ browser, backend }, info) => {
+  test(`scenario C at ${width} px: bob sees what was found, the ticket as a preview, who decides and when they were asked, with the history folded below`, async ({ browser, backend }, info) => {
     const { runId, approvalId } = await backend.waitingRun('alice')
     const answered = await backend.get<{ found: string; owner: string; started_by: string; use_case_name: string }>('bob', `/api/v1/approvals/${approvalId}`)
     expect(answered.found, 'the platform holds the summary while the request waits').not.toBe('')
@@ -148,25 +152,28 @@ for (const phone of [false, true]) {
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto(`/runs/${runId}`)
-    await expect(state(page)).toHaveText('Needs your yes')
+    await expect(state(page)).toHaveText('Waiting for approval')
     await expect(page.locator('#decision')).toBeFocused()
-    await expect(page.locator('#decision')).toContainText(`Approval, from Alice’s ${answered.use_case_name}`)
+    await expect(page.locator('#decision'), 'what the run wants to do comes before who decides').toContainText(/This run wants to create 1 Jira ticket in MOCK:[\s\S]*An Approver decides in Teams/)
     await expect(approvalPill(page), 'one pill on the page').toHaveCount(0)
-    await expect(part(page, 'What will be written')).toContainText(/Where\s*Jira project MOCK on the practice Jira\s*Summary/)
-    await expect(aiSummary(page), 'the AI’s summary is labelled as help, never the check').toContainText(`${answered.found}`)
-    await expect(aiSummary(page)).toContainText('Decide on the change above, not this.')
-    await expect(page.locator('#decision'), 'what will be written comes before the AI’s summary').toContainText(/What will be written[\s\S]*Summary by AI\./)
-    await expect(answer(page, 'Why you')).toContainText('No one can approve their own work.')
-    await expect(answer(page, 'Sent'), 'when it went to Teams, in the sketch’s words; the names stay under the gate').toContainText(/(Today|\w{3} \d{1,2} \w{3}), \d{1,2}:\d{2}, in Teams/)
-    await expect(sentLine(page)).toHaveText(SENT_TO_BOB)
+    await settled(page)
+    await expectAccessible(page, path.join(OUT, 'axe'), `run-waiting-bob-${width}`)
+    await page.getByText('Show full text', { exact: true }).click()
+    await expect(page.locator('#decision')).toContainText(/Where\s*Jira project MOCK on the practice Jira\s*Summary/)
+    await expect(page.locator('#decision'), 'when it went to Teams').toContainText(/An Approver decides in Teams \(asked (\d{1,2}:\d{2}|\w{3} \d{1,2} \w{3}, \d{1,2}:\d{2})\)\./)
+    await expect(page.getByRole('main'), 'the AI’s summary, Not checked and the old rows are gone from the page').not.toContainText(/Summary by AI|Not checked|Why you|What will be written/)
+    await expect(page.getByRole('main')).not.toContainText(answered.found)
     await expect(page.getByRole('main'), 'today’s rule: no stop time or backup is named').not.toContainText(/backup|expires|reminder/i)
     await expect(page.getByRole('button', { name: /^(Approve|Decline)$/ })).toHaveCount(2)
     await expect(page.getByRole('button', { name: 'Ask Alice', exact: true })).toBeVisible()
 
-    await expect(stepLog(page), 'Step by step is always open').toBeVisible()
-    await expect(stepLog(page)).toContainText('Version checker')
-    await settled(page)
-    await expectAccessible(page, path.join(OUT, 'axe'), `run-waiting-bob-${width}`)
+    await expect(page.locator('summary', { hasText: /^Run history \(\d+ steps?\)$/ }), 'the history is folded while a request waits').toBeVisible()
+    await showHistory(page)
+    await expect(sentLine(page)).toHaveText(SENT_TO_BOB)
+    await expect(stepLog(page)).toContainText('Asked an Approver in Teams')
+    await expect(stepLog(page), 'the agents’ own words are not among the steps').not.toContainText('Version checker')
+    await page.getByRole('button', { name: 'Show agent messages' }).click()
+    await expect(agentMessages(page), 'the agents’ own words, for support').toContainText('Version checker')
     const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
     expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
     await shot(page, info, `n15-c-bob-${width}`)
@@ -174,20 +181,20 @@ for (const phone of [false, true]) {
     await context.close()
   })
 
-  test(`scenario C-self at ${width} px: alice sees why she cannot decide, with no button`, async ({ browser, backend }, info) => {
+  test(`scenario C-self at ${width} px: alice reads that she cannot approve her own run, with no button`, async ({ browser, backend }, info) => {
     const { runId } = await backend.waitingRun('alice')
     const context = await devContext(browser, 'alice', { phone })
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto(`/runs/${runId}`)
-    await expect(state(page)).toHaveText('Waiting for a yes')
-    await expect(answer(page, 'Why not you')).toContainText('You set this workflow up and started this run, so another Approver must decide. Nobody approves their own work.')
+    await expect(state(page)).toHaveText('Waiting for approval')
+    await expect(page.locator('#decision')).toContainText('An Approver decides in Teams')
+    await expect(page.locator('#decision')).toContainText('You can’t approve your own run.')
+    await showHistory(page)
     await expect(sentLine(page), 'her request went to the other Approvers, never to her').toHaveText(SENT_TO_BOB)
     await expect(sentLine(page)).not.toContainText('Alice')
     await expect(page.getByRole('button', { name: /^(Approve|Decline)/ }), 'no dead button').toHaveCount(0)
     await expect(approvalPill(page), 'one pill on the page, the run’s').toHaveCount(0)
-    await expect(page.getByText('Waiting for an Approver.', { exact: true }), 'the line where the buttons would be says who it waits for; Why not you says why, once').toBeVisible()
-    await expect(aiSummary(page)).toBeVisible()
     await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), `run-waiting-alice-${width}`)
     const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
@@ -198,17 +205,22 @@ for (const phone of [false, true]) {
   })
 }
 
-test('scenario C: once bob has decided, the panel and the run keep the agents’ summary from the activity', async ({ browser, backend }) => {
+test('scenario C: the agents’ words are never a summary on the page, before or after bob decides, and stay under Show agent messages', async ({ browser, backend }) => {
   const { runId, approvalId } = await backend.waitingRun('alice')
   const found = (await backend.get<{ found: string }>('bob', `/api/v1/approvals/${approvalId}`)).found
+  expect(found, 'the platform still holds the agents’ report while the request waits').not.toBe('')
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
   await page.goto(`/runs/${runId}`)
-  await expect(aiSummary(page)).toContainText(found)
+  await expect(page.locator('#decision')).toBeVisible()
+  await expect(page.getByRole('main')).not.toContainText('Summary by AI')
   await decline(page)
   await expect(state(page)).toHaveText('Declined', { timeout: 60_000 })
   expect((await backend.get<{ found: string }>('bob', `/api/v1/approvals/${approvalId}`)).found, 'the approval no longer carries it').toBe('')
-  await expect(stepLog(page), 'a finished run keeps what the agents found in its log').toContainText(found.split('.')[0] ?? found)
+  await showHistory(page)
+  await expect(stepLog(page), 'the plain steps do not repeat the agents’ report').not.toContainText(found.split('.')[0] ?? found)
+  await page.getByRole('button', { name: 'Show agent messages' }).click()
+  await expect(agentMessages(page), 'a finished run keeps the agents’ own words for support').toContainText('Version checker')
   await context.close()
 })
 
@@ -301,7 +313,7 @@ test('scenario B: a stopped run opens on the three answers, an Operator retries 
   await expect
     .poll(() => runLinks(page), { message: 'mid-run, dashes march into the step at work and the links before it are solid', intervals: [100], timeout: 90_000 })
     .toEqual(['flow+', 'todo', 'todo'])
-  await expect(state(page)).toHaveText('Waiting for a yes', { timeout: 90_000 })
+  await expect(state(page)).toHaveText('Waiting for approval', { timeout: 90_000 })
   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0)
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId), 'a retry writes nothing before a yes').toEqual([])
   await shot(page, info, 'n15-b-retried')
@@ -453,7 +465,7 @@ for (const phone of [false, true]) {
     await expect(why).toContainText('Why? Optional. Alice will see it.')
     await expect(why.getByRole('button'), 'the quick reasons, then Back, and Decline last').toHaveText(['Not this week', 'Wrong version', 'Needs testing first', 'Back', 'Decline'])
     await expect(why.getByRole('button', { name: 'Not this week' }), 'focus is on the first reason').toBeFocused()
-    await expect(state(bob), 'nothing is declined yet').toHaveText('Needs your yes')
+    await expect(state(bob), 'nothing is declined yet').toHaveText('Waiting for approval')
     await why.getByRole('button', { name: 'Wrong version' }).click()
     await expect(why.locator('[aria-pressed="true"]'), 'one reason is picked').toHaveText('Wrong version')
     await expectAccessible(bob, path.join(OUT, 'axe'), `decline-reasons-${width}`)
@@ -463,8 +475,9 @@ for (const phone of [false, true]) {
     await shot(bob, info, `r15-declined-message-bob-${width}`)
 
     await expect(state(bob)).toHaveText('Declined', { timeout: 60_000 })
-    await expect(bob.getByRole('main')).toContainText(DECLINED_LINE)
+    await expect(bob.locator('#decision')).toContainText(/Declined by Bob (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2}: wrong version\. Nothing was written\./)
     await expect(pill(bob)).toBeVisible()
+    await showHistory(bob)
     await expect(steps(bob).filter({ hasText: 'Nothing written' }), 'the write step says nothing was written').toHaveCount(1)
     const shown = await steps(bob).last().getByText('Nothing written').evaluate((note) => {
       let opacity = 1
@@ -474,7 +487,6 @@ for (const phone of [false, true]) {
     expect(shown, 'the skipped step fades, but what it says under it keeps full contrast').toBe(1)
     await expect(steps(bob).last(), 'the write is the last step, skipped').toHaveAttribute('data-state', 'skip')
     await expect(steps(bob).nth(2), 'the gate shows the decline').toHaveAttribute('data-state', 'no')
-    await expect(settledLine(bob, 'Bob declined: wrong version. Nothing was written.'), 'the run settles in one line, never saying created').toBeVisible()
     await expect(stepLog(bob)).toContainText(DECLINED_LINE)
     await expect(stepLog(bob), 'the log never says anything was created').not.toContainText(/Done\.|created/)
 
@@ -522,8 +534,7 @@ test('APPR-decline-none: a decline needs no reason, and then the record gives no
   await page.goto(`/runs/${runId}`)
   await decline(page)
   await expect(state(page)).toHaveText('Declined', { timeout: 60_000 })
-  await expect(page.getByText(/^Ended (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2} · Bob declined/)).toBeVisible()
-  await expect(page.getByRole('main')).toContainText('Nothing was written.')
+  await expect(page.locator('#decision')).toContainText(/Declined by Bob (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2}\. Nothing was written\./)
   await expect(page.getByRole('main')).not.toContainText('Reason:')
   const view = await backend.get<{ steps: { reason: string | null }[] }>('bob', `/api/v1/approvals/${approvalId}`)
   expect(view.steps.map((step) => step.reason)).toEqual([null])
@@ -540,7 +551,7 @@ test('APPR-decide-nav: a half-picked decline reason does not survive leaving the
   await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: /^Workflows/ }).click()
   await expect(heading(page), 'the run page is left').toHaveText('Workflows')
   await page.goBack()
-  await expect(state(page)).toHaveText('Needs your yes')
+  await expect(state(page)).toHaveText('Waiting for approval')
   await expect(declineReasons(page), 'the reasons are closed').toHaveCount(0)
   await expect(page.getByRole('button', { name: /^(Approve|Decline)$/ }), 'Approve and Decline are back').toHaveCount(2)
   expect((await backend.run(runId)).state, 'nothing was decided').toBe('awaiting_approval')
@@ -604,9 +615,9 @@ for (const width of WIDTHS) {
     const thread = questionsOf(bob)
     await expect(thread).toContainText(inOrder(`You asked Alice: ${question}`, 'No reply yet. The request stays open.'))
     await expect(thread.getByRole('heading', { name: 'Questions' }), 'focus is on the questions’ heading').toBeFocused()
-    await expect(sentToast(bob), 'a toast says it was sent').toHaveText('Sent to Alice. The request is still waiting for a yes.')
+    await expect(sentToast(bob), 'a toast says it was sent').toHaveText('Sent to Alice. The request is still waiting for approval.')
     await expect(thread.getByRole('heading', { name: 'Questions' }), 'the toast leaves focus where it was').toBeFocused()
-    await expect(state(bob), 'the request still needs his yes').toHaveText('Needs your yes')
+    await expect(state(bob), 'the request still waits for approval').toHaveText('Waiting for approval')
     await expect(bob.getByRole('button', { name: /^(Approve|Decline)$/ }), 'Approve and Decline are still there').toHaveCount(2)
     expect((await backend.run(runId)).state, 'nothing was decided').toBe('awaiting_approval')
 
@@ -614,7 +625,7 @@ for (const width of WIDTHS) {
     const [sent] = view.questions
     await backend.post('alice', `/api/v1/approvals/${approvalId}/questions/${sent?.question_id ?? ''}/answer`, { text: 'Yes. I checked it with the team on Friday.' })
     await expect(thread, 'alice’s answer shows under it').toContainText(inOrder(question, 'Alice answered: Yes. I checked it with the team on Friday.'), { timeout: 15_000 })
-    await expect(state(bob), 'it still needs his yes').toHaveText('Needs your yes')
+    await expect(state(bob), 'it still waits for approval').toHaveText('Waiting for approval')
     await expect(bob.getByRole('button', APPROVE), 'bob still decides').toHaveCount(1)
     await thread.scrollIntoViewIfNeeded()
     await shot(bob, info, `r13-thread-answered-bob-${width}`)
@@ -658,7 +669,7 @@ for (const width of WIDTHS) {
     const thread = questionsOf(alice)
     await expect(thread).toContainText(inOrder(`Bob asked you: ${question}`, 'You answered: Yes, it was released on Friday.'))
     await expect(thread.getByRole('heading', { name: 'Questions' }), 'focus is on the questions’ heading').toBeFocused()
-    await expect(sentToast(alice), 'a toast says it was sent').toHaveText('Sent to Bob. The request is still waiting for a yes.')
+    await expect(sentToast(alice), 'a toast says it was sent').toHaveText('Sent to Bob. The request is still waiting for approval.')
     await expect(alice.getByRole('button', { name: /^Approve/ }), 'alice still can’t approve her own run').toHaveCount(0)
     expect((await backend.run(runId)).state, 'the answer decided nothing').toBe('awaiting_approval')
     await shot(alice, info, `r13-thread-answered-alice-${width}`)
@@ -712,7 +723,7 @@ test('KEYS-APPR: Ask, the decline reasons and Decline with the keyboard only, ea
   expect(await ringShows(page), 'the request’s row on Home has a visible focus').toBe(true)
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`))
-  await expect(state(page)).toHaveText('Needs your yes')
+  await expect(state(page)).toHaveText('Waiting for approval')
   await tabTo(page, page.getByRole('button', { name: 'Ask Alice', exact: true }))
   expect(await ringShows(page), 'Ask has a visible focus').toBe(true)
   await page.keyboard.press('Enter')
@@ -773,22 +784,11 @@ test.describe('what a run didn’t check', () => {
     await tidy('resetting the watchlist', () => backend.freshWatchlist('alice'))
   })
 
-  const REDIS_UNREAD = 'Redis couldn’t be read, so no ticket is proposed for it.'
-  const NO_REGISTRIES = 'The platform can’t yet check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using.'
-  const NO_DETAILS = ['The platform can’t yet see a ticket’s component or priority.', 'The platform can’t yet look past the 50 newest tickets.']
   /** The Not checked section, named by its heading. */
   const unchecked = (scope: Page | Locator) => part(scope, 'Not checked')
   const box = (page: Page) => page.getByLabel('Ask, or describe a task')
   const newest = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
   const sidePanel = (page: Page) => page.locator('#side-panel')
-  /** For the shot: scrolls Not checked into view only when it is not there, so a page that fits keeps its place. */
-  const intoView = async (section: Locator) => {
-    const seen = await section.evaluate((el) => {
-      const box = el.getBoundingClientRect()
-      return box.top >= 0 && box.bottom <= window.innerHeight
-    })
-    if (!seen) await section.scrollIntoViewIfNeeded()
-  }
   const noSidewaysScroll = async (page: Page) => {
     const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
     expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
@@ -841,25 +841,25 @@ test.describe('what a run didn’t check', () => {
     return { runId, approvalId }
   }
 
-  test('APPR-not-checked: a check that couldn’t read Redis names it, then what the platform can’t check yet, after What will be written, for bob and alice', async ({ browser, backend }, info) => {
+  test('APPR-not-checked: the run page leaves out what the run didn’t check, for a check that couldn’t read Redis, for bob and alice', async ({ browser, backend }, info) => {
     test.slow()
     const { runId, approvalId } = await backend.waitingRunWithUnread('alice')
     leftWaiting.push(approvalId)
     const forBob = await backend.get<{ not_checked: string[]; actions: { fields: { title: string } }[] }>('bob', `/api/v1/approvals/${approvalId}`)
-    expect(forBob.not_checked, 'the run names the software it couldn’t read').toEqual(['Redis'])
+    expect(forBob.not_checked, 'the run still names the software it couldn’t read').toEqual(['Redis'])
     expect(forBob.actions.map((action) => action.fields.title), 'and proposes no ticket for it').toEqual(['Upgrade LangGraph from 1.2.14 to 1.2.16'])
     for (const user of ['bob', 'alice'] as const) {
       for (const width of WIDTHS) {
         const { context, page } = await opened(browser, user, width)
         const watch = watchPage(page)
         await page.goto(`/runs/${runId}`)
-        await expect(state(page)).toHaveText(user === 'bob' ? 'Needs your yes' : 'Waiting for a yes')
-        await expect(unchecked(page)).toContainText(inOrder('Not checked', REDIS_UNREAD, NO_REGISTRIES))
-        await expect(page.locator('#decision'), 'What will be written, then Not checked, then the AI’s summary').toContainText(/What will be written[\s\S]*Not checked[\s\S]*Summary by AI\./)
+        await expect(state(page)).toHaveText('Waiting for approval')
+        await expect(page.locator('#decision')).toContainText('This run wants to create 1 Jira ticket in MOCK:')
+        await expect(unchecked(page), 'Not checked is not on the run page').toHaveCount(0)
+        await expect(page.getByRole('main')).not.toContainText(/Not checked|Summary by AI/)
         await expect(page.getByRole('button', { name: /^(Approve|Decline)/ }), user === 'bob' ? 'bob decides' : 'alice, whose run it is, has no button').toHaveCount(user === 'bob' ? 2 : 0)
         await noSidewaysScroll(page)
         if (width === 1280) await expectAccessible(page, path.join(OUT, 'axe'), `r14-not-checked-${user}-1280`)
-        await intoView(unchecked(page))
         await shot(page, info, `r14-not-checked-software-page-${user}-${String(width)}`)
         assertClean(watch)
         await context.close()
@@ -867,25 +867,20 @@ test.describe('what a run didn’t check', () => {
     }
   })
 
-  test('APPR-not-checked-jira: a ticket summary’s approval says what its agents can’t see of a ticket, as the registry says, for bob and alice', async ({ browser, backend }, info) => {
+  test('APPR-not-checked-jira: a ticket summary’s run page asks for approval in the same shape, with no Not checked, for bob and alice', async ({ browser, backend }, info) => {
     test.slow()
     const { runId, approvalId } = await summaryWaiting(backend, 'carol')
     expect((await backend.get<{ not_checked: string[] }>('bob', `/api/v1/approvals/${approvalId}`)).not_checked, 'a workflow of agents names no software').toEqual([])
-    const registry = (await backend.get<{ capabilities: { id: string; state: string }[] }>('bob', '/api/v1/capabilities')).capabilities
-    expect(registry.find((c) => c.id === 'jira.find_by_detail')?.state, 'the registry says the agents can’t see a component or priority').toBe('planned')
-    expect(registry.find((c) => c.id === 'jira.find_by_update')?.state, 'and that they can see when a ticket was updated, its type and its owner').toBe('ready')
-    expect(registry.find((c) => c.id === 'jira.find_older')?.state, 'and that a search stops at the 50 newest tickets').toBe('planned')
     for (const user of ['bob', 'alice'] as const) {
       for (const width of WIDTHS) {
         const { context, page } = await opened(browser, user, width)
         const watch = watchPage(page)
         await page.goto(`/runs/${runId}`)
-        await expect(state(page)).toHaveText('Needs your yes')
-        await expect(unchecked(page)).toHaveText(inOrder('Not checked', ...NO_DETAILS))
-        await expect(unchecked(page), 'nothing about software on a ticket summary').not.toContainText(/registries|couldn’t be read/)
+        await expect(state(page)).toHaveText('Waiting for approval')
+        await expect(page.locator('#decision')).toContainText('This run wants to create 1 Jira ticket in MOCK:')
+        await expect(unchecked(page)).toHaveCount(0)
         await expect(page.getByRole('button', { name: /^(Approve|Decline)/ }), 'carol started it, so both may decide').toHaveCount(2)
         await noSidewaysScroll(page)
-        await intoView(unchecked(page))
         await shot(page, info, `r14-not-checked-summary-page-${user}-${String(width)}`)
         assertClean(watch)
         await context.close()
@@ -893,13 +888,13 @@ test.describe('what a run didn’t check', () => {
     }
   })
 
-  test('APPR-not-checked in the side panel: alice sees Not checked beside everything that will be written, for a check and a ticket summary', async ({ browser, backend }, info) => {
+  test('APPR-not-checked in the side panel: a request opened from the chat has the run page’s shape, with no Not checked, for a check and a ticket summary', async ({ browser, backend }, info) => {
     test.slow()
     const runs = [
-      { kind: 'software', run: await carolsCheck(backend), lines: [NO_REGISTRIES] },
-      { kind: 'summary', run: await summaryWaiting(backend, 'carol'), lines: NO_DETAILS },
+      { kind: 'software', run: await carolsCheck(backend) },
+      { kind: 'summary', run: await summaryWaiting(backend, 'carol') },
     ] as const
-    for (const { kind, run, lines } of runs) {
+    for (const { kind, run } of runs) {
       for (const width of WIDTHS) {
         const { context, page } = await opened(browser, 'alice', width)
         const watch = watchPage(page)
@@ -909,12 +904,11 @@ test.describe('what a run didn’t check', () => {
         await expect(newest(page)).toHaveAttribute('data-answer', 'true')
         await newest(page).locator(`[data-opens="approval:${run.runId}"]`).click()
         const panel = sidePanel(page)
-        await expect(unchecked(panel)).toHaveText(inOrder('Not checked', ...lines))
-        await expect(panel, 'it trims nothing that will be written').toContainText(/What will be written[\s\S]*Summary[\s\S]*Not checked/)
-        await expect(panel, 'the AI’s summary and Why you wait for the page').not.toContainText(/Summary by AI|Why you/)
+        await expect(panel, 'what the run wants to do, then the whole ticket one click away').toContainText(/This run wants to create 1 Jira ticket in MOCK:[\s\S]*Where[\s\S]*Summary/)
+        await expect(unchecked(panel), 'Not checked is not in the panel').toHaveCount(0)
+        await expect(panel, 'the AI’s summary and Why you are not in the panel').not.toContainText(/Summary by AI|Why you|Not checked/)
         await noSidewaysScroll(page)
         if (width === 1280) await expectAccessible(page, path.join(OUT, 'axe'), `r14-not-checked-panel-${kind}-1280`)
-        await intoView(unchecked(panel))
         await shot(page, info, `r14-not-checked-${kind}-panel-alice-${String(width)}`)
         assertClean(watch)
         await context.close()
@@ -935,37 +929,15 @@ test.describe('what a run didn’t check', () => {
     expect(await ringShows(page), 'the request’s row on Home has a visible focus').toBe(true)
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`))
-    await expect(unchecked(page)).toContainText(inOrder('Not checked', REDIS_UNREAD, NO_REGISTRIES))
     await tabTo(page, page.getByRole('button', APPROVE), 30)
     expect(await ringShows(page), 'Approve has a visible focus').toBe(true)
     await shot(page, info, 'r14-keys-c-approve-focused-1280')
     await page.keyboard.press('Enter')
     await expect(state(page)).toHaveText('Done', { timeout: 60_000 })
-    await expect(page.getByRole('main')).toContainText(/Done .* · MOCK-\d+ created after Bob’s yes/)
-    await expect(unchecked(page), 'the decided record keeps what Bob was told, read only').toContainText(inOrder('Not checked', REDIS_UNREAD, NO_REGISTRIES))
+    await expect(page.locator('#decision')).toContainText(/Approved by Bob (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2}\. MOCK-\d+ created\./)
+    await expect(page.locator('#decision'), 'after the approval, focus is on the decision, which says what happened').toBeFocused()
     expect((await backend.get<{ not_checked: string[] }>('alice', `/api/v1/approvals/${approvalId}`)).not_checked).toEqual(['Redis'])
-    await shot(page, info, 'r14-not-checked-decided-bob-1280')
-    await context.close()
-  })
-
-  test('Not checked waits for the registry, so Approve never moves under the pointer at 390 px', async ({ browser, backend }) => {
-    const { runId, approvalId } = await backend.waitingRunWithUnread('alice')
-    leftWaiting.push(approvalId)
-    const { context, page } = await opened(browser, 'bob', 390)
-    await page.route('**/api/v1/capabilities', async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 2_000))
-      await route.continue()
-    })
-    await page.goto(`/runs/${runId}`)
-    const approve = page.getByRole('button', APPROVE)
-    await expect(approve).toBeVisible({ timeout: 15_000 })
-    expect(await page.getByText(NO_REGISTRIES).isVisible(), 'the registry line is there before Approve shows').toBe(true)
-    /** Where Approve sits inside the decision, which scrolling the page does not change. */
-    const place = () => approve.evaluate((el) => el.getBoundingClientRect().top - (el.closest('#decision')?.getBoundingClientRect().top ?? 0))
-    const before = await place()
-    // The run page polls while it waits, so the network never goes idle. The registry has answered by now, so a short wait is enough.
-    await page.waitForTimeout(1_500)
-    expect(await place(), 'Approve stays where it first showed').toBe(before)
+    await shot(page, info, 'r14-keys-c-decided-bob-1280')
     await context.close()
   })
 })

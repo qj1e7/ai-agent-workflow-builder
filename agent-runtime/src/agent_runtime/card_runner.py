@@ -30,6 +30,7 @@ from agent_runtime.confluence import (
     no_confluence,
 )
 from agent_runtime.contract import (
+    RELEASE_TAG_PATTERN,
     AgentFailedData,
     AgentMessageData,
     AgentRef,
@@ -53,8 +54,10 @@ from agent_runtime.jira import (
 from agent_runtime.model_access import problem_for
 from agent_runtime.release_source import (
     DEFAULT_RETRY,
+    SOURCE_NAME,
     MovableSource,
     RetryPolicy,
+    candidates,
     could_not_check,
     read_releases,
 )
@@ -478,16 +481,28 @@ class _AgentRun:
                 could_not_check(args.repo, found.message),
                 f"{args.repo} could not be checked.",
                 write,
+                {"source": SOURCE_NAME, "repo": args.repo},
             )
         self._read = True
         shown = [r for r in found if not r.draft][:RELEASES_SHOWN]
-        tags = [r.tag for r in shown]
+        # The run page names the newest release, so only stable ones the tag rule takes count.
+        tags = candidates(found, RELEASE_TAG_PATTERN)[:RELEASES_SHOWN]
         newest = f" The newest is {tags[0]}." if tags else ""
+        result: dict[str, object] = {
+            "releases": len(tags),
+            "tags": tags,
+            "source": SOURCE_NAME,
+            "repo": args.repo,
+        }
+        # It also says when the newest one came out, so the day travels with the read.
+        dated = next((r.published_at for r in found if tags and r.tag == tags[0]), None)
+        if dated:
+            result["newest_published_at"] = dated
         write(
             self._finished(
                 tool,
-                f"read {len(shown)} releases of {args.repo}.{newest}",
-                {"releases": len(shown), "tags": tags},
+                f"read {len(tags)} releases of {args.repo}.{newest}",
+                result,
             )
         )
         return _result(
@@ -669,9 +684,16 @@ class _AgentRun:
         return _result("Proposed. Nothing is written until an Approver approves it.")
 
     def _read_failed(
-        self, tool: Tool, what: str, failure: TaskError, message: str, reason: str, write: Emit
+        self,
+        tool: Tool,
+        what: str,
+        failure: TaskError,
+        message: str,
+        reason: str,
+        write: Emit,
+        where: dict[str, object] | None = None,
     ) -> TaskError:
-        write(self._finished(tool, what, {"problem": failure.message}))
+        write(self._finished(tool, what, {"problem": failure.message, **(where or {})}))
         error = failure.model_copy(update={"message": message})
         write(self._failed(error, reason, tool.model_name))
         return error

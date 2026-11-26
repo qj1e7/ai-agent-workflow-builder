@@ -72,7 +72,7 @@ test('bob approves on the run page, and the item has left Home when he comes bac
   await markThisPage(page)
   await itemOf(page, approvalId).getByRole('link').click()
   await page.getByRole('button', { name: 'Approve', exact: true }).click()
-  await expect(page.getByText('Approved. The platform is writing now.').or(page.locator('[data-run-pill]', { hasText: /^Done$/ }))).toBeVisible()
+  await expect(page.locator('[data-run-pill]', { hasText: /^(Approved by Bob|Done)$/ })).toBeVisible()
   await page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true }).getByRole('link', { name: 'Chat' }).click()
   await expect(page.locator('#planner-box')).toBeVisible()
   await expect(itemOf(page, approvalId)).toHaveCount(0)
