@@ -153,6 +153,51 @@ def test_one_softwares_release_check_run_by_hand_is_its_own_card(
     assert all(p.mark != "cant" for p in parts_of(fields, task, answer)), "nothing is crossed"
 
 
+WHO_RUNS_IT = [
+    ("I'll run it manually", "Run it manually"),
+    ("I will run it manually", "Run it manually"),
+    ("we’ll just run it manually", "Run it manually"),
+    ("I'll only run it manually", "Only run it manually"),
+    ("we can run it on demand", "On demand"),
+    ("I'd rather run it only when I ask", "Only when I ask"),
+]
+"""Words before them that only say who presses Run now, which the schedule row holds with its
+own words."""
+
+
+@pytest.mark.parametrize(("words", "said"), WHO_RUNS_IT)
+@pytest.mark.parametrize("watched", [(), ("n8n",)], ids=["not watched", "watched"])
+@pytest.mark.parametrize("model", [None, "manually"])
+def test_who_runs_a_release_check_by_hand_is_never_crossed_beside_its_row(
+    words: str, said: str, watched: tuple[str, ...], model: str | None
+):
+    task = f"Check n8n for new releases, {words}"
+    fields = release_read(schedule=model)
+    answer = answer_of(fields, task, facts(*watched))
+
+    assert isinstance(answer, SetupCardAnswer), answer
+    assert answer.rows[0] == UnderstoodRow(kind="schedule", text=said, state="understood")
+    assert all(p.mark != "cant" for p in parts_of(fields, task, answer)), "nothing is crossed"
+
+
+@pytest.mark.parametrize(("words", "said"), WHO_RUNS_IT)
+def test_who_runs_a_task_by_hand_is_part_of_its_schedule_row(words: str, said: str):
+    card, parts = answered(f"{REST[:1].upper()}{REST[1:]}. {words[:1].upper()}{words[1:]}.", None)
+
+    assert card.rows[0] == UnderstoodRow(kind="schedule", text=said, state="understood")
+    assert [p.mark for p in parts] == ["will_do"] * len(parts)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Check n8n for new releases, I won't run it manually", "I'll never run it on demand"],
+)
+def test_who_runs_it_beside_a_no_is_still_no_choice(text: str):
+    assert render_schedule(None, text).row == UnderstoodRow(
+        kind="schedule", text="", state="missing", note=NOT_SAID
+    )
+
+
 def test_a_schedule_beside_the_words_stays_the_schedule():
     card, _ = answered(f"Every Friday at 16:00 and on demand, {REST}", "every Friday at 16:00")
 
