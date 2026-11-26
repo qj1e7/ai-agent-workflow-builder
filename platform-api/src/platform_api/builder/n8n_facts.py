@@ -30,16 +30,18 @@ from platform_api.orchestration import (
     CardSpec,
     KnownOptions,
     NodeOption,
+    NotFoundAtSource,
     NothingToRun,
     OwnWorkflow,
     Publisher,
     RanVersion,
     ReadFailed,
-    ReadItems,
     ReadReleasesRequest,
     ReadReleasesResult,
+    ReleasesNotFound,
     ReleasesNotRead,
     RunSpec,
+    SourceRead,
     WriteEntry,
     card_bindings,
     known_options,
@@ -262,9 +264,9 @@ class BuilderWorkflowFacts:
         named = {str(row["repo"]): str(row["name"]) for row in rows}
         return [NodeOption(repo, name) for repo, name in sorted(named.items())]
 
-    async def read(self, source: str, place: str, query: str | None) -> ReadItems | ReadFailed:
+    async def read(self, source: str, place: str, query: str | None) -> SourceRead:
         """A repository's counted releases, newest first, through the agent runtime, which holds
-        GitHub's key."""
+        GitHub's key. A repository GitHub doesn't have is not found at the source."""
         if source != GITHUB_RELEASES or self._releases is None:
             return ReadFailed("Our platform does not read this source yet.")
         answer = await self._releases.read_releases(
@@ -275,6 +277,8 @@ class BuilderWorkflowFacts:
                 return ReadFailed(detail)
             case ReleasesNotRead(message=message):
                 return ReadFailed(message)
+            case ReleasesNotFound():
+                return NotFoundAtSource("GitHub", place)
             case _:
                 return [
                     {

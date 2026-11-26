@@ -55,7 +55,8 @@ from platform_api.monitoring.events import (
     activity_event_adapter,
 )
 from platform_api.monitoring.http import TroubleshootingOut
-from platform_api.monitoring.troubleshooter import answers, explain, what_happened
+from platform_api.monitoring.source_stops import not_found_words
+from platform_api.monitoring.troubleshooter import answers, explain, explain_failure, what_happened
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.dispatch import ApprovalNotice, ApprovalOutcome, AskedStep
 from platform_api.orchestration.http import (
@@ -82,11 +83,20 @@ from platform_api.orchestration.http import (
     WriteDoneView,
 )
 from platform_api.orchestration.jira import PRACTICE_SITE
+from platform_api.orchestration.n8n_calls import ExecutionFacts, FailedExecution, block_failure
 from platform_api.orchestration.questions import QuestionId
+from platform_api.orchestration.runs import Stage, failed_data
 from platform_api.orchestration.teams import approval_card, practice_text, with_outcome
 from platform_api.orchestration.write_actions import WriteAction, describe_at, digest
 from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
-from platform_api.shared import TEAM_TIME_ZONE, ApprovalId, ProposalId, RunId, UserId
+from platform_api.shared import (
+    TEAM_TIME_ZONE,
+    ApprovalId,
+    N8nExecutionId,
+    ProposalId,
+    RunId,
+    UserId,
+)
 from platform_api.wire import ApprovalStepView, ApproverRef, Trigger, WireModel
 
 ALICE = UserId("alice")
@@ -847,6 +857,28 @@ def troubleshooting(tl: Timeline) -> TroubleshootingOut:
     )
 
 
+MISSING_REPO = "zzfake-owner/no-such-repo-xyz"
+"""A repository GitHub doesn't have, as in the 25 Nov walk-through."""
+
+
+def missing_repo_troubleshooting(tl: Timeline) -> TroubleshootingOut:
+    """A release check whose Read block reads a repository GitHub doesn't have: the run as the
+    platform fails it (`block_failure`), and the troubleshooter's answer to it, as its route
+    gives them. The Portal's run page and Home read whether it can be retried from this run."""
+    failed = tl.last
+    read = {"name": "Read release", "type": "CUSTOM.wabRead", "parameters": {"place": MISSING_REPO}}
+    facts = ExecutionFacts("wf_release_check", "trigger", None, None, "v1")
+    said = not_found_words("GitHub", MISSING_REPO)
+    stopped = FailedExecution(N8nExecutionId("41"), facts, "Read release", said, read)
+    failure = failed_data(Stage.WORKING, block_failure(stopped, read_anything=False))
+    return TroubleshootingOut(
+        run_id=FAILURE.run_id,
+        failure=failure,
+        advice=explain_failure(failure),
+        answers=answers(failure, failed.ts.astimezone(TEAM_TIME_ZONE)),
+    )
+
+
 def fixtures() -> dict[str, WireModel | list[WireModel]]:
     success = success_events()
     failure = failure_events()
@@ -891,4 +923,5 @@ def fixtures() -> dict[str, WireModel | list[WireModel]]:
         ),
         "stubs/mock-jira-tickets.json": mock_jira_tickets(success),
         "troubleshooting/failure.json": troubleshooting(failure),
+        "troubleshooting/missing-repo.json": missing_repo_troubleshooting(failure),
     }

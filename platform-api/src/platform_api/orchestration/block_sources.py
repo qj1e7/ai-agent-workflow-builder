@@ -11,7 +11,7 @@ import re
 from collections.abc import Mapping
 from typing import Any, Final, cast
 
-from platform_api.monitoring import REQUEST_LIMIT_SECONDS, SourceStop, delay_in
+from platform_api.monitoring import REQUEST_LIMIT_SECONDS, SourceStop, delay_in, not_found_in
 from platform_api.orchestration.node_classes import NODE_CLASSES, NodeClasses, OnType
 
 HTTP_REQUEST: Final = "n8n-nodes-base.httpRequest"
@@ -139,14 +139,21 @@ def limit_ms_of(block: Mapping[str, Any], classes: NodeClasses = NODE_CLASSES) -
 def source_stop(
     node: str | None, block: Mapping[str, Any] | None, message: str | None
 ) -> SourceStop | None:
-    """The facts of a stop at one of n8n's own blocks whose source gave no usable answer, or None
-    for any other failure, and for any failure of our own blocks."""
-    delay = delay_in(message)
+    """The facts of a stop at one of n8n's own blocks whose source gave no usable answer, or at
+    one of ours whose source has no such place, in our platform's words for it. None for any
+    other failure."""
     named = node or (None if block is None else block.get("name"))
-    if delay is None or not isinstance(named, str):
+    if not isinstance(named, str):
+        return None
+    if block is not None and str(block.get("type")).startswith(OURS):
+        found = not_found_in(message)
+        if found is None:
+            return None
+        source, place = found
+        return SourceStop(source, "not_found", None, named, tries_of(block), place)
+    delay = delay_in(message)
+    if delay is None:
         return None
     if block is None:
         return SourceStop(None, delay, None, named, 1)
-    if str(block.get("type")).startswith(OURS):
-        return None
     return SourceStop(source_of(block), delay, limit_ms_of(block), named, tries_of(block))

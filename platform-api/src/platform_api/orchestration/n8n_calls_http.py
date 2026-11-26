@@ -228,6 +228,7 @@ class OptionsOut(WireModel):
 REFUSALS: dict[int | str, dict[str, Any]] = {
     401: error_response("Bad node key, or this platform takes no node calls"),
     403: error_response("Refused by a safety rule, such as a start or a version that fails"),
+    404: error_response("The source has no such place, as a repository GitHub doesn't have"),
     409: error_response("The run has stopped, or another execution carries it"),
     422: error_response("The block names something our platform does not allow"),
     503: {"model": RetryOut, "description": "Try the same call again soon"},

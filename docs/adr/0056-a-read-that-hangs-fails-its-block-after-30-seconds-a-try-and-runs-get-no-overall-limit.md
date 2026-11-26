@@ -81,3 +81,12 @@ A review asked about a POST answered with a 303. n8n follows a 303 with a GET. I
 - **Our blocks follow no redirect.** Each call to our API now sets `disableFollowRedirect`, which n8n's `httpRequest` takes (`@n8n/backend-network` 1.16.4, `dist/http/axios/request.js`). Our API never redirects, so a redirect fails the block with its status.
 - **n8n's notice blocks already follow none after a POST.** Teams, Outlook, Gmail and Slack send through n8n's older request helper, which follows a redirect after a POST only when a block asks for `followAllRedirects` (`dist/http/axios/legacy.js`), and none of them does (`n8n-nodes-base` 2.42.4).
 - **Where the GET could get 30 s.** Only when n8n follows redirects itself, one request at a time, does the interceptor see the GET (`shouldFollowRedirectsManually`, `dist/http/axios/redirect.js`). n8n does that only when a proxy is set and `N8N_SSRF_PROTECTION_ENABLED` is on. It is off unless set, and we never set it. Otherwise axios follows the redirect inside the POST's own request, which keeps its 300 s. If we turn on SSRF protection behind a proxy, an HTTP Request block set to follow every redirect could still meet this case.
+
+## Note, 26 Nov 2026: a place the source doesn't have
+
+A walk-through on 25 Nov read a repository GitHub doesn't have (`zzfake-owner/no-such-repo-xyz`) with our Read block. The platform answered the block 503, try again, so n8n's record held only "Our platform could not do this step (HTTP 503)" and the troubleshooter said "A step in the workflow engine failed." The simulation's "Source not found" passed, because it graded our block by the gateway's own words.
+
+- **Our API refuses the read in words.** A repository GitHub doesn't have answers our Read block 404 with "GitHub can't find zzfake-owner/no-such-repo-xyz.", which the block shows in n8n. Trying again finds none, so it is no try again. The agent runtime says so with its own result (`ReleasesNotFound`).
+- **The stop is a source stop.** `block_sources.source_stop` reads those words back from n8n's record of our block, and the stop says `GitHub can't find zzfake-owner/no-such-repo-xyz, so "Read release" stopped.` with its likely cause. The troubleshooter explains it from the same facts.
+- **The simulation plays the same answer.** Our API and the simulation gateway both answer a Read through `n8n_calls.read_answer`, so "Source not found" at a GitHub read gets the refusal a real run gets, and its grade uses the real stop's words.
+- A Confluence page that is gone is still answered as a try again. It is a follow-up.

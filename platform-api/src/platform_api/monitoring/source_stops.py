@@ -18,8 +18,9 @@ method keeps n8n's own 300 s, and a block may set a limit of its own."""
 
 NOTHING_READ_YET: Final = "Stopped before it read anything."
 
-type Delay = Literal["no_answer", "refused", "cut_off", "unreachable"]
-"""What went wrong with the connection, as far as n8n's words for it tell."""
+type Delay = Literal["no_answer", "refused", "cut_off", "unreachable", "not_found"]
+"""What went wrong with the connection, as far as n8n's words for it tell, or that the source has
+no such place, as our platform's words for a Read block say (`not_found_words`)."""
 
 N8N_DELAYS: Final[Mapping[str, Delay]] = {
     "The connection was aborted, perhaps the server is offline": "no_answer",
@@ -45,6 +46,7 @@ _HAPPENED: Final[Mapping[Delay, str]] = {
     "refused": "refused the connection",
     "cut_off": "closed the connection",
     "unreachable": "could not be reached",
+    "not_found": "can't find {place}",
 }
 CAUSES: Final[Mapping[Delay, str]] = {
     "no_answer": "Nothing came back in that time, so it may be down, busy or out of reach.",
@@ -55,6 +57,9 @@ CAUSES: Final[Mapping[Delay, str]] = {
     ),
     "unreachable": (
         "n8n couldn't reach it, so it may be down, or its address may be wrong or blocked."
+    ),
+    "not_found": (
+        "The workflow may name the wrong one, or it may have been renamed, deleted or made private."
     ),
 }
 """The likely cause, from what n8n's words show and no further."""
@@ -72,6 +77,8 @@ class SourceStop:
     tries: int
     """The tries n8n made of the block. Each one failed, and n8n keeps only the last one's
     words, which these facts come from."""
+    place: str | None = None
+    """The place the source doesn't have, as a repository, for a stop that is not found."""
 
 
 def delay_in(message: str | None) -> Delay | None:
@@ -96,10 +103,30 @@ def _within(limit_ms: int | None) -> str:
     return f"within {seconds:g} second" + ("" if seconds == 1 else "s")
 
 
+def not_found_words(source: str, place: str) -> str:
+    """What our platform answers a Read block whose source has no such place. The block shows
+    them in n8n, and `not_found_in` reads them back from n8n's record."""
+    return f"{source} can't find {place}."
+
+
+NOT_FOUND_SOURCES: Final = ("GitHub",)
+"""The sources our platform reads for a Read block and says it can't find a place at. Only these
+are read back as a stop, so other words that say "can't find" stay n8n's words for the block."""
+_NOT_FOUND: Final = re.compile(
+    rf"(?P<source>{'|'.join(map(re.escape, NOT_FOUND_SOURCES))}) can't find (?P<place>\S+?)\."
+)
+
+
+def not_found_in(message: str | None) -> tuple[str, str] | None:
+    """The source and the place, when the words are our platform's for a place not found."""
+    found = _NOT_FOUND.fullmatch(message or "")
+    return None if found is None else (found.group("source"), found.group("place"))
+
+
 def headline(stop: SourceStop) -> str:
     """One sentence: the source, what went wrong, the block and the tries."""
     source = stop.source or SOURCE_UNKNOWN
-    happened = _HAPPENED[stop.delay].format(limit=_within(stop.limit_ms))
+    happened = _HAPPENED[stop.delay].format(limit=_within(stop.limit_ms), place=stop.place)
     tries = f" after {stop.tries} tries" if stop.tries > 1 else ""
     return f'{source} {happened}, so "{stop.block}" stopped{tries}.'
 
@@ -114,7 +141,8 @@ _READ: Final = re.compile(
     r"(?:in time|within (?P<count>[0-9.]+) (?P<unit>second|minute|hour)s?))"
     r"|(?P<refused>refused the connection)"
     r"|(?P<cut_off>closed the connection)"
-    r"|(?P<unreachable>could not be reached))"
+    r"|(?P<unreachable>could not be reached)"
+    r"|(?P<not_found>can't find (?P<place>\S+?)))"
     r', so "(?P<block>.+)" stopped(?: after (?P<tries>[0-9]+) tries)?\. '
 )
 
@@ -128,10 +156,12 @@ def read_stop(message: str) -> SourceStop | None:
     if not message.endswith(CAUSES[delay]):
         return None
     source = found.group("source")
+    if delay == "not_found" and source not in NOT_FOUND_SOURCES:
+        return None
     count, unit = found.group("count"), found.group("unit")
     per = {"second": 1000, **dict(_UNITS)}
     limit = None if count is None else round(float(count) * per[unit])
-    if delay != "no_answer":
+    if delay not in ("no_answer", "not_found"):
         limit = REQUEST_LIMIT_SECONDS * 1000
     return SourceStop(
         None if source == SOURCE_UNKNOWN else source,
@@ -139,4 +169,5 @@ def read_stop(message: str) -> SourceStop | None:
         limit,
         found.group("block"),
         int(found.group("tries") or 1),
+        found.group("place"),
     )

@@ -904,9 +904,11 @@ def _release_check_beside(
 
 
 def _as_a_release_check(read: TaskRead, request: str) -> TaskRead:
-    """The reading of a release check: no ticket search, as it finds releases, and the schedule
-    and ticket its own words ask for, whether or not the model read them. The ticket stands on
-    all its words, "if there's a new one" too, so its row quotes them."""
+    """The reading of a release check: no ticket search, as it finds releases, and the schedule,
+    ticket and Jira project its own words ask for, whether or not the model read them. The
+    ticket stands on all its words, "if there's a new one" too, so its row quotes them. The
+    project is read from its words only where its ticket names one by its key and the word
+    project, as "create a Jira ticket in the MOCK project" (`TICKET_IN_A_PROJECT`)."""
     own = WATCHLISTS_OWN_TICKET.search(request)
     ticket = read.ticket
     if own is not None:
@@ -918,7 +920,12 @@ def _as_a_release_check(read: TaskRead, request: str) -> TaskRead:
         )
     stretch = None if read.schedule else schedule_stretch(None, request)
     schedule = read.schedule if stretch is None else request[stretch[0] : stretch[1]]
-    return read.model_copy(update={"search": None, "ticket": ticket, "schedule": schedule})
+    place = read.place
+    named = TICKET_IN_A_PROJECT.search(request)
+    if named is not None and (place is None or render_place(place, request).row.state == "missing"):
+        place = PlaceRead(project=named.group("key"), said=named.group("place"))
+    update = {"search": None, "ticket": ticket, "schedule": schedule, "place": place}
+    return read.model_copy(update=update)
 
 
 def _release_check(
@@ -1294,16 +1301,28 @@ AFFIRMS_A_YES: Final = re.compile(
 card already waits for one, so they ask for nothing new. They are covered only when no other
 word is left over, so "with the approval skipped" or "and the rest go straight in" still come
 back as a skip the coverage check refuses."""
-WATCHLISTS_OWN_TICKET: Final = re.compile(
+_A_TICKET: Final = (
     r"\b(?:and\s+)?(?:raise|create|open|file|log|make)\s+(?:an?\s+|one\s+)?(?:new\s+)?(?:jira\s+|"
-    r"upgrade\s+)?ticket(?:\s+(?:if|when|whenever)\s+(?:there(?:['’]s|\s+is)\s+a\s+new\s+(?:one|"
-    r"release|version)|(?:it|there)\s+(?:has|is)\s+a\s+new\s+(?:one|release|version)|a\s+new\s+"
-    r"(?:one|release|version)\s+(?:comes\s+out|is\s+out)))?\b",
-    re.IGNORECASE,
+    r"upgrade\s+)?ticket"
 )
+_WHEN_A_NEW_ONE: Final = (
+    r"(?:if|when|whenever)\s+(?:there(?:['’]s|\s+is)\s+a\s+new\s+(?:one|release|version)|(?:it|"
+    r"there)\s+(?:has|is)\s+a\s+new\s+(?:one|release|version)|a\s+new\s+(?:one|release|version)\s+"
+    r"(?:comes\s+out|is\s+out))"
+)
+WATCHLISTS_OWN_TICKET: Final = re.compile(rf"{_A_TICKET}(?:\s+{_WHEN_A_NEW_ONE})?\b", re.IGNORECASE)
 """Beside a release watch, the upgrade ticket the Software watchlist raises itself, after a yes:
 "raise a Jira ticket if there's a new one". A ticket with more, as one for major releases only
 or in another project, keeps those words, which come back as parts it can't do."""
+TICKET_IN_A_PROJECT: Final = re.compile(
+    rf"(?i:{_A_TICKET})\s+(?P<place>(?i:in(?:to)?\s+(?:the\s+)?(?:jira\s+)?)(?!JIRA\b)"
+    rf"(?P<key>[A-Z][A-Z0-9]{{1,9}})(?i:\s+(?:jira\s+)?project))(?:\s+(?P<new>(?i:"
+    rf"{_WHEN_A_NEW_ONE})))?\b"
+)
+"""The same ticket in a Jira project its words name by its key in capitals and the word project,
+as "create a Jira ticket in the MOCK project when there is a new one", never "in CSV format".
+Only so is a release check's project read from its words. "When there is a new one" is still the
+ticket's own, never a part it can't do."""
 
 
 def _stretches(pattern: re.Pattern[str], text: str) -> list[tuple[int, int]]:
@@ -1476,6 +1495,7 @@ def _answer_of(
     beside = release_check is not None and _finds_beside(read, text)
     if read.belongs_on_watchlist:
         covered += _stretches(WATCHLISTS_OWN_TICKET, text)
+        covered += [m.span("new") for m in TICKET_IN_A_PROJECT.finditer(text) if m.group("new")]
         read = (
             _as_a_release_check(read, text)
             if release_check is not None and not beside
