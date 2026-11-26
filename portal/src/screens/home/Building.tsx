@@ -195,6 +195,8 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
   const notes = notesOf(replay.lines)
   const whyStopped = useWhyTestStopped(runId, test)
   const result = test ? testStatus(test, whyStopped) : null
+  // The platform's own fact, the same one the run page and Home read: a stop it says cannot be retried would only stop again.
+  const canRetry = test?.phase.state === 'failed' && test.phase.retryable
 
   let status: ReactNode
   let actions: ReactNode
@@ -248,10 +250,12 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
       status = <span className={styles['bad']}>{result?.text} Nothing was written. It stays a Draft.</span>
       actions = (
         <>
-          <Button variant="primary" loading={starting} onClick={onTestAgain}>
-            Try again
-          </Button>
-          <OpenButton item={{ kind: 'workflow', id: useCaseId }} to={`/workflows/${encodeURIComponent(useCaseId)}`}>
+          {canRetry ? (
+            <Button variant="primary" loading={starting} onClick={onTestAgain}>
+              Try again
+            </Button>
+          ) : null}
+          <OpenButton variant={canRetry ? 'secondary' : 'primary'} item={{ kind: 'workflow', id: useCaseId }} to={`/workflows/${encodeURIComponent(useCaseId)}`}>
             Open the workflow
           </OpenButton>
         </>

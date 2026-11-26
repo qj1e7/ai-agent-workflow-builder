@@ -156,14 +156,18 @@ export function SetUpApproval({ view }: { view: SetUpApprovalView }) {
         <h2 className={styles['kind']}>Who approves each write</h2>
         <WhoApproves approves={report.approves} />
       </section>
-      <section className={styles['more']} aria-label="Settings">
-        <h2 className={styles['kind']}>Settings</h2>
-        <Settings settings={report.settings} />
-      </section>
-      <section className={styles['more']} aria-label="Safety checks">
-        <h2 className={styles['kind']}>Safety checks</h2>
-        <Checks report={report} />
-      </section>
+      {report.settings.length > 0 ? (
+        <section className={styles['more']} aria-label="Settings">
+          <h2 className={styles['kind']}>Settings</h2>
+          <Settings settings={report.settings} />
+        </section>
+      ) : null}
+      {report.fixed.length + report.passed.length > 0 ? (
+        <section className={styles['more']} aria-label="Safety checks">
+          <h2 className={styles['kind']}>Safety checks</h2>
+          <Checks report={report} />
+        </section>
+      ) : null}
       {waiting ? (
         view.you_can_decide ? (
           <Decide view={view} />
