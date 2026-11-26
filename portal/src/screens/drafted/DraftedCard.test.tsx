@@ -400,6 +400,18 @@ describe('Build it with any n8n block', () => {
 })
 
 describe('the set-up approval page', () => {
+  it('hides the Settings and Safety checks headings when the report has nothing for them', () => {
+    const base = bobSetUp as SetUpApprovalView
+    const empty: SetUpApprovalView = { ...base, report: { ...base.report, settings: [], fixed: [], passed: [] } }
+    const shown = text(render(<SetUpApproval view={empty} />))
+    expect(shown).not.toContain('Settings')
+    expect(shown).not.toContain('Safety checks')
+    const one: SetUpApprovalView = { ...empty, report: { ...empty.report, passed: [{ rule: 'r', words: 'No write runs without approval.' }] } }
+    const some = text(render(<SetUpApproval view={one} />))
+    expect(some).toContain('Safety checks')
+    expect(some).not.toContain('Settings')
+  })
+
   it('lets an Approver who may decide approve or decline, with the report’s words', () => {
     const html = render(<SetUpApproval view={bobSetUp as SetUpApprovalView} />)
     expect(text(html)).toContain('Set-up approval, from Carol’s draft')

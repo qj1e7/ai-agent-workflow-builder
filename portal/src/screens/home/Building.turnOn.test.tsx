@@ -104,3 +104,21 @@ describe('Turn on after a passing test run (effects run during the render)', () 
     expect(calls).toHaveLength(0)
   })
 })
+
+describe('The card when the test run stopped', () => {
+  const stoppedWith = (retryable: boolean): RunModel =>
+    foldWire(emptyModel, failure.map((event) => (event.kind === 'run_failed' ? { ...event, data: { ...event.data, retryable } } : event)), failure[0]?.run_id ?? '')
+  const labels = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => (m[1] ?? '').replace(/<[^>]*>/g, '').trim())
+
+  it('offers Try again and Open the workflow when the platform says the stop can be retried', () => {
+    const html = building(stoppedWith(true), { useCase: DRAFT })
+    expect(labels(html)).toEqual(expect.arrayContaining(['Try again', 'Open the workflow']))
+  })
+
+  it('offers only Open the workflow, as the primary action, when the stop cannot be retried', () => {
+    const html = building(stoppedWith(false), { useCase: DRAFT })
+    expect(labels(html)).not.toContain('Try again')
+    const open = [...html.matchAll(/<a\b([^>]*)>[^<]*Open the workflow/g)][0]?.[1] ?? ''
+    expect(open).toMatch(/primary/)
+  })
+})
