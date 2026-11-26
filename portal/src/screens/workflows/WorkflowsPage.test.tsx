@@ -50,6 +50,8 @@ interface Setup {
   readonly path?: string
   /** What the platform answers for workflows made in n8n that wait to be set up. */
   readonly made?: MadeInN8nView[]
+  /** The watchlist's workflow id, when there is a watchlist. */
+  readonly watchlistId?: string
 }
 
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
@@ -60,7 +62,7 @@ const asSeenBy = (me: Me, useCase: UseCaseView): UseCaseView =>
       ? { ...useCase, needs_you: me.id === 'alice' ? 'stopped' : null, last_run: { ...useCase.last_run, you_can_open: me.id === 'alice' } } // Only Alice started the stopped run.
       : useCase
 
-function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request, path = '/workflows', made }: Setup = {}): string {
+function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request, path = '/workflows', made, watchlistId }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -68,7 +70,7 @@ function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGG
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
   queryClient.setQueryData(['people', scope], TEAM)
   queryClient.setQueryData(['capabilities', scope], capabilities)
-  queryClient.setQueryData(['watchlist', scope], { software: [] })
+  queryClient.setQueryData(['watchlist', scope], { software: [], ...(watchlistId ? { use_case_id: watchlistId } : {}) })
   if (home) queryClient.setQueryData(['home', scope], home)
   if (drafts) queryClient.setQueryData(['drafts', scope], drafts)
   if (made) queryClient.setQueryData(['made-in-n8n', scope], made)
@@ -332,9 +334,16 @@ describe('Needs you at the top of Workflows', () => {
   })
 
   it('says software GitHub can’t find, and opens that software’s own page', () => {
+    const html = mainOf(render({ home: HOME, watchlistId: 'uc_01JB7' }))
+    const address = (HOME.addresses[0] as { software_id: string }).software_id
+    expect(html).toContain(`href="/workflows/uc_01JB7?software=${address}"`)
+    expect(html).not.toContain('href="/software')
+  })
+
+  it('opens Workflows, where the old address lands, when there is no watchlist to name', () => {
     const html = mainOf(render({ home: HOME }))
     const address = (HOME.addresses[0] as { software_id: string }).software_id
-    expect(html).toContain(`href="/software/${address}"`)
+    expect(html).toMatch(new RegExp(`data-home-item="address:${address}"[^>]*>\\s*<a[^>]*href="/workflows"`))
   })
 
   it('groups the list into Do now and Set up, as Home does, with the same rows in each', () => {
