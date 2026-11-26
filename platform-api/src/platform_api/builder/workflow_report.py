@@ -11,7 +11,7 @@ Pure. It needs no running n8n, and it grades the version itself under today's ru
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from pydantic import JsonValue
@@ -86,15 +86,6 @@ class SetUp:
 
 
 @dataclass(frozen=True)
-class Older:
-    """An older published version, as ADR 0027 keeps every one, with the grade it had then."""
-
-    version: SetUp
-    number: int
-    graded_then: Grade
-
-
-@dataclass(frozen=True)
 class Filled:
     value: str | Words
     """A string from the plan, shown in quotes, or code's own words, as for a run time."""
@@ -129,15 +120,13 @@ class Drafted:
     settings: tuple[DraftSetting, ...]
 
 
-type Source = SetUp | Older | Drafted
+type Source = SetUp | Drafted
 
 
 @dataclass(frozen=True)
 class Step:
     name: Quoted
     ours: bool
-    block_type: Quoted
-    """n8n's type, shown only to people with n8n access."""
     tag: str
 
 
@@ -219,17 +208,10 @@ class Setting:
 
 
 @dataclass(frozen=True)
-class Then:
-    number: int
-    grade: Grade
-
-
-@dataclass(frozen=True)
 class WorkflowReport:
     name: Quoted
     grade: Grade
     """Under today's rules."""
-    then: Then | None
     in_short: Words
     steps: tuple[Step, ...]
     touches: tuple[Touch, ...]
@@ -398,8 +380,6 @@ _THIS_ITEM = re.compile(r"\$(?:json|input|binary)\b")
 
 def workflow_report(source: Source, team: Team) -> WorkflowReport:
     match source:
-        case Older(version, number, graded_then):
-            return replace(workflow_report(version, team), then=Then(number, graded_then))
         case SetUp(laid_by, document, cards):
             return _report(document, cards, laid_by, None, team)
         case Drafted(document, cards, settings):
@@ -427,7 +407,6 @@ def _report(
         return WorkflowReport(
             name,
             graded.grade,
-            None,
             (UNREAD,),
             (),
             (),
@@ -465,7 +444,6 @@ def _report(
     return WorkflowReport(
         name,
         graded.grade,
-        None,
         _in_short(_when(flow, document, team.time_zone, awaiting), touches),
         tuple(_step(version, n) for n in order),
         touches,
@@ -589,7 +567,7 @@ def _step(version: _Version, name: str) -> Step:
             tag = seen.tag or UNCLASSED
         case kind:
             tag = OUR_TAGS.get(kind, UNCLASSED)
-    return Step(_quote(name), seen.ours, _quote(block.type), tag)
+    return Step(_quote(name), seen.ours, tag)
 
 
 def _read_system(parameters: Mapping[str, JsonValue]) -> str:

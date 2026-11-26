@@ -2044,7 +2044,7 @@
     },
     "ExplainAnswer": {
       "additionalProperties": false,
-      "description": "A request to explain a workflow the person has (ADR 0051). The platform matches the words\nto one of the person's workflows and shows its report. It changes nothing, so both roles may\nask.",
+      "description": "A request to explain a workflow the person has (ADR 0051). The platform matches the words\nto one of the person's workflows, and the Portal answers with the sentence the workflow's\npage shows. Code reads a request only to explain with no model call. It changes nothing, so\nboth roles may ask.",
       "properties": {
         "kind": {
           "const": "explain",

@@ -37,6 +37,7 @@ from agent_runtime.answers import (
     ANSWER_SYSTEM,
     TaskRead,
     answer_of,
+    explained_first,
     one_software_check,
     watch_of_it,
     with_software_named,
@@ -1011,6 +1012,9 @@ def led(request: AnswerRequest, chat_for: ChatFor, verify_with: ChatFor | None =
     if refused is not None:
         parts = parts_of(None, request.task, refused)
         return Led(Answered(answer=refused, parts=parts), ("word_rule",))
+    explained = explained_first(request)
+    if explained is not None:
+        return Led(explained, (FRONT_STANDS[ExplainAnswer],))
     asked: list[BaseMessage] = [HumanMessage(person_part(request))]
     with ThreadPoolExecutor(max_workers=1) as pool:
         reading = pool.submit(copy_context().run, read_front, request.task, request, chat_for)

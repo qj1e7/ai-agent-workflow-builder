@@ -334,11 +334,12 @@ def test_one_workflow_is_answered_as_the_portal_says_it_with_its_name_quoted() -
     assert shown == f"“{PLANTED}” is on. It hasn't run yet."
 
 
-def test_explaining_the_only_workflow_shows_its_report_and_several_ask_which() -> None:
+def test_explaining_the_only_workflow_shows_its_sentence_and_several_ask_which() -> None:
     explain = Answered(answer=ExplainAnswer(workflow_words=None), parts=[])
     only = words_of(explain, ONLY_PLANTED)
-    assert only.startswith(f"“{PLANTED}”: [its report")
-    assert "when it runs, what it reads, what it changes or posts" in only
+    assert only.startswith(f"“{PLANTED}”: [the sentence its page shows")
+    assert only.endswith("[Open the workflow]")
+    assert "report" not in only
     several = words_of(explain).splitlines()
     assert several[0] == "Which workflow?"
     assert "[Explain the Morning new-ticket check]" in several[1]

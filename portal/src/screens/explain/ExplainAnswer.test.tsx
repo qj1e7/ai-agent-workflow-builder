@@ -80,10 +80,10 @@ describe('the Explain answer in the chat', () => {
   })
 
   describe('one workflow named', () => {
-    it('shows a short line while the workflow is read, under its name, with nothing yet to open', () => {
+    it('shows a short line while the workflow loads, under its name, with nothing yet to open', () => {
       const html = draw(ONE)
       expect(title(html)).toBe('FastAPI release check')
-      expect(text(html)).toContain('Reading the workflow')
+      expect(text(html)).toContain('Loading the workflow')
       expect(buttons(html)).toEqual([])
     })
 
@@ -115,9 +115,9 @@ describe('the Explain answer in the chat', () => {
       expect(buttons(html)).toEqual([])
     })
 
-    it('says so when the workflow could not be read, with Try again', () => {
+    it('says so when the workflow could not be loaded, with Try again', () => {
       const html = draw(ONE, { failed: { id: FASTAPI, error: new ApiError(503, null) } })
-      expect(text(html)).toContain('The workflow could not be read.')
+      expect(text(html)).toContain('The workflow could not be loaded.')
       expect(html).toContain('role="alert"')
       expect(buttons(html)).toEqual(['Try again'])
     })

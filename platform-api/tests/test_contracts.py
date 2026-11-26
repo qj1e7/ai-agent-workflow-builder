@@ -8,7 +8,6 @@ from pydantic import TypeAdapter
 from platform_api.auth import DevUsers
 from platform_api.builder import TEMPLATES
 from platform_api.builder.drafted_workflows import DraftedWorkflowView, SetUpApprovalView
-from platform_api.builder.explain import WorkflowExplained
 from platform_api.builder.home import HomeOut
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
 from platform_api.builder.models import (
@@ -368,9 +367,6 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/opened-in-n8n.json": TypeAdapter(HoldOut),
     "builder/run.n8n.waiting.json": TypeAdapter(RunN8nView),
     "builder/run.n8n.ended.json": TypeAdapter(RunN8nView),
-    "builder/explain.json": TypeAdapter(WorkflowExplained),
-    "builder/explain.older.json": TypeAdapter(WorkflowExplained),
-    "builder/explain.reworded.json": TypeAdapter(WorkflowExplained),
     **{
         f"builder/drafted.{state}.json": TypeAdapter(DraftedWorkflowView)
         for state in (

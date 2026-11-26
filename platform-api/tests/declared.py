@@ -8,7 +8,6 @@ from fastapi import FastAPI
 
 from platform_api.app import create_app
 from platform_api.builder.drafted_workflows import NotFound as DraftNotFound
-from platform_api.builder.explain import NoSuchWorkflow
 from platform_api.builder.lifecycle import TooLate
 from platform_api.builder.models import ScheduleSaveIn
 from platform_api.builder.versions import ChangedSince
@@ -212,11 +211,6 @@ class FakePlannerFront:
         return self._view
 
 
-class FakeExplainer:
-    async def explain(self, *args: object) -> object:
-        return NoSuchWorkflow()
-
-
 class FakeDrafted:
     """No drafted workflow and no set-up approval exists."""
 
@@ -273,7 +267,6 @@ def app_with(
     app.state.orchestrator = orchestrator or FakeOrchestrator()
     app.state.builder = builder or FakeBuilder()
     app.state.planner_front = planner_front or FakePlannerFront()
-    app.state.explainer = FakeExplainer()
     app.state.drafted = FakeDrafted()
     app.state.use_case_simulations = FakeUseCaseSimulations()
     app.state.activity_log = log or FakeLog()

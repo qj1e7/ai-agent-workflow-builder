@@ -8,15 +8,21 @@ person's workflows as an edit matches them (`name_runs`), else they are the word
 happened" stay the why-stopped answer. "what does my workflow do?" asks for the same thing, and
 is read only when the words between "what does" and "do" are my, our, this, that or the workflow,
 or a workflow's whole name, and the person has a workflow. Explaining changes nothing, so both
-roles may ask."""
+roles may ask.
+
+The answer is the sentence the workflow's page shows, which the Portal builds, so a request only
+to explain is read before any model call (`explain_before_the_model`). Words beside a workflow's
+name, and words that name an approval, wait for the model's reading and its answer to the skip
+question first, as every other request does."""
 
 import re
+from dataclasses import dataclass
 from typing import Final
 
 from agent_runtime.abilities import words
 from agent_runtime.contract import ExplainAnswer, PlannerFacts
 from agent_runtime.edits import name_runs
-from agent_runtime.reading import trim
+from agent_runtime.reading import names_a_yes, trim
 
 type Span = tuple[int, int]
 
@@ -54,11 +60,37 @@ ONE_OF_THEIRS: Final = re.compile(r"(?:my|our|this|that|the)\s+workflow", re.IGN
 LEADING: Final = re.compile(r"^(?:my|our|this|that|the)\s+", re.IGNORECASE)
 
 
+@dataclass(frozen=True)
+class _Read:
+    answer: ExplainAnswer
+    whole: bool
+    """Every word is "explain", filler, "it", or words for a workflow with nothing beside a name
+    they hold, so a model's reading could add nothing: words that name none of the person's
+    workflows, or several, the platform says back or asks about."""
+
+
 def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
     """The explanation the whole request asks for, or None when it asks for anything else."""
+    read = _read(text, facts)
+    return None if read is None else read.answer
+
+
+def explain_before_the_model(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
+    """The explanation code gives with no model call: a request only to explain, with no word
+    beside the workflow's name and no word that names an approval. Words that name none of the
+    person's workflows go too, since the platform says them back or asks which. Anything else
+    is None, and waits for the model's reading."""
+    read = _read(text, facts)
+    if read is None or not read.whole or names_a_yes(text):
+        return None
+    return read.answer
+
+
+def _read(text: str, facts: PlannerFacts | None) -> _Read | None:
     lead = LEAD.match(text)
     if lead is None:
-        return _what_it_does(text, facts)
+        explained = _what_it_does(text, facts)
+        return None if explained is None else _Read(explained, whole=True)
     start, end = trim(text, lead.end(), len(text))
     found = _named(text, (start, end), facts)
     named = None if found is None else found[0]
@@ -69,13 +101,13 @@ def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
         (a, b), stored = found
         words = stored or text[a:b]
         if len(words) <= WORDS_LIMIT:
-            return ExplainAnswer(workflow_words=words)
+            return _Read(ExplainAnswer(workflow_words=words), whole=True)
     said = _edges_off(text[start:end])
     if all(t.casefold() in POINTING for t in TOKEN.findall(said)):
-        return ExplainAnswer(workflow_words=None)
+        return _Read(ExplainAnswer(workflow_words=None), whole=True)
     if JOINED.search(said) or len(said) > WORDS_LIMIT:
         return None
-    return ExplainAnswer(workflow_words=said)
+    return _Read(ExplainAnswer(workflow_words=said), whole=found is None)
 
 
 def _what_it_does(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:

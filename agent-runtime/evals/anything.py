@@ -766,12 +766,11 @@ def _removal(shown: RemoveSoftwareAnswer, facts: PlannerFacts) -> list[str]:
     ]
 
 
-REPORT: Final = (
-    "[its report, in code's words: In short says when it runs, what it reads, what it changes or "
-    "posts and what waits for a yes, then Step by step and what it reads, writes and posts] "
-    "[Open the workflow]"
+SENTENCE: Final = (
+    "[the sentence its page shows, built by code: when it runs, what it checks, and what it does "
+    "when it finds something, as creating a ticket after approval] [Open the workflow]"
 )
-"""The Portal's explain card (ADR 0051, section 6), which the judge can't open."""
+"""The Portal's explain card (ADR 0051, amended 26 Nov 2026), which the judge can't open."""
 
 
 def _explained(shown: ExplainAnswer, facts: PlannerFacts, operator: bool) -> list[str]:
@@ -791,7 +790,7 @@ def _explained(shown: ExplainAnswer, facts: PlannerFacts, operator: bool) -> lis
             ]
     if len(rows) != 1 or (words is None and facts.workflows_in_all() != 1):
         return ["Which workflow?", " ".join(f"[Explain the {w.name}]" for w in rows)]
-    return [f"“{rows[0].name}”: {REPORT}"]
+    return [f"“{rows[0].name}”: {SENTENCE}"]
 
 
 def _named(facts: PlannerFacts, workflow_words: str | None) -> list[WorkflowFact]:

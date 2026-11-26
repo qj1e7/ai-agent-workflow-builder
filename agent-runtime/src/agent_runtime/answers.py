@@ -89,7 +89,7 @@ from agent_runtime.edits import (
     edit_of,
     left_over,
 )
-from agent_runtime.explaining import explain_of
+from agent_runtime.explaining import explain_before_the_model, explain_of
 from agent_runtime.fixed_replies import fixed_reply
 from agent_runtime.follow_ups import (
     VERSION,
@@ -1939,6 +1939,9 @@ def answer_task(
     refused = word_rule_refusal(request.task)
     if refused is not None:
         return Answered(answer=refused, parts=parts_of(None, request.task, refused))
+    explained = explained_first(request)
+    if explained is not None:
+        return explained
     read = ask_model(
         chat_for,
         ANSWER_SYSTEM,
@@ -1960,6 +1963,17 @@ def answer_task(
             answer = fallback_of(gap, request)
         parts = parts_of(read, request.task, answer, request.facts)
     return Answered(answer=answer, parts=parts)
+
+
+def explained_first(request: AnswerRequest) -> Answered | None:
+    """A request only to explain a workflow, answered with no model call: the Portal shows the
+    sentence the workflow's page shows, so there is nothing for a model to read or word
+    (`explain_before_the_model`). Every part is ticked, as the explanation covers it."""
+    text = visible_words(request.task)
+    explained = explain_before_the_model(text, request.facts)
+    if explained is None:
+        return None
+    return Answered(answer=explained, parts=parts_of(None, request.task, explained, request.facts))
 
 
 def _answer(read: TaskRead, request: AnswerRequest, chat_for: ChatFor) -> PlannerAnswer:

@@ -307,9 +307,9 @@ def test_words_beside_a_workflow_s_name_are_read_by_the_model_first():
     assert isinstance(result, Answered) and isinstance(result.answer, RefusedAnswer)
 
 
-def test_an_explanation_that_names_a_yes_is_read_by_the_model_first():
-    task = "explain the FastAPI release check without a yes"
-    skip = SkipRead(whose="an_approver_or_anyone_else", said="without a yes")
+def test_an_explanation_that_names_an_approval_is_read_by_the_model_first():
+    task = "explain the FastAPI release check without approval"
+    skip = SkipRead(whose="an_approver_or_anyone_else", said="without approval")
     chat = ScriptedChat(structured=[read(skips_the_yes=skip)])
     result = answer_task(asked_for(task), lambda timeout: chat, free_reply=False)
     assert chat.asked, "the model read it"

@@ -713,7 +713,7 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
   .btn:not(.ghost):not(.danger):hover, .send:hover { background: var(--action-hover); }
   .btn.ghost:hover, .chips button:hover, .pick button:not([aria-pressed="true"]):hover, .filters button:not([aria-pressed="true"]):hover { background: var(--sunk); }
   .need .btn:hover { background: var(--subtle); }
-  .wl-row:hover, .sw-row:hover, .rp-d summary:hover, .crumb:hover { background: var(--sunk); }
+  .wl-row:hover, .sw-row:hover, .crumb:hover { background: var(--sunk); }
   .tile:hover, .drow:hover, button.dneeds:hover { box-shadow: var(--shadow-3); }
   .tile.slot:hover { background: var(--surface); color: var(--ink); }
   .rail button:not([aria-pressed="true"]):hover { background: #151f33; color: #fff; }
@@ -845,19 +845,6 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
 .dprog li.done { color: var(--ok-text); }
 .dprog li.done > svg { width: 15px; height: 15px; flex: none; margin-inline: 2.5px; }
 .dprog .tm { color: var(--text-2); }
-.rep { display: grid; gap: 12px; }
-.rep-short { line-height: 1.65; }
-p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-.rp-acc { display: grid; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); }
-.rp-d + .rp-d { border-top: 1px solid var(--line); }
-.rp-d summary { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding: 11px 40px 11px 14px; cursor: pointer; list-style: none; border-radius: var(--r-md); }
-.rp-d summary::-webkit-details-marker { display: none; }
-.rp-d summary::after { content: ""; position: absolute; right: 18px; top: 18px; width: 7px; height: 7px; border-right: 2px solid var(--text-2); border-bottom: 2px solid var(--text-2); transform: rotate(45deg); transition: transform var(--t-small) var(--ease-out); }
-.rp-d[open] summary::after { transform: translateY(3px) rotate(225deg); }
-.rp-t { flex: 1 1 auto; font-weight: 600; }
-.rp-g { font-size: var(--fs-small); color: var(--text-2); font-weight: 600; }
-.rp-b { padding: 0 14px 14px; display: grid; gap: 8px; }
-.live .rp-d[open] .rp-b { animation: rise var(--t-small) var(--ease-out); }
 .rp-steps { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
 .rp-steps .s, .rp-rwp .s { display: block; font-size: var(--fs-small); color: var(--text-2); font-weight: 400; }
 .rp-sub { font-size: var(--fs-small); font-weight: 600; color: var(--text-2); }
@@ -1035,10 +1022,10 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
       <li>“Draft a workflow that …” brings in the Workflow drafter. Each step shows as it goes, and the blocks appear on the line as it lays them out. Play “Draft a workflow”.</li>
       <li>The draft card asks one question at a time, with choices from the team’s own data. A run time is never guessed. A guess shows as a guess you can change. Keys are never typed in the chat, and an Operator adds them in Settings.</li>
       <li>Send for approval appears only when nothing is still needed. Until then the card says how many questions are left.</li>
-      <li>The report is code’s own words. In short comes first, then one row per section with a short gist. A row opens on a click, and Settings opens by itself while anything is still needed. Since 25 Nov it shows only in the chat’s Explain answer. The draft card lists its flags under See them, and has no See the report.</li>
+      <li>The report is code’s own words. The draft card shows its In short and lists its flags under See them, and has no See the report. The set-up approval shows the rest in view. Since 26 Nov no screen shows the whole report.</li>
       <li>Where something can’t go on yet, the reason sits where its button would be, such as “Answer 1 question first”. No button is ever shown dead. The Planner’s set-up card and the change card follow the same rule.</li>
       <li>Bob ticks each flag and says why. Approve appears only when every flag has a tick and a reason. A write by n8n’s own blocks won’t ask on each run, and the page says so. What it reads, writes and posts, who approves each write, the settings and the safety checks are in view, with no More details. Play “Bob approves a draft”, then “Second Approver” for a workflow that changes who can use GitLab.</li>
-      <li>“Explain the FastAPI release check” answers in the chat, with a Reworded label and code’s own wording one tap away. Play “Explain”. Since 25 Nov there is no Explain page: no Explain on a row of Workflows, the workflow page, a version or the side panel.</li>
+      <li>“Explain the FastAPI release check” answers in the chat with the sentence the workflow’s page shows and Open the workflow. Code builds it, with no model call. Play “Explain”. Since 25 Nov there is no Explain page: no Explain on a row of Workflows, the workflow page, a version or the side panel.</li>
       <li>A thumbs up or down sits under each Planner answer, only while tracing is on. Switch “Tracing” to compare.</li>
     </ul>
   </section>
@@ -3162,40 +3149,7 @@ function dFacts(d) {
     apprG: { approved: `Approved by ${(d.appr || []).join(' and ')}`, half: '1 of 2 approved', sent: 'Waiting for an Approver', declined: 'Declined' }[d.status] || (T.access ? '2 Approvers, one after the other' : '1 Approver'),
   };
 }
-function wfFacts(id, ver) {
-  const f = W.wf[id];
-  const h = ver ? W.hist[id].find((x) => x.v === +ver) : null;
-  const sched = h ? h.sched : f.sched;
-  const yes = h ? h.yes : f.yes;
-  const S = W.soft[f.soft] || EXTRA[f.soft];
-  const jira = f.then === 'jira';
-  const c = (x) => `<span class="chip">${x}</span>`;
-  const B = {
-    when: [long(sched), 'Starts it', 0, 'Schedule'], read: ['Read release', 'Reads GitHub', 1], compare: ['Newer?', 'Shapes the data', 0, 'IF'],
-    yes: ['Ask for approval', 'Waits for approval', 1], write: jira ? ['Make approved changes', 'Writes after approval', 1] : ['Tell you', 'Shows here', 1],
-  };
-  const by = h || f;
-  return {
-    id: ver ? `${id}@${ver}` : id, name: f.name,
-    ver: h ? `${h.what}. ${h.by}, ${h.on}. Checked again under today’s rules.` : '',
-    short: `${long(sched)}, it reads the newest ${c(S.name)} release on GitHub. If it is newer than the version the team runs, it ${jira ? `creates 1 ticket in Jira project ${c('MOCK')}${yes ? ' after approval' : ''}` : 'tells you here'}. It changes nothing else.`,
-    reworded: jira && yes ? `${f.name} looks at ${S.name} on GitHub ${sched.day ? `every ${DAY[sched.day]}` : 'every day'} at ${sched.time}. When there’s a release newer than yours, it opens 1 Jira ticket in MOCK, but only after an Approver approves it. Nothing else changes.` : null,
-    steps: stepsFor(f.then).filter((s) => s.id !== 'yes' || yes).map((s) => ({ name: B[s.id][0], tag: B[s.id][1], ours: !!B[s.id][2], n8n: B[s.id][3] })),
-    rwp: [['Reads', `GitHub, ${c(S.repo)}`, 'Its newest release, with the platform’s GitHub key.'], jira ? ['Writes', `Jira project ${c('MOCK')}`, `1 upgrade ticket${yes ? ', after approval' : ''}.`] : ['Shows', 'Here, in the chat', 'One line when there’s a new release.', 'in the app']],
-    accept: [], accepted: null, answer: 0,
-    refused: jira && !yes ? [['“Make approved changes” has no approval step before it', 'Our platform refuses the write, so the next run stops before the ticket. Put the approval step back to fix it.']] : [],
-    fixed: [...(jira ? ['I added an approval step. Before each ticket is made, an Approver must approve it in Teams.'] : []), 'Set the team’s time zone, Singapore.', 'Added our error workflow, so a stopped run shows here.'],
-    passed: ['Every block loads in our n8n.', 'Reads only places the team allows.', 'No key is typed into a block.', 'Runs no code.'],
-    who: jira ? [['Make approved changes', yes ? 'Waits for an Approver in Teams on each run. Nobody who started the run or made the workflow can approve it.' : 'Can’t write. Nothing asks for approval before it, so our platform refuses the write.', yes ? 'yes' : 'no']] : [],
-    sets: [['Run time', long(sched), `Set by ${by.by}, ${by.on}`], ['Software', S.name, 'From Alice’s words'], ...(jira ? [['Jira project', 'MOCK', 'The team’s allowed project'], ['Who approves', 'Any Approver but the person who started the run', 'The team’s rule']] : [])].map(([label, value, src]) => ({ label, value, mark: 'set', src })),
-    appr: 'None needed. The Planner laid it out from a tested layout, and every write waits for approval.',
-    apprG: 'No set-up approval needed',
-  };
-}
-const factsOf = (id, v) => (W.dw[id] ? dFacts(W.dw[id]) : W.wf[id] ? wfFacts(id, v) : null);
 
-const OPEN = new Map();
-const SECS = [['steps', 'Step by step'], ['rwp', 'What it reads, writes and posts'], ['flags', 'Flags'], ['who', 'Who approves each write'], ['set', 'Settings'], ['appr', 'Approval']];
 const MK = { filled: ICON.check, needed: '?', guessed: ICON.pen, set: '' };
 /* A string from the plan, such as a block's name, shows in quotes, apart from code's own words. */
 const qn = (s) => `“${s}”`;
@@ -3235,23 +3189,6 @@ const RSEC = {
   },
   appr: (F) => [F.apprG, `<p>${F.appr}</p>`],
 };
-/* In short first, then one row per section with its gist. A row opens on a click, and Settings opens by itself while anything is needed. */
-function reportHTML(F, o = {}) {
-  const rw = o.where === 'card' && F.reworded;
-  const head = `<p class="rep-short">${rw && !o.code ? F.reworded : F.short}</p>${rw ? `<p class="rw"><span class="pill">${o.code ? 'Code’s wording' : 'Reworded'}</span><button class="linkbtn" type="button" data-rw>${o.code ? 'Show the reworded one' : 'Show code’s wording'}</button></p>` : ''}${F.ver ? `<p class="small muted">${F.ver}</p>` : ''}`;
-  const secs = SECS.filter(([k]) => !(o.skip || []).includes(k)).map(([k, t]) => [k, t, ...RSEC[k](F)]);
-  return `<div class="rep">${head}<div class="rp-acc">${secs.map(([k, t, g, b]) => {
-    const sk = `${F.id}:${o.where}:${k}`;
-    const open = OPEN.has(sk) ? OPEN.get(sk) : k === 'set' && F.answer > 0;
-    return `<details class="rp-d" data-sk="${sk}"${open ? ' open' : ''}><summary><span class="rp-t">${t}</span><span class="rp-g">${g}</span></summary><div class="rp-b">${b}</div></details>`;
-  }).join('')}</div></div>`;
-}
-const repBox = (id, where, o = {}) => `<div data-live="rep" data-rep="${id}" data-where="${where}"${o.v ? ` data-v="${o.v}"` : ''}${o.skip ? ` data-skip="${o.skip}"` : ''}></div>`;
-function patchRep(el) {
-  const F = factsOf(el.dataset.rep, el.dataset.v);
-  if (F) el.innerHTML = reportHTML(F, { where: el.dataset.where, code: el.closest('[data-x]')?.dataset.code === '1', skip: el.dataset.skip ? [el.dataset.skip] : [] });
-}
-function toggleRw(btn) { const c = btn.closest('[data-x]'); c.dataset.code = c.dataset.code === '1' ? '' : '1'; refresh(); }
 
 /* ---------- The draft card: the steps as they go, then the line, In short, one question at a time ---------- */
 const dCardShell = (d) => `<div class="card" data-live="dcard" data-k="${d.key}" data-rev="${d.rev}"><div class="c-head"><b>${dT(d).name}</b><span class="c-hr"><span class="small muted">Revision ${d.rev}</span><span class="pill" data-s="run">Drafting</span></span></div><ul class="dprog" data-dprog></ul><div class="dl-scroll" data-dline hidden></div><p class="c-note" data-dnote hidden></p></div>`;
@@ -3527,7 +3464,8 @@ function slogView(k) {
     <div class="pv-sec"><h4>Accepted flags</h4><ul class="parts">${fl.map((f) => `<li class="pt wide" data-s="flag"><span class="ic" aria-hidden="true">!</span><span class="v"><span><b>${f.what}</b></span>${dWhys(d, f.id).map(([n, r]) => `<span class="s">${n} accepted it: “${esc(r)}”</span>`).join('')}</span></li>`).join('')}</ul></div>
     <div class="pv-sec"><h4>Step by step</h4><ol class="log">${steps.map(([t, s]) => `<li><span class="t">${t}</span><span>${s}</span></li>`).join('')}</ol></div></div>`;
 }
-const explainCard = (id) => `<div class="card" data-x="${id}"><div class="c-head"><b>${wfName(id)}</b></div>${repBox(id, 'card')}<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="${W.wf[id] ? 'wf' : 'dw'}:${id}">Open the workflow</button></span></div></div>`;
+/* The sentence the workflow's page shows, built by code with no model call, and one button to open the page. */
+const explainCard = (id) => `<div class="card" data-x="${id}"><div class="c-head"><b>${wfName(id)}</b></div><p class="pv-sent">${W.wf[id] ? esc(sentFor(id)) : dFacts(W.dw[id]).short}</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="${W.wf[id] ? 'wf' : 'dw'}:${id}">Open the workflow</button></span></div></div>`;
 /* "explain <workflow>" names it as an edit does: one match explains it, more ask which, none says so. */
 function explainAsk(s) {
   const all = [...W.order, ...dwListed()];
@@ -3555,7 +3493,6 @@ function fbSend(form) { const v = $('input', form).value.trim(); form.outerHTML 
 
 function refreshDrafts() {
   $$('[data-live="dcard"]').forEach(patchDCard);
-  $$('[data-live="rep"]').forEach(patchRep);
   $$('[data-live="setup"], [data-live="scard"]').forEach(patchSetup);
   $$('[data-live="d-pill"]').forEach((p) => { const d = W.dw[p.dataset.k]; if (!d) return; const [t, s] = dPill(d); p.textContent = t; p.dataset.s = s; });
 }
@@ -3744,9 +3681,6 @@ Object.assign(TASKS, {
       await wait(400);
       await typeIn('Explain the FastAPI release check');
       await wait(1800);
-      const rw = lastIn('[data-rw]');
-      await tap(rw);
-      toggleRw(rw);
     },
   },
 });
@@ -3794,7 +3728,6 @@ app.addEventListener('submit', (e) => {
   if (!playing) act(f);
 });
 app.addEventListener('input', (e) => { if (!playing && e.target.matches('[data-fwhy]')) fWhy(e.target); });
-app.addEventListener('toggle', (e) => { if (e.target.matches?.('.rp-d')) OPEN.set(e.target.dataset.sk, e.target.open); }, true);
 $('#trace').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setTrace(b.dataset.tr === 'on'); });
 app.addEventListener('click', (e) => {
   if (playing || !e.isTrusted) return;
@@ -3841,7 +3774,6 @@ app.addEventListener('click', (e) => {
   if (pick('[data-sdecl]')) { const [k, v] = pick('[data-sdecl]').dataset.sdecl.split('|'); W.dw[k].declUI = !!v; refresh(); return; }
   if (pick('[data-sreason]')) { const [k, r] = pick('[data-sreason]').dataset.sreason.split('|'); W.dw[k].declWhy = r; refresh(); return; }
   if (pick('[data-sdecline]')) { sDecline(pick('[data-sdecline]').dataset.sdecline); return; }
-  if (pick('[data-rw]')) { toggleRw(pick('[data-rw]')); return; }
   if (pick('[data-fbv]')) { vote(pick('[data-fbv]')); return; }
   if (pick('[data-eday]')) { const c = pick('[data-edit]'); W.edits[c.dataset.edit].to.day = pick('[data-eday]').dataset.eday; patchEdit(c); return; }
   if (pick('[data-save]')) { saveEdit(pick('[data-edit]')); return; }
