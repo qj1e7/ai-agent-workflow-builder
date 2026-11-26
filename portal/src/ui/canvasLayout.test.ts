@@ -18,7 +18,7 @@ describe('the canvas laid out from the workflow’s blocks', () => {
     expect(at('Read release')).toEqual([1, 0])
     expect(at('Compare')).toEqual([2, 0])
     expect(at('Newer?')).toEqual([3, 0])
-    expect(at('Ask for a yes')).toEqual([4, 0])
+    expect(at('Ask for approval')).toEqual([4, 0])
     expect(at('Create ticket')).toEqual([5, 0])
   })
 
@@ -29,7 +29,7 @@ describe('the canvas laid out from the workflow’s blocks', () => {
   })
 
   it('marks our blocks, and only ours', () => {
-    expect(laid.nodes.filter((node) => node.ours).map((node) => node.name)).toEqual(['Read release', 'Compare', 'Ask for a yes', 'Create ticket'])
+    expect(laid.nodes.filter((node) => node.ours).map((node) => node.name)).toEqual(['Read release', 'Compare', 'Ask for approval', 'Create ticket'])
   })
 
   it('draws every block, even one no way out leads to, and sizes itself to hold them', () => {
@@ -40,9 +40,9 @@ describe('the canvas laid out from the workflow’s blocks', () => {
   })
 
   it('draws a way out to a block below in the same column around the right, clear of the block’s own name', () => {
-    const ask = laid.nodes.find((node) => node.name === 'Ask for a yes')
-    const edge = laid.edges.find((one) => one.from === 'Ask for a yes' && one.to === 'Nothing to change')
-    if (!ask || !edge) throw new Error('the fixture has Ask for a yes and its way to Nothing to change')
+    const ask = laid.nodes.find((node) => node.name === 'Ask for approval')
+    const edge = laid.edges.find((one) => one.from === 'Ask for approval' && one.to === 'Nothing to change')
+    if (!ask || !edge) throw new Error('the fixture has Ask for approval and its way to Nothing to change')
     const [x0, y0, cx1, cy1, cx2, cy2, x3, y3] = (edge.path.match(/-?\d+(\.\d+)?/g) ?? []).map(Number) as [number, number, number, number, number, number, number, number]
     const at = (t: number) => {
       const u = 1 - t
@@ -54,7 +54,7 @@ describe('the canvas laid out from the workflow’s blocks', () => {
     for (let t = 0; t <= 1; t += 0.02) {
       const point = at(t)
       if (point.y < labels.top || point.y > labels.bottom) continue
-      expect(point.x, `at t=${t.toFixed(2)}, past Ask for a yes’s name`).toBeGreaterThan(labels.right)
+      expect(point.x, `at t=${t.toFixed(2)}, past Ask for approval’s name`).toBeGreaterThan(labels.right)
       expect(point.x, `at t=${t.toFixed(2)}, short of ${next?.name ?? 'the next'}’s name`).toBeLessThan(labels.nextLeft)
     }
   })

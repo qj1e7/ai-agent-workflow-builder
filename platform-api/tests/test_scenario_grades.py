@@ -53,7 +53,7 @@ DROPPED = (
     "The connection to the server was closed unexpectedly, perhaps it is offline. You can retry "
     "the request immediately or wait and retry later."
 )
-UP_TO_ASK = (START, "Read releases", "Compare", "Propose a change", "Ask for a yes")
+UP_TO_ASK = (START, "Read releases", "Compare", "Propose a change", "Ask for approval")
 FACTS = ExecutionFacts("copy-1", "manual", None, None, "v1")
 
 
@@ -138,7 +138,7 @@ def test_the_happy_path_passes_when_it_reaches_the_yes_with_the_expected_change(
     assert graded.verdict == "passed"
     assert graded.expected == EXPECTED["happy_path"]
     assert graded.happened == (
-        "It reached the yes and would have made 1 change, which the simulation refused."
+        "It reached the approval step and would have made 1 change, which the simulation refused."
     )
     assert graded.ran == (*UP_TO_ASK, WRITE)
 
@@ -185,7 +185,7 @@ def test_a_write_with_no_yes_fails_whatever_the_kind() -> None:
     for kind, made in staged(plan).items():
         graded = grade(plan, made, reached_the_yes(approver=None), refused_write())
         assert graded.verdict == "failed", kind
-        assert graded.happened == "It asked to make changes with no yes from an Approver."
+        assert graded.happened == "It asked to make changes without approval from an Approver."
 
 
 def test_a_write_that_would_leave_out_a_proposed_change_fails() -> None:
@@ -225,7 +225,7 @@ def test_nothing_new_fails_when_it_still_reaches_the_yes() -> None:
     plan = planned(release_check())
     graded = grade(plan, staged(plan)["nothing_new"], reached_the_yes(), refused_write())
     assert graded.verdict == "failed"
-    assert graded.happened.startswith("It reached the yes")
+    assert graded.happened.startswith("It reached the approval step")
 
 
 # Source not found and timeout
@@ -398,7 +398,7 @@ def test_odd_data_passes_on_a_stop_the_troubleshooter_names() -> None:
 def test_a_pinned_block_never_counts_as_run() -> None:
     plan = planned(release_check([jira_read(), our_read()]))
     ran = (START, "Read the issue", "Read releases", "Compare", "Propose a change")
-    ended = execution("error", (*ran, "Ask for a yes", WRITE), WRITE, NEVER_WRITES)
+    ended = execution("error", (*ran, "Ask for approval", WRITE), WRITE, NEVER_WRITES)
     graded = grade(plan, staged(plan)["happy_path"], reached_the_yes(), ended)
     assert graded.verdict == "passed"
     assert "Read the issue" not in graded.ran

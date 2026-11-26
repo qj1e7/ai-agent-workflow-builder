@@ -55,7 +55,7 @@ NO_START_BLOCK = "the workflow has no Start from the Portal block to start it"
 start it, and the troubleshooter names the block."""
 
 JIRA_SITE_CHANGED = (
-    "Jira's settings changed after the Approvers said yes, so the platform did not make the "
+    "Jira's settings changed after the Approvers approved, so the platform did not make the "
     "ticket in a Jira they did not approve."
 )
 """Why the safety checker stopped a write approved for another Jira site (ADR 0041). The run's

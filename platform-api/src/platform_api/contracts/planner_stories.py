@@ -604,8 +604,8 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
         "planner/check-part.in.json": CheckPartIn(kind="do", text="Email the list to the team"),
         "planner/check-part.cant.json": PartCheckCantDo(
             note="I can't email the list to the team. I can only read Jira tickets, sum up what "
-            "I find, check software for new releases, create a Jira ticket after a yes, and ask "
-            "Approvers for a yes in Teams.",
+            "I find, check software for new releases, create a Jira ticket after approval, and ask "
+            "Approvers for approval in Teams.",
             needs="new_system",
             system="email",
         ),

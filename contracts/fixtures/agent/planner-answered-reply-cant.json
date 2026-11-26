@@ -3,7 +3,7 @@
   "answer": {
     "kind": "reply",
     "form": "cant",
-    "text": "I can't send email yet. I can put the list in one new Jira ticket, after an Approver's yes.",
+    "text": "I can't send email yet. I can put the list in one new Jira ticket, after an Approver approves it.",
     "choices": [],
     "offer": {
       "capability": "jira.create",

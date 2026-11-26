@@ -128,7 +128,7 @@ describe('the practice Jira page', () => {
 
   it('has an empty state', () => {
     const html = render({ tickets: [] })
-    expect(text(html)).toContain('No tickets yet. When a run creates one after a yes, it shows here.')
+    expect(text(html)).toContain('No tickets yet. When a run creates one after approval, it shows here.')
     expect(html).not.toContain('data-ticket')
   })
 

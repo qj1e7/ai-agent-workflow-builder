@@ -310,7 +310,7 @@ async def agent(body: AgentIn, calls: CurrentNodeCalls) -> AnswerOut | JSONRespo
     "/calls/propose",
     response_model=AnswerOut,
     description="Adds one change at an allowed place to the run's proposal. Nothing is written "
-    "until an Approver says yes.",
+    "until an Approver approves it.",
     responses=REFUSALS,
 )
 async def propose(body: ProposeIn, calls: CurrentNodeCalls) -> AnswerOut | JSONResponse:
@@ -321,7 +321,7 @@ async def propose(body: ProposeIn, calls: CurrentNodeCalls) -> AnswerOut | JSONR
 @router.post(
     "/calls/ask",
     response_model=AskOut,
-    description="Asks the workflow's Approvers for a yes on the run's proposal. n8n holds the "
+    description="Asks the workflow's Approvers for approval of the run's proposal. n8n holds the "
     "wait, and our API wakes the execution with the decision. A test run stops here.",
     responses=REFUSALS,
 )
@@ -335,9 +335,9 @@ async def ask(body: AskIn, calls: CurrentNodeCalls) -> AskOut | JSONResponse:
 @router.post(
     "/calls/write",
     response_model=WriteOut,
-    description="Makes the run's own approved changes. The write gateway checks the yes in our "
-    "records as it writes each one, and makes each subject once across runs. A retry makes only "
-    "the changes still to make.",
+    description="Makes the run's own approved changes. The write gateway checks the approval in "
+    "our records as it writes each one, and makes each subject once across runs. A retry makes "
+    "only the changes still to make.",
     responses=REFUSALS,
 )
 async def write(body: WriteIn, calls: CurrentNodeCalls) -> WriteOut | JSONResponse:
@@ -351,7 +351,7 @@ async def write(body: WriteIn, calls: CurrentNodeCalls) -> WriteOut | JSONRespon
     "/calls/tell",
     response_model=TellOut,
     description="Tells the team what the run read, in its fixed Teams channel, by its fixed email "
-    "list or both, with no yes (the Tell rule). Sent at most once, and never in a test run.",
+    "list or both, without approval (the Tell rule). Sent at most once, and never in a test run.",
     responses=REFUSALS,
 )
 async def tell(body: TellIn, calls: CurrentNodeCalls) -> TellOut | JSONResponse:

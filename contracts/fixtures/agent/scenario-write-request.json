@@ -48,7 +48,7 @@
       "varies": []
     },
     {
-      "name": "Ask for a yes",
+      "name": "Ask for approval",
       "role": "ask",
       "answer": null,
       "plays": [],

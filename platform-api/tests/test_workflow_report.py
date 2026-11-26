@@ -235,7 +235,7 @@ def test_the_fastapi_release_check_reads_github_and_writes_jira_after_a_yes() ->
         ("Read release", True, "Reads GitHub"),
         ("Compare", True, "Runs an agent"),
         ("Newer?", False, "Shapes the data"),
-        ("Ask for a yes", True, "Waits for approval"),
+        ("Ask for approval", True, "Waits for approval"),
         ("Create ticket", True, "Writes after approval"),
         ("Nothing to change", False, "Ends the run"),
     ], "in run order, without the sticky note"
@@ -527,7 +527,7 @@ def test_settings_of_a_set_up_workflow_say_where_each_value_was_set() -> None:
         ("Where “Read release” reads", "“fastapi/fastapi”", "set", "Set in the Portal"),
         ("“GitHub repository” for “Compare”", "“fastapi/fastapi”", "set", "Set in the Portal"),
         ("“Jira project” for “Compare”", "“MOCK”", "set", "Set in the Portal"),
-        ("Who says yes on each run", "Any Approver", "set", "Set in the Portal"),
+        ("Who approves on each run", "Any Approver", "set", "Set in the Portal"),
     ]
     by_hand = report_of(made_in_n8n(), "n8n")
     assert {s.said for s in by_hand.settings} == {"Set in n8n"}

@@ -122,17 +122,17 @@ def test_the_release_check_is_the_sketch_s_blocks_with_the_yes_the_checker_added
         "Read release",
         "Compare",
         "Newer?",
-        "Ask for a yes",
+        "Ask for approval",
         "Create ticket",
         "Nothing to change",
     ]
     yes = ASK_EXITS.index("Yes")
     quiet = ASK_EXITS.index("Nothing to change")
     assert {
-        (NEWER, 0, "Ask for a yes"),
+        (NEWER, 0, "Ask for approval"),
         (NEWER, 1, "Nothing to change"),
-        ("Ask for a yes", yes, CREATE_TICKET),
-        ("Ask for a yes", quiet, "Nothing to change"),
+        ("Ask for approval", yes, CREATE_TICKET),
+        ("Ask for approval", quiet, "Nothing to change"),
     } <= edges(checked.document)
     assert checked.graded.grade == "safe"
 
@@ -156,7 +156,7 @@ def test_agent_cards_run_in_order_and_end_with_the_yes_and_the_write() -> None:
     checked = drafted(laid, AGENT_CARDS)
     matches_golden("agent_cards", checked.document)
     assert ("Sprint digest", 0, "Version checker") in edges(checked.document)
-    assert ("Version checker", 0, "Ask for a yes") in edges(checked.document)
+    assert ("Version checker", 0, "Ask for approval") in edges(checked.document)
 
 
 def test_agent_cards_that_only_read_have_no_yes_and_no_write() -> None:
@@ -212,7 +212,7 @@ def test_a_write_the_checker_cannot_put_behind_one_yes_is_never_saved() -> None:
     one path need a fix."""
     laid = drafted(lay_out(RELEASE_CHECK), RELEASE_CHECK).document
     no = ASK_EXITS.index("No")
-    laid["connections"]["Ask for a yes"]["main"][no] = [
+    laid["connections"]["Ask for approval"]["main"][no] = [
         {"node": CREATE_TICKET, "type": "main", "index": 0}
     ]
     refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW, TEAM_ZONE)

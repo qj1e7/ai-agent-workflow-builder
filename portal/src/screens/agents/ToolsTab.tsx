@@ -68,8 +68,8 @@ export function ToolsTab({ tools: all, ...shared }: { tools: readonly ToolView[]
   const tools = focusTools(all, shared.capabilities)
   return (
     <>
-      <Group title="Tools that change data" sub="Each one waits for a yes, every time." tools={tools.filter((tool) => tool.kind === 'write')} {...shared} />
-      <Group title="Tools that only read" sub="They never change anything, so they do not need a yes." tools={tools.filter((tool) => tool.kind === 'read')} {...shared} />
+      <Group title="Tools that change data" sub="Each one waits for approval, every time." tools={tools.filter((tool) => tool.kind === 'write')} {...shared} />
+      <Group title="Tools that only read" sub="They never change anything, so they do not need approval." tools={tools.filter((tool) => tool.kind === 'read')} {...shared} />
     </>
   )
 }

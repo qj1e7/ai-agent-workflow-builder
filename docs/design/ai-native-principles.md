@@ -70,7 +70,7 @@ These are the product's safety rules, and no design may weaken them (AGENTS.md):
 
 ### 7. Honest states, one source per fact
 
-The same words mean the same state everywhere: AI suggestion, Draft, Waiting for a yes, On, Paused, Running, Done, Declined, Stopped and Test run (spec section 15). A count or status comes from one function, so Home, Workflows, the tab badge and the Planner never disagree.
+The same words mean the same state everywhere: AI suggestion, Draft, Waiting for approval, On, Paused, Running, Done, Declined, Stopped and Test run (spec section 15). A count or status comes from one function, so Home, Workflows, the tab badge and the Planner never disagree.
 
 - **Check:** change the state once. Does every place that shows it change together?
 
@@ -79,7 +79,7 @@ The same words mean the same state everywhere: AI suggestion, Draft, Waiting for
 Agents appear with their faces and plain step names, not their internals.
 - While a run is going, the live activity view shows the agents at work.
 - When a run stops, the AI troubleshooter gives three answers: what happened, what was affected, and whether a retry is safe. The next step, such as Retry or Report to support, sits under them.
-- Waiting for a yes, the decision comes first.
+- Waiting for approval, the decision comes first.
 
 - **Check:** at every point in a run, can the person say what the AI is doing now and why?
 

@@ -12,7 +12,7 @@ import { devContext, OUT, shot } from './support/ui'
 // password, as the API suite's Member does, so she can hold a workflow. She never opens the watchlist, which other specs change.
 
 const N8N_URL = process.env['N8N_URL'] ?? 'http://n8n:5678'
-const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for a yes.'
+const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for approval.'
 const HELD = /Dana has it open in n8n since \d{1,2}:\d{2}\./
 const AGENTS = [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }]
 
@@ -111,7 +111,7 @@ test.describe('who has a workflow open in n8n, and the watchlist in n8n', () => 
     const when = main(page).getByRole('region', { name: 'When' })
     await expect(when).toContainText('Can’t change it while Dana has it open in n8n.')
     await expect(when.getByRole('button'), 'Change when it runs would be refused after Save').toHaveCount(0)
-    for (const refused of ['Undo', 'Add the yes back', 'Resume']) await expect(main(page).getByRole('button', { name: refused, exact: true })).toHaveCount(0)
+    for (const refused of ['Undo', 'Add the approval step back', 'Resume']) await expect(main(page).getByRole('button', { name: refused, exact: true })).toHaveCount(0)
     await expect(main(page).getByRole('button', { name: 'Pause' }), 'Pause still works while it is held').toBeVisible()
     await expect(main(page).locator(':is(button, input, select, textarea):disabled, [aria-disabled="true"]')).toHaveCount(0)
     await expectAccessible(page, path.join(OUT, 'axe'), 'holds-summary-alice')

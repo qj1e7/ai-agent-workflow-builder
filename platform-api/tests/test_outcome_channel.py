@@ -35,7 +35,8 @@ pytestmark = pytest.mark.anyio
 HOOK_A = "https://teams.example/workflows/a/run?sig=signature-of-channel-a"
 HOOK_B = "https://teams.example/workflows/b/run?sig=signature-of-channel-b"
 ASKED = (
-    f"{SPEC.use_case_name} wants to make 1 change. Nothing is written until an Approver says yes."
+    f"{SPEC.use_case_name} wants to make 1 change. Nothing is written until an Approver "
+    "approves it."
 )
 APPROVED = f"{SPEC.use_case_name}: approved by Bob."
 

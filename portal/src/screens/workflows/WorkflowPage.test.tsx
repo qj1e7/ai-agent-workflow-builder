@@ -140,17 +140,17 @@ describe('a workflow page', () => {
   })
 
   it('says what it does in one sentence built from what the platform stored, never a guessed time', () => {
-    expect(sentenceOfHtml(render())).toBe('Check langchain-ai/langgraph on GitHub for a new release when an Operator presses Run now. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.')
+    expect(sentenceOfHtml(render())).toBe('Check langchain-ai/langgraph on GitHub for a new release when an Operator presses Run now. If there is one, create an upgrade ticket in Jira project MOCK, after approval.')
     const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-05T00:00:00Z', schedule: { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
-    expect(sentenceOfHtml(html)).toBe('Every day at 8:00, check langchain-ai/langgraph on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after a yes.')
+    expect(sentenceOfHtml(html)).toBe('Every day at 8:00, check langchain-ai/langgraph on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after approval.')
   })
 
   it('draws its steps as the run line, large, with a tag under each', () => {
     const line = text(/<div[^>]*class="[^"]*large[^"]*"[\s\S]*?<\/ol>/.exec(mainOf(render()))?.[0] ?? '')
     expect(line).toContain('Run now No system access')
     expect(line).toContain('Check release Reads only')
-    expect(line).toContain('Ask for approval Waits for a yes')
-    expect(line).toContain('Create Jira tickets Writes after a yes')
+    expect(line).toContain('Ask for approval Waits for approval')
+    expect(line).toContain('Create Jira tickets Writes after approval')
   })
 
   it('keeps what it was set up without as a Left out line, and none when nothing was left out', () => {
@@ -164,12 +164,12 @@ describe('a workflow page', () => {
     expect(whenOf(html)).toBe('Runs only when you press Run now.')
     expect(sectionText(html, 'When'), 'a workflow with no schedule has no next run to give').not.toContain('Next run')
     expect(text(mainOf(html))).toContain('On. Runs only when you press Run now.')
-    expect(sectionText(html, 'Who says yes')).toBe('Any Approver but you, in Teams. Nothing is written until an Approver says yes. Who can’t say yes Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
+    expect(sectionText(html, 'Who approves')).toBe('Any Approver but you, in Teams. Nothing is written until an Approver approves it. Who can’t approve Nobody approves their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t approve that run.')
   })
 
   it('keeps the sketch’s short Who says yes line, with the whole own-work rule folded one tap away', () => {
-    const rule = /<details[^>]*>\s*<summary>Who can’t say yes<\/summary>([\s\S]*?)<\/details>/.exec(mainOf(render({ useCase: SCHEDULED })))
-    expect(text(rule?.[1] ?? '')).toBe('Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run. A scheduled run starts as Carol.')
+    const rule = /<details[^>]*>\s*<summary>Who can’t approve<\/summary>([\s\S]*?)<\/details>/.exec(mainOf(render({ useCase: SCHEDULED })))
+    expect(text(rule?.[1] ?? '')).toBe('Nobody approves their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t approve that run. A scheduled run starts as Carol.')
     expect(rule?.[0]).not.toMatch(/<details[^>]*\bopen\b/)
   })
 
@@ -273,7 +273,7 @@ describe('a workflow page', () => {
   it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, then the buttons, with no Agents section', () => {
     const html = mainOf(render({ runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] }))
     const at = (needle: string) => html.indexOf(needle)
-    const order = [at('<h1'), at('sentence'), at('data-tone='), at('Check release'), at('>When</h2>'), at('>Who says yes</h2>'), at('>Recent runs</h2>'), at('>Pause<')]
+    const order = [at('<h1'), at('sentence'), at('data-tone='), at('Check release'), at('>When</h2>'), at('>Who approves</h2>'), at('>Recent runs</h2>'), at('>Pause<')]
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
     expect(html).not.toContain('Agents')
@@ -340,7 +340,7 @@ describe('a workflow page', () => {
 
   it('gives an Approver who may approve and the recent runs, but no manage buttons', () => {
     const html = render({ me: BOB, runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] })
-    expect(sectionText(html, 'Who says yes')).toMatch(/^Any Approver but Alice, in Teams\. Nothing is written until an Approver says yes\. Who can’t say yes /)
+    expect(sectionText(html, 'Who approves')).toMatch(/^Any Approver but Alice, in Teams\. Nothing is written until an Approver approves it\. Who can’t approve /)
     expect(text(mainOf(html))).toContain('Recent runs')
     expect(mainOf(html)).toContain('href="/runs/run_01JB8"')
     expect(buttons(html).filter((label) => /Run now|Pause|Resume|Delete|More actions/.test(label))).toEqual([])
@@ -428,7 +428,7 @@ describe('a workflow page', () => {
     expect(text(html)).toMatch(/Carol has it open in n8n since (Mon 9 Nov, )?10:02\. Ask Carol, or anyone with n8n access, to take it back\./)
     expect(sectionText(html, 'When')).toContain('Can’t change it while Carol has it open in n8n.')
     const pressable = buttons(html)
-    for (const refused of ['Undo', 'Add the yes back', 'Change when it runs', 'Set when it runs', 'Resume']) expect(pressable, `${refused} would be refused`).not.toContain(refused)
+    for (const refused of ['Undo', 'Add the approval step back', 'Change when it runs', 'Set when it runs', 'Resume']) expect(pressable, `${refused} would be refused`).not.toContain(refused)
     expect(pressable, 'Pause still works, so the safety lever never waits').toContain('Pause')
     expect(text(render({ me: BOB, useCase: held }))).toMatch(/Carol has it open in n8n since/)
   })
@@ -527,7 +527,7 @@ describe('Details on the workflow page', () => {
   })
 
   it('says the one approval rule where the page names who says yes', () => {
-    expect(text(mainOf(render()))).toContain('Who says yes Any Approver but you, in Teams. Nothing is written until an Approver says yes.')
+    expect(text(mainOf(render()))).toContain('Who approves Any Approver but you, in Teams. Nothing is written until an Approver approves it.')
   })
 })
 

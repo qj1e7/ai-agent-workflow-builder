@@ -11,7 +11,7 @@
         -400
       ],
       "parameters": {
-        "content": "## Weekly release and sprint check\nRuns Sprint digest, Version checker.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for a yes in Teams before it is made.",
+        "content": "## Weekly release and sprint check\nRuns Sprint digest, Version checker.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for approval in Teams before it is made.",
         "height": 260,
         "width": 460
       }
@@ -105,8 +105,8 @@
       "waitBetweenTries": 2000
     },
     {
-      "id": "3f638ea4-ee00-5b7c-873c-34e533c3cd17",
-      "name": "Ask for a yes",
+      "id": "8f45249b-1dd3-5b24-83b5-2ed9bf014534",
+      "name": "Ask for approval",
       "type": "CUSTOM.wabAskForYes",
       "typeVersion": 1,
       "position": [
@@ -179,14 +179,14 @@
       "main": [
         [
           {
-            "node": "Ask for a yes",
+            "node": "Ask for approval",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Ask for a yes": {
+    "Ask for approval": {
       "main": [
         [],
         [

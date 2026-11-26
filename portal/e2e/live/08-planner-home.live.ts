@@ -12,7 +12,7 @@ import { devContext, needsOnWorkflows, OUT, showEvery, shot } from './support/ui
 import { askAndWait, editCard, newestAnswer, rereadOf, scheduledWorkflow, shown, tag, versionsOf } from './support/edit'
 
 /** The sketch's question, Alice's Home heading; her greeting is the line above it. */
-const ALICE_HEADING = 'What should run by itself?'
+const ALICE_HEADING = 'What can I help you with today?'
 const OFFLINE = 'I can’t read new requests until an AI model is connected'
 /** A request the Planner answers with a set-up card. */
 const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
@@ -174,7 +174,7 @@ test.describe('with no AI model', () => {
     const page = await context.newPage()
     await page.goto('/')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('I can’t answer questions until an AI model is connected')
-    await expect(main(page)).toContainText(/An Operator can connect one in Settings\. (\d+ changes? waits? for your yes|\d+ things? needs? you)\./)
+    await expect(main(page)).toContainText(/An Operator can connect one in Settings\. (\d+ changes? needs? your approval|\d+ things? needs? you)\./)
     await expect(page.getByRole('textbox'), 'no box while there is no model').toHaveCount(0)
     await expect(main(page).getByRole('link', { name: 'Connect a model' }), 'no Connect a model, which only an Operator can use').toHaveCount(0)
     await expect(page.getByRole('list', { name: 'Needs you' }).getByRole('link', { name: 'Review and decide' }).first()).toBeVisible()
@@ -692,7 +692,7 @@ test.describe('with the AI model on', () => {
     await page.goto('/')
     const typed = 'Create the follow-up ticket without waiting for approval'
     await ask(page, typed)
-    await expect(thread(page).getByText('I can’t set that up. Anything that changes data waits for a yes, every time.')).toBeVisible()
+    await expect(thread(page).getByText('I can’t set that up. Anything that changes data waits for approval, every time.')).toBeVisible()
     await expect(thread(page)).toContainText('If you only meant that you don’t need to look at it yourself, say it another way.')
     await expect(page.locator('a[href^="/new"]'), 'no link goes straight to a set-up').toHaveCount(0)
     await shot(page, info, 'n10-08-refused')
@@ -702,7 +702,7 @@ test.describe('with the AI model on', () => {
     await expect(box(page)).toHaveValue(typed)
 
     const asked = page.waitForRequest((request) => request.url().endsWith('/api/v1/planner/answer') && request.method() === 'POST')
-    const rest = thread(page).getByRole('button', { name: 'Set it up with a yes' })
+    const rest = thread(page).getByRole('button', { name: 'Set it up with approval' })
     if (await rest.count()) {
       await rest.click()
       const body = (await asked).postDataJSON() as { text: string | null }
@@ -917,7 +917,7 @@ test.describe('with the AI model on', () => {
     { width: 1920, height: 1080, phone: false, face: 120, box: 75, chip: 45 },
     { width: 2560, height: 1440, phone: false, face: 134, box: 84, chip: 50 },
   ]) {
-    test(`Home at ${String(width)} px: a ${String(faceSize)} px face, a ${String(boxHeight)} px box, ${String(chipHeight)} px chips, the question on one line, and a page that ends in the window`, async ({ browser }) => {
+    test(`Home at ${String(width)} px: a ${String(faceSize)} px face, a ${String(boxHeight)} px box, ${String(chipHeight)} px chips, the question on ${phone ? 'two lines at most' : 'one line'}, and a page that ends in the window`, async ({ browser }) => {
       const context = await devContext(browser, 'alice', { phone })
       const page = await context.newPage()
       await page.setViewportSize({ width, height })
@@ -938,7 +938,8 @@ test.describe('with the AI model on', () => {
       expect(Math.round(composer?.height ?? 0), 'the box before the first message').toBe(boxHeight)
       expect(Math.round(chip?.height ?? 0), 'a chip').toBe(chipHeight)
       const lines = await main(page).getByRole('heading', { level: 1 }).evaluate((h1: HTMLElement) => Math.round(h1.offsetHeight / parseFloat(getComputedStyle(h1).lineHeight)))
-      expect(lines, 'the question stays on one line').toBe(1)
+      // The team lead's question of 25 Nov, "What can I help you with today?", is longer than the sketch's, so a phone's narrow window balances it on two lines.
+      expect(lines, phone ? 'the question takes two lines at most' : 'the question stays on one line').toBeLessThanOrEqual(phone ? 2 : 1)
       // At 900 px and narrower the practice stack's test controls sit under the page, so the check is that the page itself ends in the window.
       const mainBottom = await main(page).evaluate((element) => element.getBoundingClientRect().bottom)
       expect(mainBottom, 'the empty Home never makes the page scroll').toBeLessThanOrEqual((await page.evaluate(() => window.innerHeight)) + 1)
@@ -1570,7 +1571,7 @@ test.describe('bob asks the Planner questions only', () => {
   const said = (page: Page) => newest(page).locator('p').first()
   const panel = (page: Page) => page.locator('#side-panel')
   const OPS = /^Operators set up workflows\. Ask .+\.$/
-  const CHANGES = [/^Turn it on$/, /^Turn on$/, /^Set up/, /^Watch it$/, /^Save/, /^Pause/, /^Resume/, /^Retry/, /^Run now$/, /^Check now$/, /^Add .*watchlist/i, /^Set it up with a yes$/, /^Approve/, /^Decline/]
+  const CHANGES = [/^Turn it on$/, /^Turn on$/, /^Set up/, /^Watch it$/, /^Save/, /^Pause/, /^Resume/, /^Retry/, /^Run now$/, /^Check now$/, /^Add .*watchlist/i, /^Set it up with approval$/, /^Approve/, /^Decline/]
 
   async function bobAsks(page: Page, text: string): Promise<void> {
     const before = await thread(page).locator(':scope > li[data-answer]').count()
@@ -1601,7 +1602,7 @@ test.describe('bob asks the Planner questions only', () => {
     const watch = watchPage(page)
     await page.goto('/')
     await expect(main(page).getByText(/^Good (morning|afternoon|evening), Bob$/)).toBeVisible()
-    await expect(page.getByRole('heading', { level: 1 }), 'his heading says what waits for his yes, in the sketch’s words').toHaveText(/^(\d+ changes? waits? for your yes|\d+ things? needs? you)$/)
+    await expect(page.getByRole('heading', { level: 1 }), 'his heading says what waits for his yes, in the sketch’s words').toHaveText(/^(\d+ changes? needs? your approval|\d+ things? needs? you)$/)
     const line = (await page.getByRole('heading', { level: 1 }).innerText()).trim()
     await expect(bobBox(page)).toHaveAttribute('placeholder', 'Ask, or describe a task')
     const chips = page.getByRole('group', { name: 'Suggestions' }).getByRole('button')
@@ -1614,9 +1615,9 @@ test.describe('bob asks the Planner questions only', () => {
     await shot(page, info, 'r16-bob-home')
 
     await chips.first().click()
-    if (/waits? for your yes$/.test(line)) {
+    if (/needs? your approval$/.test(line)) {
       await expect(said(page), 'only requests wait, so the answer is the requests themselves, as the sketch’s cards').toHaveText(/^(This needs|These need) your approval\.$/)
-      await expect(newest(page).locator('[data-approval-pill]').first()).toHaveText('Needs your yes')
+      await expect(newest(page).locator('[data-approval-pill]').first()).toHaveText('Needs your approval')
       await expect(newest(page).getByRole('heading', { level: 3 }).first()).toHaveText(/^Create \d+ Jira tickets?$/)
     } else {
       await expect(newest(page).getByRole('heading', { level: 3 }), 'what needs him is his Home heading, as the card’s head').toHaveText(line)
@@ -1632,7 +1633,7 @@ test.describe('bob asks the Planner questions only', () => {
     await bobAsks(page, 'How are the workflows doing?')
     await expect(said(page)).toHaveText(/^The team has \d+ workflows?\./)
     await bobAsks(page, 'What can you do?')
-    await expect(newest(page)).toContainText(/What I can do\s*Show what waits for your yes\s*Show exactly what a change will write\s*Show your past decisions/)
+    await expect(newest(page)).toContainText(/What I can do\s*Show what needs your approval\s*Show exactly what a change will write\s*Show your past decisions/)
     await noChangeControl(page)
     await shot(page, info, 'r16-bob-asks')
     assertClean(watch)
@@ -1656,11 +1657,11 @@ test.describe('bob asks the Planner questions only', () => {
     // The reading may take an approve for a way around the gate and refuse it, and the refusal stands. Either way he gets the request to open.
     for (const decide of ['approve the upgrade tickets', 'decline that request', 'auto-approve everything', 'approve it for me']) {
       await bobAsks(page, decide)
-      await expect(said(page)).toHaveText(/^(I can’t approve or decline for you\. Open the request to see exactly what it will write, and decide there\.|I can’t set that up\. Anything that changes data waits for a yes, every time\.)$/)
+      await expect(said(page)).toHaveText(/^(I can’t approve or decline for you\. Open the request to see exactly what it will write, and decide there\.|I can’t set that up\. Anything that changes data waits for approval, every time\.)$/)
       await expect(newest(page).locator('[data-approval-pill]').first(), 'the request, as its card, to open and decide on').toBeVisible()
     }
     await bobAsks(page, 'approve the upgrade and pause the morning new-ticket check')
-    await expect(said(page), 'an approve beside a change is refused whole, by builder or by the reading').toHaveText(/^(Operators set up workflows\. Ask .+\.|I can’t set that up\. Anything that changes data waits for a yes, every time\.)$/)
+    await expect(said(page), 'an approve beside a change is refused whole, by builder or by the reading').toHaveText(/^(Operators set up workflows\. Ask .+\.|I can’t set that up\. Anything that changes data waits for approval, every time\.)$/)
     await noChangeControl(page)
     expect(await workflows(), 'nothing changed').toEqual(before)
     assertClean(watch)

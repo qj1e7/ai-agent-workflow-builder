@@ -33,7 +33,7 @@ export function StatusPills({ useCase, test = false, large = false }: { useCase:
   )
 }
 
-/** A run's one pill: Stopped, Running, Waiting for a yes, Done, Nothing new or Declined. */
+/** A run's one pill: Stopped, Running, Waiting for approval, Done, Nothing new or Declined. */
 export function RunPill({ facts }: { facts: StageFacts }) {
   const { label, tone } = runPill(facts)
   return (

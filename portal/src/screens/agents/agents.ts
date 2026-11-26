@@ -27,14 +27,14 @@ export const PLATFORM_AGENTS: readonly PlatformAgent[] = [
     what: 'When a run stops, it explains why in plain words, and says whether you can fix it or support should.',
     reach: 'It reads the run’s own record.',
     steps: ['Read the stopped run’s record', 'Explain what went wrong in plain words', 'Say whether you can fix it, or support should'],
-    rules: ['Only explains. It never changes a run', 'Fix it for me drafts a change. Nothing changes until an Approver says yes.'],
+    rules: ['Only explains. It never changes a run', 'Fix it for me drafts a change. Nothing changes until an Approver approves it.'],
   },
   {
     id: 'fix_drafter',
     what: 'When you ask for a fix, it drafts the smallest change to the block where a run stopped.',
     reach: 'It changes a copy on practice systems, never a real system.',
     steps: ['Read the cause and the failed block', 'Draft the smallest change to that block', 'Try again with what the practice systems showed'],
-    rules: ['Never changes a block outside the failed part', 'Never removes or moves an Ask for a yes', 'Never changes a setting a person filled in'],
+    rules: ['Never changes a block outside the failed part', 'Never removes or moves an approval step', 'Never changes a setting a person filled in'],
   },
   {
     id: 'scenario_writer',
@@ -65,8 +65,8 @@ export function kindLabel(kind: ToolView['kind']): string {
 }
 
 export function approvalWords(min: number | null): string {
-  if (min === null || min <= 0) return 'Waits for a yes'
-  return min === 1 ? 'Waits for a yes from 1 Approver' : `Waits for a yes from ${min} Approvers, one after the other`
+  if (min === null || min <= 0) return 'Waits for approval'
+  return min === 1 ? 'Waits for approval from 1 Approver' : `Waits for approval from ${min} Approvers, one after the other`
 }
 
 export function toolCountWords(count: number): string {
@@ -76,7 +76,7 @@ export function toolCountWords(count: number): string {
 export type Access = 'none' | 'reads' | 'writes'
 
 export function accessLabel(access: Access): string {
-  return { none: 'No access to other systems', reads: 'Reads only', writes: 'Changes data after a yes' }[access]
+  return { none: 'No access to other systems', reads: 'Reads only', writes: 'Changes data after approval' }[access]
 }
 
 /** The tool list can be down while the cards load, so an approval on the card counts as a write too. */

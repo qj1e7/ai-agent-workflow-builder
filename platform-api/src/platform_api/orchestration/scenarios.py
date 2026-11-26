@@ -308,7 +308,7 @@ def _applies(kind: ScenarioKind, plan: SimulationPlan) -> str | None:
     """None when the kind applies, else words for why not."""
     said = f'"{KIND_SAID[kind]}"'
     if kind == "approver_says_no" and not plan.having("ask"):
-        return f"{said} needs an Ask for a yes block, and this version has none."
+        return f"{said} needs an Ask for approval block, and this version has none."
     if kind in NEEDS_A_READ and not plan.reads:
         return f"{said} needs a block that reads a source, and this version has none."
     if kind == "odd_data" and all(b.answer is None for b in plan.reads):

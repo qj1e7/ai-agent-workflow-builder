@@ -92,7 +92,7 @@
       "next": [
         {
           "exit": "true",
-          "to": "Ask for a yes"
+          "to": "Ask for approval"
         },
         {
           "exit": "false",
@@ -101,7 +101,7 @@
       ]
     },
     {
-      "name": "Ask for a yes",
+      "name": "Ask for approval",
       "kind": "ask",
       "badge": "ours",
       "tag": null,

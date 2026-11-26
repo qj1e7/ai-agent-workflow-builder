@@ -36,14 +36,14 @@ function leaveBy(exit: Exit, items: INodeExecutionData[]): INodeExecutionData[][
 
 export class AskForYes implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Ask for a yes',
+    displayName: 'Ask for approval',
     name: 'wabAskForYes',
     icon: 'file:ask.svg',
     group: ['transform'],
     version: 1,
     subtitle: 'Teams',
     description: 'Our block. Asks any Approver except the person who started the run, in Teams.',
-    defaults: { name: 'Ask for a yes' },
+    defaults: { name: 'Ask for approval' },
     inputs: ['main'],
     outputs: ['main', 'main', 'main', 'main'],
     outputNames: EXIT_ORDER.map((e) => EXITS[e]),

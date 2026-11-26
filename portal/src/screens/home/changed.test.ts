@@ -22,8 +22,8 @@ describe('the Changed in n8n card’s words', () => {
   })
 
   it('says what a refused write does, and names the ticket only when a change does', () => {
-    expect(wordsOf(REFUSED).refused).toBe('Without a yes, our platform refuses the write. The next run stops before the write.')
-    expect(wordsOf({ ...REFUSED, changes: ['Deleted “Ask for a yes” before “Create ticket”.'] }).refused).toBe('Without a yes, our platform refuses the write. The next run stops before the ticket.')
+    expect(wordsOf(REFUSED).refused).toBe('Without approval, our platform refuses the write. The next run stops before the write.')
+    expect(wordsOf({ ...REFUSED, changes: ['Deleted “Ask for a yes” before “Create ticket”.'] }).refused).toBe('Without approval, our platform refuses the write. The next run stops before the ticket.')
   })
 
   it('shows the findings only for a version that needs a fix, and the refusal only for refused writes', () => {

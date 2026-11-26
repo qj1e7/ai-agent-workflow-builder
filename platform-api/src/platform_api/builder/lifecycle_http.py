@@ -143,7 +143,7 @@ async def turn_on_use_case(
 @router.delete(
     "/use-cases/{use_case_id}",
     description="Takes the workflow out of the list and stops it running. Nothing is erased: "
-    "its past runs stay readable, a run waiting for a yes can still be decided, and it can be "
+    "its past runs stay readable, a run waiting for approval can still be decided, and it can be "
     "restored for a day. Deleting it again answers the same. One someone holds in n8n is taken "
     "back first, and stays theirs when n8n does not move it.",
     responses={
@@ -328,9 +328,9 @@ async def rollback_version(
 
 @router.post(
     "/use-cases/{use_case_id}/add-the-yes-back",
-    description="Puts Ask for a yes back before each write that can run without one, in the "
+    description="Puts Ask for approval back before each write that can run without one, in the "
     "version in use, and publishes that as a new version under the version compare, as a roll "
-    "back does. When every write already waits for a yes, nothing changes. When the version "
+    "back does. When every write already waits for approval, nothing changes. When the version "
     "still would not pass the safety check, nothing changes and the answer says why: undo it "
     "instead. The caller is its publisher, and whoever published the version it changes joins "
     "every run of it.",

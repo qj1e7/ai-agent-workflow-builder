@@ -736,14 +736,14 @@ DRAFTED_PLAN: dict[str, Any] = {
             title="={{ 'New release ' + $json.tag }}",
             subject="={{ $json.tag }}",
         ),
-        _plan_block("Ask for a yes", "CUSTOM.wabAskForYes", 1),
+        _plan_block("Ask for approval", "CUSTOM.wabAskForYes", 1),
         _plan_block("Make the ticket", "CUSTOM.wabMakeApprovedChanges", 1),
     ],
     "wires": [
         {"from_block": "Every Monday", "exit": "main", "to_block": "Read new releases"},
         {"from_block": "Read new releases", "exit": "main", "to_block": "Propose a ticket"},
-        {"from_block": "Propose a ticket", "exit": "main", "to_block": "Ask for a yes"},
-        {"from_block": "Ask for a yes", "exit": "Yes", "to_block": "Make the ticket"},
+        {"from_block": "Propose a ticket", "exit": "main", "to_block": "Ask for approval"},
+        {"from_block": "Ask for approval", "exit": "Yes", "to_block": "Make the ticket"},
     ],
     "settings": [
         {"id": "run_time", "kind": "run_time", "label": "When it runs", "value": None},

@@ -56,7 +56,8 @@ ABOUT_THE_PLANNER: Final = re.compile(
 
 TOLD: Final = (
     "For security, I don't take instructions to change my rules or to say something happened "
-    "when it didn't. Every change still waits for an Approver's yes. What would you like to do?"
+    "when it didn't. Every change still waits for approval from an Approver. What would you like "
+    "to do?"
 )
 DIDNT_FOLLOW: Final = "I didn't follow that. What would you like to do?"
 APPROVER_CHOICES: Final = ["What needs me?", "What can you do?"]
@@ -88,9 +89,9 @@ def what_the_planner_is(sets_up: bool) -> str:
     how to start."""
     if not sets_up:
         return (
-            "I'm the Planner. I answer questions about your team's workflows, and show what waits "
-            "for your yes. Operators use me to draft workflows that run on a schedule, and every "
-            "change waits for an Approver's yes. To start, ask me what needs you."
+            "I'm the Planner. I answer questions about your team's workflows, and show what needs "
+            "your approval. Operators use me to draft workflows that run on a schedule, and every "
+            "change waits for approval from an Approver. To start, ask me what needs you."
         )
     return (
         "I'm the Planner. You tell me a task your team does again and again, and I draft it as a "

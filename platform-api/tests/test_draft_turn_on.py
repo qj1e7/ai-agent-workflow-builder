@@ -45,7 +45,7 @@ lab = test_builder_lifecycle.lab
 TURN_ON_PATH = "/api/v1/use-cases/{use_case_id}/turn-on"
 RUNS_PATH = "/api/v1/use-cases/{use_case_id}/runs"
 EVERY_MONDAY = {"day": "monday", "at": "09:00"}
-TEST_PASSED = "Test run passed up to the yes. Nothing was written."
+TEST_PASSED = "Test run passed up to the approval step. Nothing was written."
 NOT_ON_YET = {"detail": "This workflow isn't on yet. Do a test run, or turn it on to run it."}
 
 

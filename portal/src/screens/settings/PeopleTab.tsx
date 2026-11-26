@@ -36,7 +36,7 @@ import styles from './Settings.module.css'
 const NOTICE_ID = 'people-notice'
 const PROBLEM_ID = 'people-problem'
 const LEFT_ID = 'people-left'
-export const PEOPLE_LEAD = 'Operators set up workflows and change settings. Approvers say yes or no to changes. People sign in with their NCS account.'
+export const PEOPLE_LEAD = 'Operators set up workflows and change settings. Approvers approve or decline changes. People sign in with their NCS account.'
 
 const operatorBoxId = (personId: string) => `person-${personId}-operator`
 const approverBoxId = (personId: string) => `person-${personId}-approver`

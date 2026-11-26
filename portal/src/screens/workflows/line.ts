@@ -9,8 +9,8 @@ const TAGS: Record<Station['spot']['at'], string> = {
   started: 'No system access',
   planner: 'No system access',
   agent: 'Reads only',
-  gate: 'Waits for a yes',
-  write: 'Writes after a yes',
+  gate: 'Waits for approval',
+  write: 'Writes after approval',
   done: 'No system access',
 }
 

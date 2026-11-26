@@ -47,9 +47,9 @@ def test_set_up_off_saves_a_draft_in_n8n_that_the_safety_checker_graded_safe(api
     held = held_in_n8n(created["n8n_workflow_id"])
     assert held["activeVersionId"] is None, "the draft is saved, not published"
     types = {node["name"]: node["type"] for node in held["nodes"]}
-    assert types["Ask for a yes"] == "CUSTOM.wabAskForYes"
+    assert types["Ask for approval"] == "CUSTOM.wabAskForYes"
     assert types["Create ticket"] == "CUSTOM.wabMakeApprovedChanges"
-    assert into(held, "Create ticket") == [("Ask for a yes", 1)], "only the Yes exit writes"
+    assert into(held, "Create ticket") == [("Ask for approval", 1)], "only the Yes exit writes"
     assert held["settings"]["timezone"] == "Asia/Singapore"
     assert held["settings"]["saveExecutionProgress"] is True
 

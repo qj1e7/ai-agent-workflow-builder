@@ -41,7 +41,7 @@ PLACEHOLDER: Final = re.compile(r"<<([a-z][a-z0-9_]{0,39})>>")
 """A setting's placeholder, which stands as a whole value: <<channel>>."""
 MOST_BLOCKS: Final = 40
 MOST_WIRES: Final = 80
-USE_OURS: Final = "Use our Propose a change, Ask for a yes and Make the approved changes blocks"
+USE_OURS: Final = "Use our Propose a change, Ask for approval and Make the approved changes blocks"
 THEMED: Final = re.compile(
     r"\b(Flint|Forge|Striker|Spark\s+Map|Scout|Analyst|Messenger|Clerk|Fixer|Kindling|"
     r"Firebreak|Ember)\b",
@@ -657,7 +657,7 @@ def _native_write(
             walk.bad(
                 "native_write",
                 f"{block['name']} writes to {system} with n8n's own block. "
-                f"{USE_OURS}, which give that write a yes on each run.",
+                f"{USE_OURS}, which ask for approval of that write on each run.",
             )
     requester = REQUESTERS.get(base)
     if requester is None or not _writes(requester, settled, values):
@@ -672,8 +672,8 @@ def _native_write(
     elif isinstance(address, str) and ATLASSIAN_URL.search(address):
         walk.bad(
             "native_write",
-            f"{block['name']} writes to Jira or Confluence. {USE_OURS}, which give that write a "
-            "yes on each run.",
+            f"{block['name']} writes to Jira or Confluence. {USE_OURS}, which ask for "
+            "approval of that write on each run.",
         )
 
 

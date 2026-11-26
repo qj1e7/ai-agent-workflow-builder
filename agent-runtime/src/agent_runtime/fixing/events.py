@@ -166,7 +166,7 @@ class FixRoundData(WireModel):
 
 class FixProposedData(WireModel):
     fix_id: FixId
-    version: int = Field(ge=1, description="The fixed version, which waits for a yes.")
+    version: int = Field(ge=1, description="The fixed version, which waits for approval.")
     digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 

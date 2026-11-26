@@ -26,7 +26,7 @@ describe('the approval card', () => {
   it('draws every line the platform sent, in order', () => {
     expect(text(draw(WAITING))).toBe(
       [
-        'Software watchlist wants to make 1 change. Nothing is written until an Approver says yes.',
+        'Software watchlist wants to make 1 change. Nothing is written until an Approver approves it.',
         'Set up by Alice',
         '• Create Jira ticket in MOCK on the practice Jira: Upgrade LangGraph from 1.2.14 to 1.2.16',
         'What the agents found',

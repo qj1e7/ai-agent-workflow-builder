@@ -150,7 +150,7 @@ def test_the_questions_come_one_at_a_time_in_the_adr_s_order():
     )
     asked = next_question(last, FACTS)
     assert asked is not None and asked.id == APPROVERS
-    assert asking(asked, FACTS).words == "Who says yes to “Make the ticket” on each run?"
+    assert asking(asked, FACTS).words == "Who approves “Make the ticket” on each run?"
     assert [c.label for c in asking(asked, FACTS).choices] == [ANY_APPROVER]
 
 

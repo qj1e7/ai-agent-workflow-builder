@@ -21,7 +21,7 @@ const view = (over: Partial<FixView> = {}): FixView => ({
   use_case_id: 'uc_01JB9',
   name: 'Release check',
   state: 'waiting',
-  said: 'Waiting for a yes. Nothing changes until an Approver approves.',
+  said: 'Waiting for approval. Nothing changes until an Approver approves it.',
   asked_by: 'alice',
   asked_by_name: 'Alice',
   ends_by: new Date(ENDS).toISOString(),
@@ -112,7 +112,7 @@ describe('progress under the stop', () => {
 
   it('says a ready fix waits for a yes in the platform’s words, with a way to the approval', () => {
     const html = draw({ fix: fix({ ended: 'proposed' }), view: view() })
-    expect(text(html)).toContain('Waiting for a yes. Nothing changes until an Approver approves.')
+    expect(text(html)).toContain('Waiting for approval. Nothing changes until an Approver approves it.')
     expect(links(html)).toEqual([['/setup-approvals/apr_01A', 'Open the approval']])
     expect(buttons(html)).toEqual([])
   })

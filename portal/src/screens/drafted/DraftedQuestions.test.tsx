@@ -67,7 +67,7 @@ describe('the question a draft asks', () => {
     const html = card(QUESTION)
     expect(text(html)).toContain('When Mondays, at what time?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['8:00', '9:00', '13:00', '17:00', 'Type a time']))
-    expect(text(html)).not.toContain('Who says yes')
+    expect(text(html)).not.toContain('Who approves')
     expect(buttons(html)).not.toContain('Turn on')
     expect(text(html)).toContain('Answer 2 questions first')
     expect(html).not.toContain('disabled')
@@ -77,7 +77,7 @@ describe('the question a draft asks', () => {
     const second = { ...withSetting(QUESTION, 'run_time', { mark: 'filled', value: 'every Monday at 9:00', said: 'You chose' }), question: 'approvers' }
     expect(questionOf(second)?.id).toBe('approvers')
     const html = card(second)
-    expect(text(html)).toContain('Yes from Who says yes to “Make the ticket” on each run?')
+    expect(text(html)).toContain('Approval from Who approves “Make the ticket” on each run?')
     expect(buttons(html)).toContain('Any Approver on the team')
     expect(buttons(html)).not.toContain('Type a time')
   })

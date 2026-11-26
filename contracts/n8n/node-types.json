@@ -34,7 +34,7 @@
     },
     {
       "type": "CUSTOM.wabAskForYes",
-      "displayName": "Ask for a yes",
+      "displayName": "Ask for approval",
       "settings": {}
     },
     {

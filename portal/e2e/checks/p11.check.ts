@@ -611,7 +611,7 @@ test('@two-step a run that needs two Approvers: after bob says yes to step 1, it
     expect(after.bob.waiting_on_others.find((w) => w.run_id === runId)?.because).toBe('decided_earlier')
     expect(after.alice.approvals.find((a) => a.run_id === runId)?.step).toBe(1)
     expect(after.carol.approvals).toEqual([])
-    expect(ui['bob']).toContain('You already said yes to an earlier step')
+    expect(ui['bob']).toContain('You already approved an earlier step')
     expect(ui['alice']).toContain('Step 2 of 2')
   })
 })

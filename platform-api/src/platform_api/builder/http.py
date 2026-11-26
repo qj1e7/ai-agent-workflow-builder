@@ -176,8 +176,8 @@ def _after(after: str | None, lists: tuple[str, ...]) -> dict[str, Place] | None
     "/home/needs",
     responses=PAGED,
     description="A page of the parts of Needs you that can run long: runs waiting for this "
-    "person's yes, stopped runs, declined test runs and questions, each the newest first. Home "
-    "answers the first page. Each total counts every row, so the pages reach every one.",
+    "person's approval, stopped runs, declined test runs and questions, each the newest first. "
+    "Home answers the first page. Each total counts every row, so the pages reach every one.",
 )
 async def home_needs(
     principal: CurrentPrincipal,
@@ -190,7 +190,7 @@ async def home_needs(
 @router.get(
     "/home/waiting-on-others",
     responses=PAGED,
-    description="A page of the runs waiting for someone else's yes that this person is part "
+    description="A page of the runs waiting for someone else's approval that this person is part "
     "of, the newest first.",
 )
 async def home_waiting_on_others(
@@ -316,7 +316,7 @@ async def simulate_use_case_again(
         ),
     },
     description="Starts a run. On a draft only a test run starts, and it stops at the approval "
-    "gate: it asks nobody for a yes and writes nothing (ADR 0044).",
+    "gate: it asks nobody for approval and writes nothing (ADR 0044).",
 )
 async def start_run(
     use_case_id: str,

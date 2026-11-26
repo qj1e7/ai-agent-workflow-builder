@@ -33,7 +33,7 @@ class PastDecisionView(WireModel):
     )
     connector: str | None = Field(description="Where the run writes, as jira.")
     approved_before: list[UserId] = Field(
-        description="On a declined run, who said yes before the decline, in step order. Empty "
+        description="On a declined run, who approved before the decline, in step order. Empty "
         "for any other run."
     )
     declined_by: UserId | None = Field(description="Who declined the run, when it was declined.")

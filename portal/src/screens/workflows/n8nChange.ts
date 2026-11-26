@@ -11,7 +11,7 @@ const PILL: Readonly<Record<Grade, readonly [string, GradeTone]>> = {
 
 export const gradePill = (grade: Grade): { readonly label: string; readonly tone: GradeTone } => ({ label: PILL[grade][0], tone: PILL[grade][1] })
 
-export const ADD_THE_YES_BACK = 'Add the yes back'
+export const ADD_THE_YES_BACK = 'Add the approval step back'
 export const UNDO = 'Undo'
 export const SAVE_AGAIN = 'Save the schedule again'
 export const UNKNOWN_PUBLISHER = 'someone we don’t know'
@@ -28,14 +28,14 @@ export function writeWords(blocks: readonly Pick<N8nBlockView, 'kind' | 'name'>[
 }
 
 /** The workflow page's banner for a version whose writes are refused, as the sketch says it. */
-export const refusedBanner = (blocks: readonly Pick<N8nBlockView, 'kind' | 'name'>[] | undefined): string => `Writes refused: there’s no yes before ${writeWords(blocks)}.`
+export const refusedBanner = (blocks: readonly Pick<N8nBlockView, 'kind' | 'name'>[] | undefined): string => `Writes refused: there’s no approval step before ${writeWords(blocks)}.`
 
 export const needsFixBanner = (findings: readonly string[]): string => `Needs a fix: ${findings.length > 0 ? findings.join(' ') : 'it can’t run as the platform expects.'}`
 
 /** The card's line under a refused write. It says "the ticket" only when a change names one. */
 export function refusedLine(changes: readonly string[]): string {
   const ticket = changes.some((change) => /ticket/i.test(change))
-  return `Without a yes, our platform refuses the write. The next run stops before ${ticket ? 'the ticket' : 'the write'}.`
+  return `Without approval, our platform refuses the write. The next run stops before ${ticket ? 'the ticket' : 'the write'}.`
 }
 
 /** The state pill's words on the workflow page and its row, whenever the version in use is not safe or it could not move to n8n. */
@@ -43,7 +43,7 @@ export const needsFix = (useCase: Pick<UseCaseView, 'grade'> & Partial<Pick<UseC
   Boolean(useCase.move_refused) || (useCase.grade !== undefined && useCase.grade !== null && useCase.grade !== 'safe')
 
 export const backToVersionToast = (version: number, saved: number): string => `Back to version ${version}, saved as version ${saved}.`
-export const yesBackToast = (saved: number): string => `Version ${saved} has the yes back.`
+export const yesBackToast = (saved: number): string => `Version ${saved} has the approval step back.`
 
 /** What a version made in n8n or by a roll back says it was, or null for a version the schedule changes made. */
 export function madeWords(version: Pick<VersionView, 'made' | 'changes' | 'rolled_back_to'>): string | null {
@@ -55,7 +55,7 @@ export function madeWords(version: Pick<VersionView, 'made' | 'changes' | 'rolle
     case 'rolled_back':
       return version.rolled_back_to === null || version.rolled_back_to === undefined ? 'Rolled back' : `Rolled back to version ${version.rolled_back_to}`
     case 'yes_put_back':
-      return 'Put “Ask for a yes” back'
+      return 'Put “Ask for approval” back'
     case 'moved_to_n8n':
       return 'Moved to its own n8n workflow'
     default:

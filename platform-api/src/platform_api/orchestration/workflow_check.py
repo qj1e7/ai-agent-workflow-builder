@@ -922,10 +922,12 @@ def _yes_before_writes(flow: Flow) -> Iterable[Finding]:
                 stack.append((edge.target, approved, asked))
     for name in unapproved:
         yield Finding(
-            "no_yes_before_write", "writes_refused", name, f'"{name}" can run without a yes.'
+            "no_yes_before_write", "writes_refused", name, f'"{name}" can run without approval.'
         )
     for name in doubled:
-        yield _fix("second_yes", name, f'"{name}" asks for a second yes on the same path.')
+        yield _fix(
+            "second_yes", name, f'"{name}" asks for approval a second time on the same path.'
+        )
 
 
 def _kind(flow: Flow, name: str) -> BlockKind | None:
@@ -960,7 +962,7 @@ def add_yes(document: Mapping[str, Any], key: str) -> WithYes:
     ends_quietly = quiet is not None and quiet.spec is not None and quiet.spec.kind == "end"
     taken = set(flow.blocks)
     for write in ordered:
-        ask = free_name("Ask for a yes", taken)
+        ask = free_name("Ask for approval", taken)
         taken.add(ask)
         node = next(n for n in nodes if n["name"] == write)
         x, y = cast(list[float], node.get("position") or [0, 0])
@@ -1091,9 +1093,9 @@ FLAG_RULES: Mapping[RuleId, FlagRow] = {
     ),
     "operation_off": FlagRow(
         "Does something the platform hasn't classed",
-        "It could change data, and n8n's own blocks don't ask for a yes on each run.",
+        "It could change data, and n8n's own blocks don't ask for approval on each run.",
         "Each of n8n's blocks only reads, posts or shapes the data.",
-        ApproverMayAccept("It does this on every run, with no yes on each run.", approvers=2),
+        ApproverMayAccept("It does this on every run, without approval on each run.", approvers=2),
     ),
     "nothing_starts": FlagRow(
         "Nothing starts it",
@@ -1228,19 +1230,19 @@ FLAG_RULES: Mapping[RuleId, FlagRow] = {
         NeedsASetting(),
     ),
     "no_yes_before_write": FlagRow(
-        "Writes with no yes before it",
+        "Writes with no approval before it",
         "Our platform refuses the write, so the run stops before it.",
-        "Every write waits for a yes.",
+        "Every write waits for approval.",
         FixedForYou(
             "I added an approval step. Before each change is made, "
             "an Approver must approve it in Teams."
         ),
     ),
     "second_yes": FlagRow(
-        "Asks for a yes twice on one path",
-        "A path needs one yes before its write, and this one asks twice.",
-        "No path asks for a yes twice.",
-        ApproverMayAccept("It asks for a yes twice on one path."),
+        "Asks for approval twice on one path",
+        "A path needs one approval before its write, and this one asks twice.",
+        "No path asks for approval twice.",
+        ApproverMayAccept("It asks for approval twice on one path."),
     ),
 }
 """What each rule is, why it matters and who can clear it, in plain words (ADR 0051, section 2).

@@ -1532,7 +1532,7 @@ WHY_NOT: Final[Mapping[Refusal, str]] = {
         "You can't approve it. You asked for it, changed it, answered its questions or sent it."
     ),
     Refusal.NOT_AN_APPROVER: "Only an Approver can decide a set-up.",
-    Refusal.NOT_OPEN: "It's not waiting for a yes any more.",
+    Refusal.NOT_OPEN: "It's not waiting for approval any more.",
     Refusal.STALE_DIGEST: "It changed since you opened it. Open it again.",
     Refusal.INVALID_DECISIONS: "Its decisions don't add up, so nobody can decide it.",
     Refusal.WRONG_STEP: "It's not waiting for this step.",

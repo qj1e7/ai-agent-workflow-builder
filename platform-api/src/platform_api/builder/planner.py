@@ -341,7 +341,7 @@ class WatchlistReply(Reply):
         description="The parts of the request past the software that the Software watchlist does "
         "itself, each a ticked row on the software card: schedule when the request names the day "
         "or time it already runs on, ticket when it asks for the upgrade ticket the watchlist "
-        "raises after a yes. Empty beside also, whose card holds the rest of the request.",
+        "raises after approval. Empty beside also, whose card holds the rest of the request.",
     )
 
 
@@ -414,8 +414,8 @@ class ReplyOfferView(WireModel):
     capability: str = Field(description="The Ready capability it stands for.")
     request: str = Field(
         description="The registry's example request. The Portal's button sends it as the "
-        "person's next message, so the Planner reads it again and any write still waits for a "
-        "yes."
+        "person's next message, so the Planner reads it again and any write still waits for "
+        "approval."
     )
 
 
@@ -675,7 +675,7 @@ class DecidedReply(Reply):
 
 class DecideReply(Reply):
     """An approve or decline asked in the chat. Nobody decides there: the Portal offers the
-    requests waiting for the person's yes, to open and decide on."""
+    requests waiting for the person's approval, to open and decide on."""
 
     answer: Literal["decide"] = "decide"
 
@@ -694,8 +694,9 @@ class ChangedInN8nReply(Reply):
     """A version published in n8n, as the versions sweep found and graded it (ENGINE-PLAN 2.5).
     Home lists the newest for Operators, and the chat shows each as the Changed in n8n card, whose
     Undo rolls back to the version before with POST
-    /api/v1/use-cases/{use_case_id}/versions/{version}/rollback and whose Add the yes back is POST
-    /api/v1/use-cases/{use_case_id}/add-the-yes-back, each with in_use set to version."""
+    /api/v1/use-cases/{use_case_id}/versions/{version}/rollback and whose Add the approval step
+    back is POST /api/v1/use-cases/{use_case_id}/add-the-yes-back, each with in_use set to
+    version."""
 
     answer: Literal["changed_in_n8n"] = "changed_in_n8n"
     use_case_id: str

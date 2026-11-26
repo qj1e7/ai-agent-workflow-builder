@@ -96,7 +96,7 @@ SYSTEM: Final = (
     "- kind, one of:\n"
     "  - stopped: the block stopped the run with no reason people can act on.\n"
     "  - went_on: the block let the run go on where the scenario expects it to stop or end.\n"
-    "  - ended_early: in a happy path, the block ended the run before the yes.\n"
+    "  - ended_early: in a happy path, the block ended the run before the approval step.\n"
     "  - changes: the block asked for other changes than the scenario expects.\n"
     "  - no_end: the block kept the run from ending.\n"
     "  - unknown: none of these fits, or the facts don't say.\n"

@@ -35,7 +35,7 @@
               },
               {
                 "type": "TextRun",
-                "text": " wants to make 1 change. Nothing is written until an Approver says yes."
+                "text": " wants to make 1 change. Nothing is written until an Approver approves it."
               }
             ]
           },

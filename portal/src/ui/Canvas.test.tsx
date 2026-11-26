@@ -13,20 +13,20 @@ const stateOf = (html: string, name: string) => statesIn(html).get(name)
 const title = (html: string) => /<title[^>]*>([^<]*)<\/title>/.exec(html)?.[1] ?? ''
 
 describe('the canvas in each state a run gives a block', () => {
-  const states: Record<string, NodeState> = { 'Read release': 'ok', Compare: 'ok', 'Newer?': 'ok', 'Ask for a yes': 'wait', 'Create ticket': 'err', 'Start from the Portal': 'now' }
-  const html = renderToStaticMarkup(<Canvas blocks={BLOCKS} name="LangGraph release check" nodes={states} edges={{ [edgeKey('Read release', 'Compare')]: 'ok', [edgeKey('Newer?', 'Ask for a yes')]: 'flow' }} />)
+  const states: Record<string, NodeState> = { 'Read release': 'ok', Compare: 'ok', 'Newer?': 'ok', 'Ask for approval': 'wait', 'Create ticket': 'err', 'Start from the Portal': 'now' }
+  const html = renderToStaticMarkup(<Canvas blocks={BLOCKS} name="LangGraph release check" nodes={states} edges={{ [edgeKey('Read release', 'Compare')]: 'ok', [edgeKey('Newer?', 'Ask for approval')]: 'flow' }} />)
 
   it('marks every block with its state, and a block with no state as idle', () => {
     expect(stateOf(html, 'Read release')).toBe('ok')
     expect(stateOf(html, 'Start from the Portal')).toBe('now')
-    expect(stateOf(html, 'Ask for a yes')).toBe('wait')
+    expect(stateOf(html, 'Ask for approval')).toBe('wait')
     expect(stateOf(html, 'Create ticket')).toBe('err')
     expect(stateOf(html, 'Mon 8:00')).toBe('idle')
   })
 
   it('says each run state in words after the block’s name, so the picture is not colour alone', () => {
     expect(title(html)).toBe(
-      'LangGraph release check in n8n: Mon 8:00, Start from the Portal (working), Read release (done), Compare (done), Newer? (done), Ask for a yes (waiting), Create ticket (stopped here), Nothing to change',
+      'LangGraph release check in n8n: Mon 8:00, Start from the Portal (working), Read release (done), Compare (done), Newer? (done), Ask for approval (waiting), Create ticket (stopped here), Nothing to change',
     )
   })
 

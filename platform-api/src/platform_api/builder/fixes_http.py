@@ -81,14 +81,14 @@ async def read_a_fix(fix_id: str, principal: CurrentPrincipal, fixes: CurrentFix
 @router.post(
     "/fixes/{fix_id}/turn-back-on",
     status_code=202,
-    description="Only after an Approver's yes to the fix's version: tries it with the one real "
-    "test run, which stops at the yes and writes nothing, and turns the workflow back on with it "
-    "only once that passed. Asking again answers the fix as it stands. A fix an Approver said no "
-    "to stays off.",
+    description="Only after an Approver approved the fix's version: tries it with the one real "
+    "test run, which stops at the approval step and writes nothing, and turns the workflow back on "
+    "with it only once that passed. Asking again answers the fix as it stands. A fix an Approver "
+    "said no to stays off.",
     responses={
         **OPERATORS_ONLY,
         404: error_response(NO_SUCH_FIX),
-        409: error_response("It needs an Approver's yes first."),
+        409: error_response("An Approver must approve it first."),
         503: error_response(NOT_HERE),
     },
 )
@@ -100,7 +100,7 @@ async def turn_a_fix_back_on(fix_id: str, principal: FixAsker, fixes: CurrentFix
     "/fixes/{fix_id}/answers",
     description="The answer to the question a handed-back fix asks: the one setting a fix never "
     "changes itself. Code puts it in the stopped version, with no model, and the version it makes "
-    "waits for an Approver's yes, as any fix does. The person who answers is a party to it.",
+    "waits for approval, as any fix does. The person who answers is a party to it.",
     responses={
         **OPERATORS_ONLY,
         404: error_response(NO_SUCH_FIX),

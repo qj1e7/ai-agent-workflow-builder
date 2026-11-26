@@ -1,5 +1,5 @@
 """Code grades each scenario (ADR 0054, section 5, and spike S7). It reads two records: the
-gateway's record of the simulated run (each call, what was proposed, what Ask for a yes got and
+gateway's record of the simulated run (each call, what was proposed, what Ask for approval got and
 what the write would have made) and n8n's record of the execution (its status, which blocks ran,
 and the block and words of a failure). The model never grades. Its words, from PR 6, only help
 the reader.
@@ -57,7 +57,7 @@ ENDED: Final = frozenset({"success", "error", "crashed", "canceled"})
 AFTER_WRITE: Final = "A simulation never writes, so a block after a write never runs."
 NOT_PLAYED: Final = "No block here can play this case, so it was not tried."
 EXPECTED: Final[Mapping[ScenarioKind, str]] = {
-    "happy_path": "It reaches the yes with the expected change.",
+    "happy_path": "It reaches the approval step with the expected change.",
     "nothing_new": "It ends as Nothing new and proposes nothing.",
     "source_not_found": "It stops with a reason when the source is not found, and writes nothing.",
     "timeout": "It stops with a reason when the source is too slow, and writes nothing.",
@@ -126,7 +126,7 @@ def _seen(
         return _Seen("failed", "The simulation gateway no longer keeps this run.")
     written = run.would_have_written
     if written is not None and run.approver != "yes":
-        return _Seen("wrong_write", "It asked to make changes with no yes from an Approver.")
+        return _Seen("wrong_write", "It asked to make changes without approval from an Approver.")
     if written is not None and written < len(run.proposed):
         proposed = len(run.proposed)
         made = f"It would have made {written} of the {proposed} changes proposed."
@@ -148,7 +148,10 @@ def _stopped(plan: SimulationPlan, run: SimulatedRun, execution: ExecutionRecord
     words = (execution.error or "").strip()
     if block is not None and block.role == "write" and run.would_have_written is not None:
         made = _changes(run.would_have_written)
-        happened = f"It reached the yes and would have made {made}, which the simulation refused."
+        happened = (
+            f"It reached the approval step and would have made {made}, which the simulation "
+            "refused."
+        )
         return _Seen("reached_yes", happened, at)
     if at is None or block is None:
         return _Seen("failed", "It failed, and n8n names no block.")
@@ -180,7 +183,7 @@ def _ended(run: SimulatedRun) -> _Seen:
             return _Seen("no_answer", "It ended with no answer from an Approver.")
         case "yes":
             made = _changes(len(run.proposed))
-            return _Seen("reached_yes", f"It reached the yes with {made} proposed.")
+            return _Seen("reached_yes", f"It reached the approval step with {made} proposed.")
         case None if not run.proposed:
             return _Seen("nothing_new", "It ended with nothing new and proposed nothing.")
         case None:
@@ -238,7 +241,7 @@ def _problem(
             if seen.ending != "reached_yes" or run is None:
                 return seen.happened
             if plan.having("write") and run.would_have_written is None:
-                return "It reached the yes, but never asked to make the changes."
+                return "It reached the approval step, but never asked to make the changes."
             return _wrong_change(plan, run)
         case "happy_path":
             return None if seen.ending in ("finished", "nothing_new") else seen.happened

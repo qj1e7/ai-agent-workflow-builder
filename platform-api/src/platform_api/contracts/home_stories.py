@@ -247,8 +247,8 @@ def home_for_alice(failure: Timeline) -> HomeOut:
                 by_name="Alice Tan",
                 at=datetime(2026, 11, 9, 2, 5, tzinfo=UTC),
                 grade="writes_refused",
-                changes=["Now runs every day at 7:30.", "Deleted “Ask for a yes”."],
-                findings=['"Create ticket" can run without a yes.'],
+                changes=["Now runs every day at 7:30.", "Deleted “Ask for approval”."],
+                findings=['"Create ticket" can run without approval.'],
                 in_use=4,
             )
         ],

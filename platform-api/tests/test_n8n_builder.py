@@ -149,11 +149,11 @@ async def test_a_new_use_case_is_saved_in_n8n_as_a_draft_the_checker_graded_safe
         "Read release",
         "Compare",
         "Newer?",
-        "Ask for a yes",
+        "Ask for approval",
         "Create ticket",
         "Nothing to change",
     ]
-    ask = next(b for b in body["blocks"] if b["name"] == "Ask for a yes")
+    ask = next(b for b in body["blocks"] if b["name"] == "Ask for approval")
     assert {"exit": "Yes", "to": "Create ticket"} in ask["next"]
 
 

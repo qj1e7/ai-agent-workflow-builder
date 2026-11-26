@@ -128,7 +128,7 @@ describe('the sentence for each answer', () => {
     expect(sayOf({ ...CANT, alternative: null }), 'its one-line card says it').toBeNull()
     const own = { ...CANT, alternative: null, cant: CANT.cant.map((row) => ({ ...row, instead: null })) }
     expect(sayOf(own)).toBe('I can’t do that yet.')
-    expect(sayOf(answers['refused']!)).toBe('I can’t set that up. Anything that changes data waits for a yes, every time.')
+    expect(sayOf(answers['refused']!)).toBe('I can’t set that up. Anything that changes data waits for approval, every time.')
   })
 
   it('says a question answer in the Planner’s own words, not in fixed text', () => {
@@ -217,12 +217,12 @@ describe('How to start, from the registry', () => {
       'Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”.',
       'Check the card I make, and change anything I guessed.',
       'Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.',
-      'Nothing is written until an Approver says yes in Teams.',
+      'Nothing is written until an Approver approves it in Teams.',
     ])
   })
 
   it('names Teams only while the platform can ask there, and no example it doesn’t have', () => {
-    expect(startSteps(withTeams('needs_setup')).at(-1)).toBe('Nothing is written until an Approver says yes.')
+    expect(startSteps(withTeams('needs_setup')).at(-1)).toBe('Nothing is written until an Approver approves it.')
     expect(startSteps({ ...CAPS, examples: [] })[0]).toBe('Tell me what should run by itself, in your own words.')
   })
 })
@@ -234,7 +234,7 @@ describe('Check my workflows counts what its rows show', () => {
 
   it('says running only for a run in progress, never for a workflow that is simply idle', () => {
     const rows = [row('a', 'failed'), row('b', 'awaiting_approval'), row('c', null), row('d', 'succeeded'), row('e', 'working')]
-    expect(workflowsSay(rows)).toBe('You have 5 workflows. 1 stopped, 1 is waiting for a yes, 1 is running.')
+    expect(workflowsSay(rows)).toBe('You have 5 workflows. 1 stopped, 1 is waiting for approval, 1 is running.')
     expect(workflowsSay([row('c', null), row('d', 'succeeded')])).toBe('You have 2 workflows. None needs you.')
   })
 })

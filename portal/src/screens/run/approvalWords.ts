@@ -57,13 +57,13 @@ export interface Pill {
 }
 
 /** What the person who may say yes reads in the pill, on the request and on its run's page. */
-export const YOUR_YES: Pill = { label: 'Needs your yes', tone: 'wait' }
+export const YOUR_YES: Pill = { label: 'Needs your approval', tone: 'wait' }
 
 /** The request's one pill. While it waits, the person who may say yes reads that it needs theirs. */
 export function approvalPill(standing: Standing, canDecide: boolean): Pill {
   switch (standing.is) {
     case 'open':
-      return canDecide ? YOUR_YES : { label: 'Waiting for a yes', tone: 'wait' }
+      return canDecide ? YOUR_YES : { label: 'Waiting for approval', tone: 'wait' }
     case 'approved':
       return { label: 'Approved', tone: 'ok' }
     case 'declined':

@@ -106,7 +106,7 @@
       "tag": "Shapes the data"
     },
     {
-      "name": "Ask for a yes",
+      "name": "Ask for approval",
       "ours": true,
       "block_type": "CUSTOM.wabAskForYes",
       "tag": "Waits for approval"
@@ -329,7 +329,7 @@
     },
     {
       "rule": "second_yes",
-      "words": "No path asks for a yes twice."
+      "words": "No path asks for approval twice."
     }
   ],
   "approves": [
@@ -432,7 +432,7 @@
     {
       "label": [
         {
-          "text": "Who says yes on each run",
+          "text": "Who approves on each run",
           "quoted": false
         }
       ],

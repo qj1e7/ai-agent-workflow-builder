@@ -163,7 +163,7 @@ WRITE_REFUSED = Advice(
 
 SITE_CHANGED = Advice(
     explanation=JIRA_SITE_CHANGED,
-    likely_cause="The platform now uses another Jira than the one the Approvers said yes to, so "
+    likely_cause="The platform now uses another Jira than the one the Approvers approved, so "
     "the safety checker stopped the write.",
     suggested_action="ask_maintainer",
     suggestion=f"{WRITE_STOP_ADVICE} Ask a maintainer to check Jira's settings, so a new run "

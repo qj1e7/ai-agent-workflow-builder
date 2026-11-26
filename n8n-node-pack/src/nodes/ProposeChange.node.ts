@@ -16,7 +16,7 @@ export class ProposeChange implements INodeType {
     group: ['transform'],
     version: 1,
     subtitle: 'Jira',
-    description: 'Our block. Adds a change to the run’s proposal. Nothing changes until an Approver says yes.',
+    description: 'Our block. Adds a change to the run’s proposal. Nothing changes until an Approver approves it.',
     defaults: { name: 'Propose a change' },
     inputs: ['main'],
     outputs: ['main'],

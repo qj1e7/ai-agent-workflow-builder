@@ -26,13 +26,13 @@ const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;'
 describe('the workflow page’s banner for a graded version', () => {
   it('says writes are refused before the ticket, with Add the yes back for an Operator', () => {
     const refused = { ...on, grade: 'writes_refused', blocks: [block('read', 'Check releases'), block('write', 'Create ticket')] } as UseCaseView
-    expect(bannerOf(facts(refused))).toEqual({ tone: 'bad', text: 'Writes refused: there’s no yes before the ticket.', action: { kind: 'yes' } })
+    expect(bannerOf(facts(refused))).toEqual({ tone: 'bad', text: 'Writes refused: there’s no approval step before the ticket.', action: { kind: 'yes' } })
     expect(bannerOf(facts(refused, BOB)).action).toBeNull()
   })
 
   it('names the write block when it is not the ticket', () => {
-    expect(refusedBanner([block('write', 'Create tickets')])).toBe('Writes refused: there’s no yes before the tickets.')
-    expect(refusedBanner([block('write', 'Post a comment')])).toBe('Writes refused: there’s no yes before “Post a comment”.')
+    expect(refusedBanner([block('write', 'Create tickets')])).toBe('Writes refused: there’s no approval step before the tickets.')
+    expect(refusedBanner([block('write', 'Post a comment')])).toBe('Writes refused: there’s no approval step before “Post a comment”.')
     expect(writeWords([])).toBe('the write')
     expect(writeWords(undefined)).toBe('the write')
   })
@@ -110,7 +110,7 @@ describe('the workflow page’s banner for a graded version', () => {
   it('draws Add the yes back as the main button and Undo as the quiet one', () => {
     const html = (action: Parameters<typeof StatusBanner>[0]['banner']['action']) =>
       renderToStaticMarkup(<StatusBanner banner={{ tone: 'bad', text: 'x', action }} resuming={false} onResume={() => undefined} />)
-    expect(html({ kind: 'yes' })).toMatch(/_primary_[^>]*>Add the yes back/)
+    expect(html({ kind: 'yes' })).toMatch(/_primary_[^>]*>Add the approval step back/)
     expect(text(html({ kind: 'undo', to: 3, inUse: 4 }))).toContain('Undo')
     expect(html({ kind: 'undo', to: 3, inUse: 4 })).not.toMatch(/_primary_/)
   })
@@ -152,7 +152,7 @@ describe('the Versions words', () => {
 
   it('says a roll back and a yes put back in the sketch’s words', () => {
     expect(madeWords({ made: 'rolled_back', rolled_back_to: 2 })).toBe('Rolled back to version 2')
-    expect(madeWords({ made: 'yes_put_back' })).toBe('Put “Ask for a yes” back')
+    expect(madeWords({ made: 'yes_put_back' })).toBe('Put “Ask for approval” back')
     expect(madeWords({ made: 'moved_to_n8n' })).toBe('Moved to its own n8n workflow')
     expect(versionLine(version({ made: 'rolled_back', rolled_back_to: 2 }), NOW, nameOf)).toBe('Today, 9:00. Rolled back to version 2. Alice Tan.')
     expect(madeWords({ made: null })).toBeNull()
@@ -165,7 +165,7 @@ describe('the Versions words', () => {
 
   it('says what a roll back and a yes put back did, as the sketch’s messages', () => {
     expect(backToVersionToast(2, 5)).toBe('Back to version 2, saved as version 5.')
-    expect(yesBackToast(5)).toBe('Version 5 has the yes back.')
+    expect(yesBackToast(5)).toBe('Version 5 has the approval step back.')
   })
 })
 

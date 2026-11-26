@@ -12,8 +12,8 @@ describe('the workflow’s own line, the run line before any run', () => {
     expect(line.map((step) => [step.label, step.under])).toEqual([
       ['Daily 8:00', { kind: 'note', text: 'No system access' }],
       ['Check release', { kind: 'note', text: 'Reads only' }],
-      ['Ask for approval', { kind: 'note', text: 'Waits for a yes' }],
-      ['Create Jira tickets', { kind: 'note', text: 'Writes after a yes' }],
+      ['Ask for approval', { kind: 'note', text: 'Waits for approval' }],
+      ['Create Jira tickets', { kind: 'note', text: 'Writes after approval' }],
     ])
   })
 

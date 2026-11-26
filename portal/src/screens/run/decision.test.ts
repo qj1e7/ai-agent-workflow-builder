@@ -120,8 +120,8 @@ describe('the request’s words', () => {
   })
 
   it.each([
-    ['Bob, who may decide', open, true, 'Needs your yes', 'wait'],
-    ['Alice, whose work it is', open, false, 'Waiting for a yes', 'wait'],
+    ['Bob, who may decide', open, true, 'Needs your approval', 'wait'],
+    ['Alice, whose work it is', open, false, 'Waiting for approval', 'wait'],
     ['anyone, once approved', { is: 'approved', by: ['bob'], at: AT }, false, 'Approved', 'ok'],
     ['anyone, once declined', { is: 'declined', record: { by: 'bob', approvedBy: [], reason: null }, at: AT }, false, 'Declined', 'quiet'],
     ['anyone, once nobody answered', { is: 'expired' }, true, 'No answer', 'quiet'],

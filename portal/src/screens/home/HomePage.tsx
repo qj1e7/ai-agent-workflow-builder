@@ -83,7 +83,7 @@ const CARD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['setup_card',
 /** Answers that ask them to type one thing in a field of their own. Focus goes to the field. */
 const FIELD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['which_software'])
 /** An Operator's question on Home, day one included (the sketch's heading). */
-export const OPERATOR_HEADING = 'What should run by itself?'
+export const OPERATOR_HEADING = 'What can I help you with today?'
 const OFFLINE_HEADING = 'I can’t read new requests until an AI model is connected'
 const OFFLINE_LEAD =
   'Without an AI model, the Planner can’t answer questions. The Software watchlist keeps checking for new releases.'

@@ -404,7 +404,7 @@ def test_a_run_n8n_started_works_on_that_execution_from_the_first_call():
 def test_a_run_that_finds_another_waiting_for_a_yes_is_skipped_and_names_it():
     moved = skipped_events(CREATED, HOLDER, "trigger", WAITING_RUN)
     assert kinds(moved) == ["run_created", "execution_linked", "run_skipped"]
-    assert moved[2].summary == "An earlier run is still waiting for a yes."
+    assert moved[2].summary == "An earlier run is still waiting for approval."
     assert moved[2].data.model_dump() == {"waiting_run_id": "run_0"}
     assert state_name(SKIPPED) == "skipped"
     assert unread_in(SKIPPED) == ()

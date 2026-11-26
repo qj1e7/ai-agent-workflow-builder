@@ -69,7 +69,7 @@ const CASES: Record<string, Case> = {
     },
     answer: {},
   },
-  'Ask for a yes': {
+  'Ask for approval': {
     node: new AskForYes(),
     path: 'calls/ask',
     params: {},

@@ -51,7 +51,7 @@ class RunGist:
     tickets: bool
     """True when every write counted in `written` or `proposed` is a ticket, and there is one."""
     you_can_decide: bool
-    """The asking person may decide the yes this run waits for. False without a person."""
+    """The asking person may decide the approval this run waits for. False without a person."""
     you_can_open: bool
     """The run stopped and is in the asking person's Needs you: an Operator whose work it is."""
     retryable: bool

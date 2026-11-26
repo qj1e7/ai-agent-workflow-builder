@@ -83,21 +83,21 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   it('lists what I can do in the registry’s short words, with what isn’t built yet in one Not yet line', () => {
     const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: false, parts: [asked('What can you do', 'will_do')] }
     expect(text(draw(reply, { registry: REGISTRY }))).toBe(
-      'What I can do Watch software for new releases Watch Maven and npm packages Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Draft an n8n workflow from your words, for an Approver to check Explain any workflow Not yet: Teams channels, email, Confluence.',
+      'What I can do Watch software for new releases Watch Maven and npm packages Create Jira tickets, after approval Explain a stopped run, and retry it Change or pause your workflows Draft an n8n workflow from your words, for an Approver to check Explain any workflow Not yet: Teams channels, email, Confluence.',
     )
     expect(sayOf(reply)).toBeNull()
   })
 
   it('never shows a line as working while its connection needs setting up', () => {
     const jiraOff: CapabilitiesView = { ...REGISTRY, capabilities: REGISTRY.capabilities.map((c) => (c.id === 'jira.create' ? { ...c, state: 'needs_setup' as const } : c)) }
-    expect(text(draw({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [] }, { registry: jiraOff }))).toContain('Create Jira tickets, after a yes Needs setup')
+    expect(text(draw({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [] }, { registry: jiraOff }))).toContain('Create Jira tickets, after approval Needs setup')
   })
 
   it('answers how to start with what the app is for, the steps, and the registry’s example as a chip, with no cross on their question', () => {
     const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: true, parts: [asked('list me the steps to use this app', 'will_do')] }
     const html = draw(reply, { registry: REGISTRY })
     expect(text(html)).toBe(
-      'How to start This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written without an Approver’s yes. Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes. Nothing is written until an Approver says yes in Teams. Keep track of the LangGraph version',
+      'How to start This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written until an Approver approves it. Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes. Nothing is written until an Approver approves it in Teams. Keep track of the LangGraph version',
     )
     expect(buttons(html)).toEqual(['Keep track of the LangGraph version'])
     expect(html).toContain('aria-label="Try one"')
@@ -551,7 +551,7 @@ describe('a refusal', () => {
     const html = draw(refused as PlannerReply)
     expect(text(html)).toContain('Nobody approves their own work')
     expect(text(html)).toContain('If you only meant that you don’t need to look at it yourself, say it another way.')
-    expect(buttons(html)).toEqual(['Set it up with a yes', 'Say it another way'])
+    expect(buttons(html)).toEqual(['Set it up with approval', 'Say it another way'])
   })
 
   it('has only the way to say it another way when nothing was left after the refused part', () => {
@@ -671,7 +671,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     const [request] = HOME.approvals
     const many = { ...HOME, approvals: Array.from({ length: 10 }, (_, n) => ({ ...request!, approval_id: `apr_${String(n)}`, run_id: `run_${String(n)}` })), approvals_total: 25, confirmations: [] }
     const html = ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: many })
-    expect(answerOf(html)).toMatch(/^These need your approval\. Create 1 Jira ticket Needs your yes Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Review and decide/)
+    expect(answerOf(html)).toMatch(/^These need your approval\. Create 1 Jira ticket Needs your approval Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Review and decide/)
     expect(buttons(html).filter((name) => name === 'Review and decide')).toHaveLength(3)
     expect(html).toMatch(/<a[^>]*href="\/workflows"[^>]*>22 more<\/a>/)
   })
@@ -714,13 +714,13 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     const cards = [...html.matchAll(/<section[^>]*>([\s\S]*?)<\/section>/g)].map((match) => text(match[1] ?? ''))
     expect(cards).toEqual([
       'Create 1 Jira ticket Approved Upgrade LangGraph from 1.2.14 to 1.2.16 Approved. Open',
-      'Create 1 Jira ticket Needs your yes Upgrade LangGraph from 1.2.14 to 1.2.16 Review and decide',
+      'Create 1 Jira ticket Needs your approval Upgrade LangGraph from 1.2.14 to 1.2.16 Review and decide',
     ])
   })
 
   it('leads one request with the sketch’s line', () => {
     const one = { ...HOME, confirmations: [] }
-    expect(answerOf(ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: one }))).toMatch(/^This needs your approval\. Create 1 Jira ticket Needs your yes/)
+    expect(answerOf(ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: one }))).toMatch(/^This needs your approval\. Create 1 Jira ticket Needs your approval/)
   })
 
   it('sends an approve to the request to decide there, never a decision in the chat', () => {
@@ -736,16 +736,16 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
 
   it('says there is nothing to decide when nothing waits for their yes', () => {
     const quiet = { ...HOME, approvals: [], approvals_total: 0 }
-    expect(answerOf(ask(decideReply as PlannerReply, { home: quiet }))).toContain('Nothing is waiting for your yes, so there’s nothing to decide.')
+    expect(answerOf(ask(decideReply as PlannerReply, { home: quiet }))).toContain('Nothing needs your approval, so there’s nothing to decide.')
   })
 
   it('answers what they can ask in the sketch’s three lines', () => {
     const html = ask({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [{ text: 'What can you do', mark: 'will_do', reason: null, note: null, choices: [] }] })
-    expect(answerOf(html)).toBe('What I can do Show what waits for your yes Show exactly what a change will write Show your past decisions')
+    expect(answerOf(html)).toBe('What I can do Show what needs your approval Show exactly what a change will write Show your past decisions')
     const unknown = ask({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [{ text: 'What’s the weather', mark: 'cant', reason: 'not_followed', note: null, choices: [] }] })
-    expect(answerOf(unknown)).toContain('I didn’t follow that I can show what waits for your yes, and your past decisions.')
+    expect(answerOf(unknown)).toContain('I didn’t follow that I can show what needs your approval, and your past decisions.')
     const start = ask({ trace_id: null, answer: 'abilities', how_to_start: true, parts: [{ text: 'help', mark: 'will_do', reason: null, note: null, choices: [] }] })
-    expect(answerOf(start), 'they set nothing up, so they get what they can ask, not the steps').toBe('What I can do Show what waits for your yes Show exactly what a change will write Show your past decisions')
+    expect(answerOf(start), 'they set nothing up, so they get what they can ask, not the steps').toBe('What I can do Show what needs your approval Show exactly what a change will write Show your past decisions')
   })
 
   it('gives a refusal with no set-up offered, and their request to open where they decide', () => {
@@ -1116,7 +1116,7 @@ describe('the core release check, already on the watchlist', () => {
   it('lists every part of the core request on the one card as ticked rows, the ticket and its yes included', () => {
     const html = chat(core, CORE)
     expect(answerOf(html)).toBe(
-      'LangGraph is already on the Software watchlist. LangGraph Newer out You run 1.2.14. Newest is 1.2.16. Will do: When Every Monday at 9:00 Will do: Then An upgrade ticket in Jira project MOCK, after a yes Open it',
+      'LangGraph is already on the Software watchlist. LangGraph Newer out You run 1.2.14. Newest is 1.2.16. Will do: When Every Monday at 9:00 Will do: Then An upgrade ticket in Jira project MOCK, after approval Open it',
     )
     expect(primaries(html)).toEqual(['Open it'])
   })
@@ -1124,7 +1124,7 @@ describe('the core release check, already on the watchlist', () => {
   it('lists the same parts for software not watched yet, under Watch it, so the ticket is never dropped', () => {
     const k8s = watch({ software: 'Kubernetes', already_listed: null, word: 'release', covers: ['schedule', 'ticket'] })
     expect(answerOf(chat(k8s, CORE.replace('LangGraph', 'Kubernetes')))).toContain(
-      'Kubernetes It isn’t on the watchlist, so I don’t know which version you run. Will do: When Every Monday at 9:00 Will do: Then An upgrade ticket in Jira project MOCK, after a yes Watch it',
+      'Kubernetes It isn’t on the watchlist, so I don’t know which version you run. Will do: When Every Monday at 9:00 Will do: Then An upgrade ticket in Jira project MOCK, after approval Watch it',
     )
   })
 

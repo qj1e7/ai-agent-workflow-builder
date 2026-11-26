@@ -18,7 +18,7 @@ const notFound = (error: unknown): boolean => error instanceof ApiError && error
 
 export const PICK_A_REASON = 'Pick a reason first'
 
-/** The page's one pill: the approval's own words, and the one an Approver who may decide reads, Needs your yes. */
+/** The page's one pill: the approval's own words, and the one an Approver who may decide reads, Needs your approval. */
 export function setUpApprovalPill(view: Pick<SetUpApprovalView, 'approval' | 'you_can_decide'>): PillWords {
   switch (view.approval.status) {
     case 'waiting':

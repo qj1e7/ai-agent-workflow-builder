@@ -192,7 +192,7 @@ def _what(notice: ApprovalNotice) -> list[CardElement]:
             _plain(notice.use_case_name, weight="bolder"),
             TextRun(
                 text=f" wants to make {_changes(len(lines))}. "
-                "Nothing is written until an Approver says yes."
+                "Nothing is written until an Approver approves it."
             ),
         ),
         *owner,
@@ -304,7 +304,7 @@ def set_up_card(notice: SetUpNotice) -> AdaptiveCard:
                 _plain(notice.sent_by, weight="bolder"),
                 TextRun(text=" asks to set up "),
                 _plain(notice.name, weight="bolder"),
-                TextRun(text=". Nothing is set up until an Approver says yes."),
+                TextRun(text=". Nothing is set up until an Approver approves it."),
             ),
             _runs(_plain(notice.in_short, SUMMARY_LIMIT)),
             TextBlock(text="Who can decide", weight="bolder"),
@@ -318,7 +318,7 @@ def set_up_card(notice: SetUpNotice) -> AdaptiveCard:
 def practice_set_up_text(notice: SetUpNotice) -> str:
     return (
         f"{notice.sent_by} asks to set up {notice.name}. "
-        "Open the approval page to decide. Nothing is set up until an Approver says yes."
+        "Open the approval page to decide. Nothing is set up until an Approver approves it."
     )
 
 

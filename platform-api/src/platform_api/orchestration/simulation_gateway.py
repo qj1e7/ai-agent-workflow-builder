@@ -602,7 +602,7 @@ async def start(body: SignedBody, calls: CurrentCalls) -> StartOut | JSONRespons
     "/runs/{nonce}",
     response_model=SimulatedRun,
     description="One simulated run's record: each call in order, what was proposed, what Ask "
-    "for a yes got and what the write would have made.",
+    "for approval got and what the write would have made.",
     responses={**REFUSED, 404: error_response("The gateway keeps no such run")},
 )
 async def record(nonce: str, _: SignedBody, calls: CurrentCalls) -> SimulatedRun | JSONResponse:

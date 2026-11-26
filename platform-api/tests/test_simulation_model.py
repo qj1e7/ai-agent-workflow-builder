@@ -194,8 +194,8 @@ NOTHING_NEW = ResultOut(
     kind="nothing_new",
     verdict="failed",
     expected="It ends as Nothing new and proposes nothing.",
-    happened="It reached the yes with 1 change proposed.",
-    ran=[START, READ, "Compare", "Propose a change", "Ask for a yes"],
+    happened="It reached the approval step with 1 change proposed.",
+    ran=[START, READ, "Compare", "Propose a change", "Ask for approval"],
     not_tried=[],
     ending="reached_yes",
     stopped_at=None,
@@ -205,8 +205,10 @@ PASSED = ResultOut(
     name="happy_path",
     kind="happy_path",
     verdict="passed",
-    expected="It reaches the yes with the expected change.",
-    happened="It reached the yes and would have made 1 change, which the simulation refused.",
+    expected="It reaches the approval step with the expected change.",
+    happened=(
+        "It reached the approval step and would have made 1 change, which the simulation refused."
+    ),
     ran=[START, READ],
     not_tried=[],
     ending="reached_yes",
@@ -249,7 +251,7 @@ async def test_nothing_is_asked_without_a_model_or_without_a_failure() -> None:
     "picked",
     [
         note(scenario="happy_path", block="Compare", kind="stopped"),
-        note(scenario="odd_data", block="Ask for a yes", kind="stopped"),
+        note(scenario="odd_data", block="Ask for approval", kind="stopped"),
         note(scenario="odd_data", block="Compare", kind="stopped", source="Compare"),
         note(scenario="odd_data", block="Compare", kind="stopped", detail="langchain-ai/langgraph"),
         note(scenario="odd_data", block="Compare", kind="stopped", detail="tag"),
@@ -295,7 +297,7 @@ async def test_the_explainer_is_sent_each_failure_within_its_bounds() -> None:
     [
         ("stopped", [], '"Compare" stopped the run with no reason people can act on.'),
         ("went_on", [], '"Compare" let the run go on.'),
-        ("ended_early", [], '"Compare" ended the run before the yes.'),
+        ("ended_early", [], '"Compare" ended the run before the approval step.'),
         ("changes", [], '"Compare" asked for other changes than expected.'),
         ("no_end", [], '"Compare" kept the run from ending.'),
         ("unknown", [], 'Something went wrong at "Compare".'),

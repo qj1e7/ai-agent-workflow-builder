@@ -107,7 +107,7 @@ describe('in the n8n editor', () => {
       Read: ['GitHub', 'Jira', 'Confluence'],
       Agent: ['Agent card'],
       'Propose a change': ['Jira'],
-      'Ask for a yes': ['Teams'],
+      'Ask for approval': ['Teams'],
       'Make the approved changes': ['Jira'],
       Tell: ['Teams', 'Email', 'Teams and email'],
       'Report a failure': ['Portal'],

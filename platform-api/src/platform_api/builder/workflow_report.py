@@ -182,7 +182,7 @@ class Cleared:
 @dataclass(frozen=True)
 class EachRun:
     approvers: int
-    """How many Approvers say yes on each run, one after the other."""
+    """How many Approvers approve on each run, one after the other."""
 
 
 @dataclass(frozen=True)
@@ -930,7 +930,7 @@ def _set_settings(
                 pass
     if flow.of_kind("write"):
         who = "Any Approver" if approvers == 1 else "Two Approvers, one after the other"
-        settings.append(Setting(("Who says yes on each run",), (who,), "set", said))
+        settings.append(Setting(("Who approves on each run",), (who,), "set", said))
     return tuple(settings)
 
 

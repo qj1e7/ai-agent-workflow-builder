@@ -168,7 +168,7 @@ class FixRoundData(WireModel):
 
 class FixProposedData(WireModel):
     fix_id: FixId
-    version: int = Field(ge=1, description="The fixed version, which waits for a yes.")
+    version: int = Field(ge=1, description="The fixed version, which waits for approval.")
     digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
@@ -213,8 +213,8 @@ WIDENED: Final[Mapping[FixWidening, str]] = {
     "adds_a_write": "adds a write",
     "adds_a_system": "adds a system",
     "adds_a_key": "adds a key",
-    "removes_a_yes": "removes an Ask for a yes",
-    "moves_a_yes": "moves an Ask for a yes",
+    "removes_a_yes": "removes an approval step",
+    "moves_a_yes": "moves an approval step",
     "goes_past_a_failure": "lets a block go past a failure",
     "changes_a_persons_setting": "changes a setting a person filled in",
     "cant_check": "is one the platform can't check",
@@ -310,7 +310,7 @@ def fix_summary(data: FixData) -> str:
         case FixProposedData():
             return (
                 f"A fix is ready as version {data.version}. Nothing changes until an Approver "
-                "says yes."
+                "approves it."
             )
         case FixHandedBackData():
             return f"I couldn't fix this. {HANDED_BACK[data.why]} Nothing was changed."
@@ -327,7 +327,7 @@ type FixTriedResult = Literal["turned_on", "kept_paused", "test_failed", "not_pu
 
 
 class FixDecidedData(WireModel):
-    """An Approver's yes or no to a fix's set-up approval."""
+    """An Approver's approve or decline on a fix's set-up approval."""
 
     fix_id: FixId
     approval_id: ApprovalIdText
@@ -375,9 +375,9 @@ def fix_outcome_key(data: FixOutcomeData) -> str:
 def fix_outcome_summary(data: FixOutcomeData) -> str:
     match data:
         case FixDecidedData(verdict="approved"):
-            return f"{data.by_name} said yes to the fix."
+            return f"{data.by_name} approved the fix."
         case FixDecidedData():
             reason = f": {data.reason}" if data.reason else ""
             return f"{data.by_name} said no to the fix{reason}. The workflow stays as it was."
         case FixTriedData():
-            return f"{TRIED[data.result]} {data.approved_by_name} said yes to it."
+            return f"{TRIED[data.result]} {data.approved_by_name} approved it."

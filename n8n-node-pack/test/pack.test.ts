@@ -12,21 +12,21 @@ describe('the pack', () => {
       ['CUSTOM.wabRead', 'Read'],
       ['CUSTOM.wabAgent', 'Agent'],
       ['CUSTOM.wabProposeChange', 'Propose a change'],
-      ['CUSTOM.wabAskForYes', 'Ask for a yes'],
+      ['CUSTOM.wabAskForYes', 'Ask for approval'],
       ['CUSTOM.wabMakeApprovedChanges', 'Make the approved changes'],
       ['CUSTOM.wabTell', 'Tell'],
       ['CUSTOM.wabReportFailure', 'Report a failure'],
     ]);
   });
 
-  it('retries each calling block after a short delay, and never retries Ask for a yes', () => {
+  it('retries each calling block after a short delay, and never retries Ask for approval', () => {
     const settings = Object.fromEntries(manifest().nodes.map((n) => [n.displayName, n.settings]));
     expect(settings).toEqual({
       'Start from the Portal': {},
       Read: RETRIED,
       Agent: RETRIED,
       'Propose a change': RETRIED,
-      'Ask for a yes': {},
+      'Ask for approval': {},
       'Make the approved changes': RETRIED,
       Tell: RETRIED,
       'Report a failure': {},

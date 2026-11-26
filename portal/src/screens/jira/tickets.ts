@@ -4,7 +4,7 @@ import type { MockJiraTicket } from '../../api/types'
 import { dateAndClock } from '../workflows/times'
 
 export const JIRA_PATH = '/jira'
-export const EMPTY_WORDS = 'No tickets yet. When a run creates one after a yes, it shows here.'
+export const EMPTY_WORDS = 'No tickets yet. When a run creates one after approval, it shows here.'
 export const LOAD_WORDS = 'The tickets could not be loaded.'
 
 export const ticketPath = (key: string) => `${JIRA_PATH}/${encodeURIComponent(key)}`

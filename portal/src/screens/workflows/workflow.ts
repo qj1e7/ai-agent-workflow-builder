@@ -40,7 +40,7 @@ export type LastRun = NonNullable<UseCaseView['last_run']>
 export const isRunning = (run: { readonly state: RunState } | null): boolean => run !== null && IN_PROGRESS.has(run.state)
 
 /** The one approval rule, in the words the team lead approved on 23 Nov (ADR 0053). */
-export const APPROVAL_RULE = 'Nothing is written until an Approver says yes.'
+export const APPROVAL_RULE = 'Nothing is written until an Approver approves it.'
 
 export type Four = 'needs' | 'on' | 'paused' | 'draft'
 
@@ -50,7 +50,7 @@ export interface Status {
   readonly tone: 'ok' | 'wait' | 'bad' | 'new' | undefined
 }
 
-export const WAITING_ON_AN_APPROVER = 'On · waiting for an Approver’s yes'
+export const WAITING_ON_AN_APPROVER = 'On · waiting for approval'
 export const LAST_RUN_STOPPED = 'On · last run stopped'
 
 /**
@@ -210,7 +210,7 @@ export function whenWords(useCase: ByHandFacts): When {
 const STEP_TAGS: Record<BlockKind, { readonly words: string; readonly writes: boolean }> = {
   agent: { words: 'Reads only', writes: false },
   approval: { words: 'Asks an Approver in Teams', writes: false },
-  write_action: { words: 'Changes data, waits for a yes', writes: true },
+  write_action: { words: 'Changes data, waits for approval', writes: true },
 }
 
 export function stepTag(kind: BlockKind): { readonly words: string; readonly writes: boolean } {
@@ -301,7 +301,7 @@ function runsAt(schedule: VersionSchedule): string {
 const RELEASE_CHECK_CARD = 'crd_version_checker'
 
 /** The upgrade ticket a release check writes, and where: "an upgrade ticket in Jira project MOCK, after a yes". */
-export const upgradeTicketWords = (project: unknown): string => `an upgrade ticket in Jira${typeof project === 'string' && project.trim() !== '' ? ` project ${project}` : ''}, after a yes`
+export const upgradeTicketWords = (project: unknown): string => `an upgrade ticket in Jira${typeof project === 'string' && project.trim() !== '' ? ` project ${project}` : ''}, after approval`
 
 /**
  * The workflow in one sentence, built from its schedule, the repository its Version checker reads and its write step, as the sketch says it.
@@ -598,7 +598,7 @@ export function bannerOf(facts: BannerFacts): Banner {
  * One sentence on the state, and the one action that moves it on. Pause wins over the last run, because a paused workflow starts nothing.
  * Otherwise the newest run's pill decides, and its stage words say the rest, so the banner, the pill, the row and Recent runs never disagree:
  * "Stopped today at 8:00. An agent could not finish its work.", "Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.",
- * "Waiting for a yes.", "Running now.". A run that settled, declined, got no answer or was skipped leaves the workflow On.
+ * "Waiting for approval.", "Running now.". A run that settled, declined, got no answer or was skipped leaves the workflow On.
  */
 function bannerOfState({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
   const last = useCase.last_run
@@ -649,7 +649,7 @@ export function whoSaysYes(owner: string, viewer: Pick<Viewer, 'id'>, nameOf: Na
 /** The rule the approval gate keeps, in full: the people on a run can't approve it. A scheduled run starts as the schedule's owner. */
 export function ownWorkRule(schedule: Pick<NonNullable<UseCaseView['schedule']>, 'owner_name'> | null): string {
   const started = schedule?.owner_name ? ` A scheduled run starts as ${schedule.owner_name}.` : ''
-  return `Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.${started}`
+  return `Nobody approves their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t approve that run.${started}`
 }
 
 /** What Delete takes away, said before the person confirms. */

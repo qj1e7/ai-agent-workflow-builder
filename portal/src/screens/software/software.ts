@@ -178,7 +178,7 @@ export function ticketFact(row: Pick<WatchedSoftwareView, 'status' | 'open_ticke
   if (declined) return declined
   switch (row.status) {
     case 'awaiting_approval':
-      return 'Waiting for a yes'
+      return 'Waiting for approval'
     case 'ticket_open':
       return row.open_ticket ? `${row.open_ticket}, open in Jira` : 'Open in Jira'
     case 'cant_check':
@@ -571,7 +571,7 @@ interface HistoryLine {
 export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => string, declined: string | null): HistoryLine[] {
   const now: HistoryLine[] = []
   if (row.open_ticket) now.push({ when: 'Now', words: `${row.open_ticket} is open in Jira for the upgrade.` })
-  else if (row.status === 'awaiting_approval') now.push({ when: 'Now', words: 'An upgrade ticket is waiting for a yes.' })
+  else if (row.status === 'awaiting_approval') now.push({ when: 'Now', words: 'An upgrade ticket is waiting for approval.' })
   const dated: { readonly at: string; readonly words: string }[] = []
   const failed = row.status === 'cant_check'
   if (row.checked_at && failed) dated.push({ at: row.checked_at, words: row.problem ? `Couldn’t check. ${row.problem}` : 'Couldn’t check.' })

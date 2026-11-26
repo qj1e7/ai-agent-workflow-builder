@@ -108,7 +108,7 @@ describe('a list in the chat says what its page says', () => {
     const page = rowsIn(render(<WorkflowsPage heading="Workflows" now={NOW} />, { path: '/workflows' }), 'data-workflow-id')
     expect(page).toHaveLength(EVERY_WORKFLOW.length)
     const said = page.map(([, row]) => row).join(' | ')
-    for (const state of ['no runs yet On', 'Paused', 'stopped Needs you', 'stopped Needs you Test run', 'waiting for approval On · waiting for an Approver’s yes', 'declined by Bob', 'approved by Bob On']) expect(said).toContain(state)
+    for (const state of ['no runs yet On', 'Paused', 'stopped Needs you', 'stopped Needs you Test run', 'waiting for approval On · waiting for approval', 'declined by Bob', 'approved by Bob On']) expect(said).toContain(state)
     expect(rowsIn(panel({ kind: 'workflows' }), 'data-workflow-id')).toEqual(page)
   })
 

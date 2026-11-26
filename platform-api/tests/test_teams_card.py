@@ -225,7 +225,7 @@ def test_the_card_says_what_would_be_written_what_the_agents_found_and_who_decid
     headings = texts(card, "TextBlock", "text")
     assert [run["text"] for run in card["body"][0]["inlines"]] == [
         "Software watchlist",
-        " wants to make 1 change. Nothing is written until an Approver says yes.",
+        " wants to make 1 change. Nothing is written until an Approver approves it.",
     ]
     assert "• Create Jira ticket in MOCK: Upgrade LangGraph to 1.2.16" in runs
     assert headings == ["What the agents found", "Who can decide"]

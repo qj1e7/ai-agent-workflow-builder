@@ -80,8 +80,8 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
 
   it('greets them in a small line, then asks the one question as the heading', () => {
     expect(html).toMatch(/<p[^>]*>Good afternoon, Alice<\/p>/)
-    expect(headingsOf(html)).toEqual(['What should run by itself?'])
-    expect(html.indexOf('Good afternoon, Alice')).toBeLessThan(html.indexOf('What should run by itself?'))
+    expect(headingsOf(html)).toEqual(['What can I help you with today?'])
+    expect(html.indexOf('Good afternoon, Alice')).toBeLessThan(html.indexOf('What can I help you with today?'))
   })
 
   it('has the Planner’s face at 96 px above the greeting', () => {
@@ -148,7 +148,7 @@ describe('Home for an Approver with a run waiting for their yes', () => {
     expect(html).toMatch(/<p[^>]*>Good afternoon, Bob<\/p>/)
     expect(headingsOf(html)).toEqual(['3 things need you'])
     const one = mainOf(render(BOB, { ...BOB_HOME, confirmations: [] }))
-    expect(headingsOf(one), 'the sketch’s words when only their yes is wanted').toEqual(['1 change waits for your yes'])
+    expect(headingsOf(one), 'the sketch’s words when only their yes is wanted').toEqual(['1 change needs your approval'])
   })
 
   it('has the same box, the sketch’s three chips, then every row that needs them (ROLE-home)', () => {
@@ -164,7 +164,7 @@ describe('Home for an Approver with a run waiting for their yes', () => {
       ['Do now', ['approval:apr_01JB8']],
       ['Set up', ['confirmation:cfm_01JADDR', 'confirmation:cfm_01JD4VE']],
     ])
-    expect(linksIn(html)).toContainEqual(['Software watchlist needs your yes', '/runs/run_01JB8'])
+    expect(linksIn(html)).toContainEqual(['Software watchlist needs your approval', '/runs/run_01JB8'])
     expect(linksIn(html)).toContainEqual(['Dave waits to be confirmed as an Approver', '/settings?tab=people'])
   })
 
@@ -206,7 +206,7 @@ describe('Home on day one', () => {
   const html = mainOf(render(ERIN, DAY_ONE))
 
   it('asks the sketch’s question, with the box and the platform’s two starting points as chips', () => {
-    expect(headingsOf(html)).toEqual(['What should run by itself?'])
+    expect(headingsOf(html)).toEqual(['What can I help you with today?'])
     expect(html).toContain('<textarea')
     expect(chipsOf(html, 'Starting points')).toEqual(CAPABILITIES.examples.map((example) => example.text))
     expect(text(html)).not.toContain('Start your first workflow')
@@ -224,9 +224,9 @@ describe('Home on day one', () => {
 
   it('gives an Approver their box for questions and no first workflow', () => {
     const approver = mainOf(render(BOB, DAY_ONE))
-    expect(headingsOf(approver)).toEqual(['Nothing waits for your yes'])
+    expect(headingsOf(approver)).toEqual(['Nothing needs your approval'])
     expect(approver).toContain('<textarea')
-    expect(text(approver)).not.toContain('What should run by itself?')
+    expect(text(approver)).not.toContain('What can I help you with today?')
     expect(keysOf(approver)).toEqual([])
   })
 })
@@ -241,7 +241,7 @@ describe('Home with no working AI model', () => {
   })
 
   it('still shows the lists and Needs you, and no Ask the team', () => {
-    expect(text(html)).toContain('I can Check software for new releases on GitHub Check Maven Central and npm packages for new versions Create a Jira ticket after a yes')
+    expect(text(html)).toContain('I can Check software for new releases on GitHub Check Maven Central and npm packages for new versions Create a Jira ticket after approval')
     expect(buttonsIn(html)).not.toContain('Ask the team for something new')
     expect(html).toContain('data-home-item="stopped:run_01JB9"')
   })
@@ -283,7 +283,7 @@ describe('Home with many runs waiting', () => {
     const html = mainOf(render(BOB, { ...BOB_HOME, approvals, approvals_total: 50, confirmations: [] }))
     expect(keysOf(html)).toHaveLength(10)
     expect(keysOf(html)[0]).toBe('approval:apr_9')
-    expect(headingsOf(html)).toEqual(['50 changes wait for your yes'])
+    expect(headingsOf(html)).toEqual(['50 changes need your approval'])
     expect(html).toMatch(/<p id="[^"]+" role="status"[^>]*>Showing 10 of 50\.<\/p>/)
     expect(html).toMatch(/<button type="button" aria-describedby="[^"]+"[^>]*>Show more<\/button>/)
   })
@@ -306,7 +306,7 @@ describe('Home before it knows', () => {
 describe('Home when a refresh fails', () => {
   it('keeps what it showed and says quietly that it could not refresh', () => {
     const html = mainOf(render(BOB, { stale: BOB_HOME }))
-    expect(text(itemOf(html, 'approval:apr_01JB8'))).toContain('Software watchlist needs your yes')
+    expect(text(itemOf(html, 'approval:apr_01JB8'))).toContain('Software watchlist needs your approval')
     expect(html).toMatch(/<p[^>]*role="status"[^>]*>Could not refresh\. Trying again in a moment\.<\/p>/)
     expect(html).not.toContain('role="alert"')
   })

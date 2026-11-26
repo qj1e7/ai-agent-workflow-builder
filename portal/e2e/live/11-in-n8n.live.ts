@@ -12,7 +12,7 @@ import { devContext, OUT, shot } from './support/ui'
 // takes it away again at the end, so no other spec meets a Carol who has it.
 
 const AGENTS = [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }]
-const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for a yes.'
+const SAFE_BLOCKS = 'Only our blocks and n8n’s safe ones are on, so every write waits for approval.'
 
 const views = (page: Page): Locator => page.getByRole('main').getByRole('group', { name: 'View' })
 const canvasTitle = (page: Page): Locator => page.getByRole('main').locator('svg title').first()
@@ -59,7 +59,7 @@ test.describe('the In n8n tabs', () => {
     const main = page.getByRole('main')
     await expect(main).toContainText(/Version 1, (published|saved as a draft) by Alice, /)
     await expect(main).toContainText(SAFE_BLOCKS)
-    await expect(canvasTitle(page)).toHaveText(/ in n8n: .*Ask for a yes/)
+    await expect(canvasTitle(page)).toHaveText(/ in n8n: .*Ask for approval/)
     const open = main.getByRole('button', { name: /^Open in n8n editor/ })
     const why = main.getByText(/Set your n8n password first|n8n account isn’t made yet|n8n account isn't made yet|Turn it on first/)
     await expect(open.or(why).first(), 'Open in n8n editor, or the reason it can’t open yet, never a dead button').toBeVisible()
@@ -79,7 +79,7 @@ test.describe('the In n8n tabs', () => {
     await page.goto(`/runs/${runId}`)
     await expect(views(page).getByRole('button')).toHaveText(['Steps', 'In n8n'])
     await views(page).getByRole('button', { name: 'In n8n' }).click()
-    await expect(canvasTitle(page)).toHaveText(/Ask for a yes \(waiting\)/)
+    await expect(canvasTitle(page)).toHaveText(/Ask for approval \(waiting\)/)
     await expect(canvasTitle(page)).toHaveText(/\(done\)/)
     await expectAccessible(page, path.join(OUT, 'axe'), 'e8-run-in-n8n')
     await shot(page, info, 'e8-run-in-n8n-carol')

@@ -142,7 +142,7 @@
     },
     {
       "id": "jira.create",
-      "plain": "Create a Jira ticket after a yes",
+      "plain": "Create a Jira ticket after approval",
       "kind": "write",
       "system": "Jira",
       "state": "ready",
@@ -155,12 +155,12 @@
       "tools": [
         "jira.create_ticket"
       ],
-      "short": "Create Jira tickets, after a yes",
+      "short": "Create Jira tickets, after approval",
       "instead": null
     },
     {
       "id": "teams.ask",
-      "plain": "Ask Approvers for a yes in Teams",
+      "plain": "Ask Approvers for approval in Teams",
       "kind": "notify",
       "system": "Teams",
       "state": "ready",
@@ -300,7 +300,7 @@
       "focus": false,
       "tools": [],
       "short": "Confluence",
-      "instead": "I can create a Jira ticket, after a yes."
+      "instead": "I can create a Jira ticket, after approval."
     },
     {
       "id": "github.issues",

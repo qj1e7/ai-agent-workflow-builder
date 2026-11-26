@@ -171,12 +171,12 @@ class SkipRead(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     whose: SkipWhose = Field(
-        description="nobody when the request skips no one's yes or attention, including a "
+        description="nobody when the request skips no one's approval or attention, including a "
         "request that only reads or reports on approvals. only_me when it asks only that the "
         "staff member themselves is not asked, told or kept in the loop. "
-        "an_approver_or_anyone_else when it asks for a change to go ahead without an Approver's "
-        "yes, to bypass, pre-approve or self-approve it, or to leave any other person or any "
-        "person at all out."
+        "an_approver_or_anyone_else when it asks for a change to go ahead without approval from "
+        "an Approver, to bypass, pre-approve or self-approve it, or to leave any other person or "
+        "any person at all out."
     )
     said: str | None = Field(
         default=None,
@@ -191,8 +191,8 @@ class TaskRead(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     skips_the_yes: SkipRead = Field(
-        description="Whether the request asks to skip, bypass, pre-approve or self-approve the "
-        "Approver's yes, with the request's words that say so."
+        description="Whether the request asks to skip, bypass, pre-approve or self-approve "
+        "approval, with the request's words that say so."
     )
     asks_about: AsksAbout = Field(
         default="none",

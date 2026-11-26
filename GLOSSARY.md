@@ -57,7 +57,7 @@ One whole plan of a drafted workflow. The first comes from the person's words. E
 _Avoid_: Version (that is a set-up workflow's)
 
 **Drafted setting**:
-A value a drafted workflow needs, such as its run time, a Jira project, a channel, who says yes on each run, or a write key. Each is filled, guessed or needed, and the card says where a filled one came from: the person's words, a choice, what they typed, or what they typed in n8n. A run time, a Jira project, a channel or an address a notice posts to, the Approvers and a write key are never guessed (ADR 0051).
+A value a drafted workflow needs, such as its run time, a Jira project, a channel, who approves on each run, or a write key. Each is filled, guessed or needed, and the card says where a filled one came from: the person's words, a choice, what they typed, or what they typed in n8n. A run time, a Jira project, a channel or an address a notice posts to, the Approvers and a write key are never guessed (ADR 0051).
 _Avoid_: Parameter (that is a block's, in n8n)
 
 **Drafted question**:
@@ -69,19 +69,19 @@ Opening a drafted workflow in your own n8n space, without its keys, to change it
 _Avoid_: Open in n8n (that is a set-up workflow's)
 
 **Set-up approval**:
-An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051). The app calls it the one-time check: one line on the drafted workflow's card, which Turn on asks for (ADR 0053). A fix needs one too, whatever its flags, and the person who asked for the fix is a party to it (ADR 0055).
-_Avoid_: Approval (that is a run's yes to a write)
+An Approver's approval to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051). The app calls it the one-time check: one line on the drafted workflow's card, which Turn on asks for (ADR 0053). A fix needs one too, whatever its flags, and the person who asked for the fix is a party to it (ADR 0055).
+_Avoid_: Approval (that is a run's approval of a write)
 
 **Workflow report**:
 The plain-words account that code builds of one version of any workflow: when it runs, each step, what it reads, writes and posts, every safety checker rule as flagged, fixed for you or passed, who approves each write, and its settings. A model never writes it. Strings from the workflow, such as a block's name, show in quotes, apart from code's own words (ADR 0051).
 _Avoid_: Summary, explanation
 
 **Set-up card**:
-The Planner's reply on Home when it can do a request: the whole workflow filled in from the request, with every guess marked and what it can't know asked for. The Operator turns it on. Each write it makes still waits for an Approver's yes.
+The Planner's reply on Home when it can do a request: the whole workflow filled in from the request, with every guess marked and what it can't know asked for. The Operator turns it on. Each write it makes still waits for approval from an Approver.
 _Avoid_: Wizard, form, New workflow (the old 4-step page)
 
 **Planner answer**:
-What the Planner replies to one request typed on Home: a set-up card, an edit card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, a free reply, the I didn't follow that card, or offline. With the rules Planner, code decides which one from the model's reading. With the AI-led Planner, the model picks the tool, and code checks the call and builds every card (ADR 0049). The reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042) and the free reply (ADR 0047).
+What the Planner replies to one request typed on Home: a set-up card, an edit card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip approval, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, a free reply, the I didn't follow that card, or offline. With the rules Planner, code decides which one from the model's reading. With the AI-led Planner, the model picks the tool, and code checks the call and builds every card (ADR 0049). The reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042) and the free reply (ADR 0047).
 _Avoid_: Reply, response, intent (in the app)
 
 **AI-led Planner**:
@@ -128,7 +128,7 @@ A request someone saves for the team when the platform can't help: Ask the team,
 _Avoid_: Ticket (that is Jira), support email
 
 **Draft**:
-A workflow that is set up but not turned on yet. It never runs on its schedule, its test run stops before the yes, and Turn it on publishes its version 1 (ADR 0044). Everyone sees it on Workflows. A set-up card that an Operator started and kept to come back to is a draft too, and only they see it. Always write "n8n draft" for an n8n workflow that is not published yet.
+A workflow that is set up but not turned on yet. It never runs on its schedule, its test run stops before the approval step, and Turn it on publishes its version 1 (ADR 0044). Everyone sees it on Workflows. A set-up card that an Operator started and kept to come back to is a draft too, and only they see it. Always write "n8n draft" for an n8n workflow that is not published yet.
 _Avoid_: Proposal (that is a run's write actions)
 
 **Paused**:
@@ -136,7 +136,7 @@ A workflow an Operator has stopped for now. It starts no run, on its schedule or
 _Avoid_: Disabled, turned off (a schedule is turned off, a workflow is paused)
 
 **Deleted**:
-A workflow an Operator has taken out of the list. It starts no run, but nothing is erased: its past runs stay readable, and a run waiting for a yes can still be decided.
+A workflow an Operator has taken out of the list. It starts no run, but nothing is erased: its past runs stay readable, and a run waiting for approval can still be decided.
 _Avoid_: Archived, removed (watched software is removed)
 
 **Restore**:
@@ -151,7 +151,7 @@ The web app where Operators build use cases and start runs, watch the live activ
 _Avoid_: Frontend, dashboard
 
 **Node pack**:
-Our own n8n nodes, built into our n8n image: Start from the Portal, Read, Agent, Propose a change, Ask for a yes, Make the approved changes, Tell and Report a failure. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval, carry out an approved proposal and tell the team. They are the only way an n8n workflow reaches another system. Each one calls only our API, at the address and with the key in n8n's environment, and has no field for either.
+Our own n8n nodes, built into our n8n image: Start from the Portal, Read, Agent, Propose a change, Ask for approval, Make the approved changes, Tell and Report a failure. Ask for approval was called Ask for a yes before 25 Nov 2026, and workflows set up before then keep that name: the platform knows the block by its type, never its name. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval, carry out an approved proposal and tell the team. They are the only way an n8n workflow reaches another system. Each one calls only our API, at the address and with the key in n8n's environment, and has no field for either.
 _Avoid_: Plugin, integration, custom nodes
 
 **Start from the Portal**:
@@ -177,7 +177,7 @@ A workflow someone with n8n access built in their own n8n space, rather than one
 _Avoid_: External workflow, imported workflow
 
 **Holder**:
-The Operator with n8n access who has a workflow open in n8n. Open in n8n moves the workflow into their own space in n8n, because n8n's free edition lets only one person's space hold it. While someone holds a workflow, the platform changes it only to undo or to add the yes back, and Take it back returns it.
+The Operator with n8n access who has a workflow open in n8n. Open in n8n moves the workflow into their own space in n8n, because n8n's free edition lets only one person's space hold it. While someone holds a workflow, the platform changes it only to undo or to add the approval step back, and Take it back returns it.
 _Avoid_: Owner (the platform's n8n account), editor
 
 ### Keeping software up to date
@@ -231,7 +231,7 @@ One execution of a use case, from trigger to result.
 _Avoid_: Job, execution (n8n uses "execution" for its own internal runs)
 
 **Test run**:
-A run an Operator starts by hand to try a workflow. On a workflow that is on, it asks for a yes and writes like any other run. On a draft, it stops at the approval gate: it asks nobody for a yes and writes nothing (ADR 0044).
+A run an Operator starts by hand to try a workflow. On a workflow that is on, it asks for approval and writes like any other run. On a draft, it stops at the approval gate: it asks nobody for approval and writes nothing (ADR 0044).
 _Avoid_: Dry run
 
 **Simulation n8n**:
@@ -239,7 +239,7 @@ A second n8n, on the same pinned image, node pack and guards as the platform's n
 _Avoid_: Test n8n, sandbox
 
 **Simulation gateway**:
-The service our blocks in the simulation n8n call in place of platform-api. It answers them from a scenario: recorded or mock reads, a recorded agent reply, and the scenario's yes or no for Ask for a yes, which asks nobody. It refuses every write and keeps what it would have written, and Tell sends nothing. It holds no real key and no database (ADR 0054).
+The service our blocks in the simulation n8n call in place of platform-api. It answers them from a scenario: recorded or mock reads, a recorded agent reply, and the scenario's yes or no for Ask for approval, which asks nobody. It refuses every write and keeps what it would have written, and Tell sends nothing. It holds no real key and no database (ADR 0054).
 _Avoid_: Mock API, fake platform
 
 **Simulated run**:
@@ -271,7 +271,7 @@ A block that no scenario of a simulation reached, or a kind of scenario that app
 _Avoid_: Untested block
 
 **Skipped**:
-A run that n8n started while an earlier run of the same workflow was still waiting for a yes. It stops at its first step and does nothing, so Approvers never see two requests for one change. The Portal says "An earlier run is still waiting for a yes."
+A run that n8n started while an earlier run of the same workflow was still waiting for approval. It stops at its first step and does nothing, so Approvers never see two requests for one change. The Portal says "An earlier run is still waiting for approval."
 
 **Node call**:
 One call from a block of the node pack to our platform, such as a Read or an Agent. The first call of a run links its n8n execution to the run. Our platform keeps each block's first answer and gives it again when n8n repeats or retries the call, so no agent runs twice and no change is proposed twice.
@@ -292,7 +292,7 @@ The specialist agent that reads each watched software's releases at its source, 
 _Avoid_: Release checker (the old name), scanner
 
 **Leg**:
-Retired on 13 Nov 2026 (ADR 0026). It was the part of a run that n8n carried in one execution, a work leg and an act leg with our platform owning the pause between them. Each workflow is now its own n8n workflow, and n8n holds the wait for a yes.
+Retired on 13 Nov 2026 (ADR 0026). It was the part of a run that n8n carried in one execution, a work leg and an act leg with our platform owning the pause between them. Each workflow is now its own n8n workflow, and n8n holds the wait for approval.
 
 **Write action**:
 Any action that changes data in an external system, such as Jira, Confluence or GitLab.
@@ -302,7 +302,7 @@ The block of ours that starts a run when the Portal asks, for Run now. It accept
 _Avoid_: Webhook (n8n's Webhook block is off)
 
 **Tell**:
-A block that posts a run's result in the team's Teams channel and emails the team's fixed list. Our API writes the message from what the run read and found, never from text in the workflow. It changes no system of record, so it needs no yes, and in a test run it sends nothing.
+A block that posts a run's result in the team's Teams channel and emails the team's fixed list. Our API writes the message from what the run read and found, never from text in the workflow. It changes no system of record, so it needs no approval, and in a test run it sends nothing.
 _Avoid_: Notify, message
 
 **Jira site**:
@@ -314,10 +314,11 @@ The set of write actions that agents propose for one run. One approval request c
 _Avoid_: Plan, draft (a Draft is a set-up card not yet turned on)
 
 **Approval gate**:
-The step that pauses a run before a write action until an Approver approves it in Teams.
+The step that pauses a run before a write action until an Approver approves it in Teams. In n8n it is our Ask for approval block. The app says a run "waits for approval", and never uses yes as a noun (team lead, 25 Nov 2026).
+_Avoid_: a yes, your yes, the yes
 
 **Tell**:
-A Teams card or an email that only reports what a run read or found. It may go out without a yes, because it changes no data, under the Tell rule: its recipients are the ones fixed in the Portal, our API writes its words from the run's own reads and agent results, and a test run sends nothing (ADR 0026). The node pack's Tell node sends one.
+A Teams card or an email that only reports what a run read or found. It may go out without approval, because it changes no data, under the Tell rule: its recipients are the ones fixed in the Portal, our API writes its words from the run's own reads and agent results, and a test run sends nothing (ADR 0026). The node pack's Tell node sends one.
 _Avoid_: Notification, alert
 
 **n8n block**:
@@ -347,11 +348,11 @@ The Adaptive Card the platform posts in Teams for each approval request: what wo
 _Avoid_: Teams message, notification
 
 **Not checked**:
-The line on an approval that names what the run could not check, such as software it couldn't read or security advisories the platform can't read yet. It tells the Approver what their yes does not cover.
+The line on an approval that names what the run could not check, such as software it couldn't read or security advisories the platform can't read yet. It tells the Approver what their approval does not cover.
 _Avoid_: Warnings, caveats
 
 **Question on a request**:
-A question an Approver who may decide asks the requester, on the approval request, before deciding. Only the requester answers, once, while the request waits for a yes. The questions stay on the record, read only, once it is decided. A question or an answer decides nothing.
+A question an Approver who may decide asks the requester, on the approval request, before deciding. Only the requester answers, once, while the request waits for approval. The questions stay on the record, read only, once it is decided. A question or an answer decides nothing.
 _Avoid_: Comment, chat
 
 **Requester**:
@@ -390,7 +391,7 @@ The check that every agent action passes before it runs. It denies write actions
 The animated view of a run that shows agents talking, hand-offs, and where something failed.
 
 **Run line**:
-The row of a run's steps, in plain words, whose links show where the run is: which step is at work, which waits for a yes, where it stopped, and which steps are done.
+The row of a run's steps, in plain words, whose links show where the run is: which step is at work, which waits for approval, where it stopped, and which steps are done.
 _Avoid_: Progress bar, station strip
 
 **Activity event**:
@@ -407,7 +408,7 @@ The blocks the AI troubleshooter names as the cause of a stop, once code confirm
 What stopped a run, as the AI troubleshooter picks it from a fixed list: not found, refused, no answer, wrong value, changed field, permission, limit, or unknown. Code checks the stop shows it, or shows unknown, and writes the cause people see from it, the failed part, the system and one name from the stop (ADR 0055).
 
 **Fix**:
-A new version of a workflow that changes only the failed part, drafted by the Fix drafter and proven by simulation. A person asks for one on a stopped run, and nothing changes until an Approver says yes (ADR 0055).
+A new version of a workflow that changes only the failed part, drafted by the Fix drafter and proven by simulation. A person asks for one on a stopped run, and nothing changes until an Approver approves it (ADR 0055).
 
 **Coordinator**:
 The agent that runs one fix, behind the AI troubleshooter's face. It hands work to sub-agents, and its "done" counts for nothing until code agrees. It never writes (ADR 0055).
@@ -428,11 +429,11 @@ How a fix ends without a fix: the person gets the cause and what was tried, and 
 The coordinator's loop run on a drafted workflow's Check, once its simulation failed a case or no case reached a block. Code names the blocks where a case failed, and the Fix drafter may change only those. A refined draft is a new revision that goes through the same Check, and an Approver still checks it before it first runs. An Operator asks for it with Refine it, only where Simulation mode's model is on (ADR 0054, section 7).
 
 **Turn back on**:
-What an Operator presses once an Approver said yes to a fix. Code tries the fixed version with the one real test run, which writes nothing, and only then puts it live (ADR 0055).
+What an Operator presses once an Approver approved a fix. Code tries the fixed version with the one real test run, which writes nothing, and only then puts it live (ADR 0055).
 _Avoid_: Resume (that is a paused workflow's)
 
 **Scope check**:
-Code's check that a fix's draft changes only the blocks the coordinator asked for, and there only the parameters each block's type lists. It refuses anything else, code, a query, an expression it can't read, and a change that adds a write, a system or a key, moves an Ask for a yes, lets a block go past a failure or changes a person's setting (ADR 0055).
+Code's check that a fix's draft changes only the blocks the coordinator asked for, and there only the parameters each block's type lists. It refuses anything else, code, a query, an expression it can't read, and a change that adds a write, a system or a key, moves an Ask for approval, lets a block go past a failure or changes a person's setting (ADR 0055).
 
 **Kept key**:
 What platform-api puts in a plan where a key stood, before it sends the plan for a fix, so no key's value leaves it. A value counts as a key by its name as well as by its shape (ADR 0055).
@@ -505,7 +506,7 @@ The zone the team works in, Singapore unless the setting `TEAM_TIME_ZONE` names 
 _Avoid_: Server time, UTC day
 
 **Confirmation**:
-A second person's yes to a setup change before it takes effect, such as making someone an Approver or using a new AI model address. Any Approver may confirm, except the person who asked and the person it is about.
+A second person's approval of a setup change before it takes effect, such as making someone an Approver or using a new AI model address. Any Approver may confirm, except the person who asked and the person it is about.
 _Avoid_: Approval (that is for a run's proposal), sign-off
 
 ### Roles

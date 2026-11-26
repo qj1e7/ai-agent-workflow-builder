@@ -678,7 +678,7 @@ const TEST_PASSED = 'Test run passed up to the approval step. Nothing was writte
 const testPassed = (run: StageFacts): boolean => run.state === 'succeeded' && (run.outcome === 'test_passed' || (run.test === true && run.count === 0))
 
 /**
- * Where the run stands, in a short phrase that reads after "last run today," and on its own: "Waiting for a yes", "Retrying",
+ * Where the run stands, in a short phrase that reads after "last run today," and on its own: "Waiting for approval", "Retrying",
  * "1 ticket created, approved by Bob", or "MOCK-22 created" when the run's events name what it wrote.
  */
 export function stageWords(run: StageFacts, nameOf: NameOf): string {

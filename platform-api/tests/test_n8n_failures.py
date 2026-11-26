@@ -250,7 +250,9 @@ async def test_a_report_for_a_run_that_passed_its_test_up_to_the_yes_changes_not
     """E2b's review: a test run ends with a 409 at the gate, so its execution ends in an error and
     the error workflow reports it."""
     run_id = await r.test_run_at_the_gate()
-    result = await r.report(node="Ask for a yes", message="Test run passed up to the yes.")
+    result = await r.report(
+        node="Ask for approval", message="Test run passed up to the approval step."
+    )
     assert isinstance(result, LeftAsIs)
     assert await r.state() == Succeeded(run_id, Outcome.TEST_PASSED, ())
 

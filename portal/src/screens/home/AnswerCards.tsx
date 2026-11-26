@@ -299,7 +299,7 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
         <>
           {rest ? (
             <Button variant={main} onClick={() => page.ask(rest)}>
-              Set it up with a yes
+              Set it up with approval
             </Button>
           ) : null}
           <Button variant={rest ? 'secondary' : main} onClick={() => page.edit(typed)}>
@@ -309,7 +309,7 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
       }
     >
       <p>
-        You asked me to skip a yes: <q>{reply.said}</q>. Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.
+        You asked me to skip approval: <q>{reply.said}</q>. Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.
       </p>
       <p className="muted">{SAY_ANOTHER_WAY}</p>
     </Card>
@@ -317,11 +317,11 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
 }
 
 /** What someone who isn't an Operator can ask, each a question the Planner answers (ADR 0043). */
-export const APPROVER_CAN = ['Show what waits for your yes', 'Show exactly what a change will write', 'Show your past decisions'] as const
+export const APPROVER_CAN = ['Show what needs your approval', 'Show exactly what a change will write', 'Show your past decisions'] as const
 
 export const FOLLOWED_NOTHING: Readonly<Record<Asker, string>> = {
   operator: 'I can watch software releases, fix stopped runs and change your workflows.',
-  approver: 'I can show what waits for your yes, and your past decisions.',
+  approver: 'I can show what needs your approval, and your past decisions.',
 }
 
 function WhatICanDo({ lines, notYet = [] }: { lines: readonly { key: string; text: string; state: string | null }[]; notYet?: readonly string[] }) {

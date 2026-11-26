@@ -928,7 +928,7 @@ class Builder:
     async def add_the_yes_back(
         self, use_case_id: str, principal: Principal, body: RepublishIn
     ) -> Republished | None:
-        """Puts Ask for a yes back before each write in the version in use, and publishes that
+        """Puts Ask for approval back before each write in the version in use, and publishes that
         as a new version under the version compare."""
 
         def with_yes(versions: Sequence[Version]) -> tuple[Version, Held] | NoSuchVersion:

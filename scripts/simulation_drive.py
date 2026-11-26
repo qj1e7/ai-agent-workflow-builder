@@ -173,7 +173,7 @@ def lay_out() -> str:
 
 def release_check(first: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """A release check of our blocks with a Propose a change block: Read, Agent, Propose a change,
-    Ask for a yes, then Make the approved changes and Tell on Yes, and an end on each other exit.
+    Ask for approval, then Make the approved changes and Tell on Yes, and an end on each other exit.
     `first` stands in for Read. The Planner's own release check is tried in the simulation-link
     job (e2e/tests/test_practice_systems.py)."""
     read = {"source": "github_releases", "place": "langchain-ai/langgraph"}
@@ -193,7 +193,7 @@ def release_check(first: list[dict[str, Any]] | None = None) -> dict[str, Any]:
             "Compare", "CUSTOM.wabAgent", 2, {"agent": "release_checker", "inputs": inputs}, **RETRY
         ),
         node("Propose a change", "CUSTOM.wabProposeChange", 3, propose, **RETRY),
-        node("Ask for a yes", "CUSTOM.wabAskForYes", 4, webhookId=str(uuid.uuid4())),
+        node("Ask for approval", "CUSTOM.wabAskForYes", 4, webhookId=str(uuid.uuid4())),
         node("Make the approved changes", "CUSTOM.wabMakeApprovedChanges", 5, **RETRY),
         node("Tell", "CUSTOM.wabTell", 6, {"where": "channel", "what": "result"}, **RETRY),
         node("No answer", "n8n-nodes-base.noOp", 5),
@@ -205,8 +205,8 @@ def release_check(first: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     edges = {
         **{a: to(b) for a, b in zip(line, line[1:], strict=False)},
         "Compare": to("Propose a change"),
-        "Propose a change": to("Ask for a yes"),
-        "Ask for a yes": {"main": [[{"node": e, "type": "main", "index": 0}] for e in exits]},
+        "Propose a change": to("Ask for approval"),
+        "Ask for approval": {"main": [[{"node": e, "type": "main", "index": 0}] for e in exits]},
         "Make the approved changes": to("Tell"),
     }
     settings = {"saveManualExecutions": True, "saveExecutionProgress": True, "executionOrder": "v1"}
@@ -607,7 +607,7 @@ def main() -> int:
     )
     check(
         kept["approver"] == "yes" and kept["woke"] == "delivered",
-        f"yes: Ask for a yes got yes and n8n woke ({kept['approver']}, {kept['woke']})",
+        f"yes: Ask for approval got yes and n8n woke ({kept['approver']}, {kept['woke']})",
     )
     written = [c["title"] for c in kept["proposed"][: kept["would_have_written"] or 0]]
     check(

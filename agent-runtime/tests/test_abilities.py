@@ -30,7 +30,8 @@ from agent_runtime.planner import why_no_tool
 
 CAN = (
     "I can only check software for new releases on GitHub, check Maven Central and npm packages "
-    "for new versions, create a Jira ticket after a yes, and ask Approvers for a yes in Teams."
+    "for new versions, create a Jira ticket after approval, and ask Approvers for approval in "
+    "Teams."
 )
 WONT = ("close", "delete", "edit", "move", "update", "change", "reassign", "assign")
 
@@ -646,7 +647,7 @@ def test_a_new_tool_is_one_more_line_in_the_table():
     assert why_not("do", "Delete them", more) == (
         "I can't delete them. I can only read Jira tickets, sum up what I find, check "
         "software for new releases, read a Confluence page the team allows, create a Jira "
-        "ticket after a yes, and post a message in Teams."
+        "ticket after approval, and post a message in Teams."
     )
 
 
