@@ -104,9 +104,9 @@ from platform_api.orchestration.n8n_calls import (
     WriteCall,
     admit_write,
     after_write,
+    block_failure,
     decide_link,
     fail_by_report,
-    failure_words,
     read_answer,
     refuses_writes,
     rejoin,
@@ -387,8 +387,7 @@ class NodeCalls:
                 state
             ) not in (None, failed.execution_id):
                 return LeftAsIs(f"The run is {state_name(state)}, so it stays as it is.")
-            words = failure_words(failed, read_anything=True)
-            failure = Failure(FailureReason.WORKFLOW_NODE_ERROR, words, retryable=True)
+            failure = block_failure(failed, read_anything=True)
             await self._commit(uow, record, state.fail(failure))
             await self._store.cancel_outbox(uow, run_id)
         return FailedRun(run_id)
@@ -415,8 +414,7 @@ class NodeCalls:
             record = await self._store.load_run(uow, run_id, lock=True)
             assert record is not None
             read = await self._book.results_in_run(uow, run_id)
-            words = failure_words(failed, read_anything=bool(read))
-            failure = Failure(FailureReason.WORKFLOW_NODE_ERROR, words, retryable=True)
+            failure = block_failure(failed, read_anything=bool(read))
             writing = await self._book.writing(uow, execution)
             moved = fail_by_report(record.state, execution, failure, writing)
             if moved is None and writing and isinstance(record.state, Acting):

@@ -755,6 +755,15 @@ def failure_words(failed: FailedExecution, read_anything: bool) -> str:
     return words if read_anything else f"{NOTHING_READ_YET} {words}"
 
 
+def block_failure(failed: FailedExecution, read_anything: bool) -> Failure:
+    """How a failed block fails its run. A place its source doesn't have stops a retry the same
+    way, so that run can't be retried, and every screen reads it from this one fact."""
+    stop = source_stop(failed.node, failed.block, failed.message)
+    retryable = stop is None or stop.delay != "not_found"
+    words = failure_words(failed, read_anything)
+    return Failure(FailureReason.WORKFLOW_NODE_ERROR, words, retryable=retryable)
+
+
 def fail_by_report(
     state: RunState, execution: N8nExecutionId, failure: Failure, writing: bool
 ) -> Moved[Failed] | None:

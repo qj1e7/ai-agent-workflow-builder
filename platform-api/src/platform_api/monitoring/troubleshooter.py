@@ -204,9 +204,15 @@ def explain(reason: FailureReason) -> Advice:
 
 
 def _source_stop(failure: RunFailedData) -> SourceStop | None:
-    if failure.reason != "WorkflowNodeError" or not failure.retryable:
+    """The source stop a block's failure names. A place its source doesn't have fails the run as
+    one that can't be retried, and an older run failed it as one that can, so it is read
+    whatever `retryable` says. Any other source stop is one only while the run can be retried."""
+    if failure.reason != "WorkflowNodeError":
         return None
-    return read_stop(failure.message)
+    stop = read_stop(failure.message)
+    if stop is None or (stop.delay != "not_found" and not failure.retryable):
+        return None
+    return stop
 
 
 def source_advice(stop: SourceStop) -> Advice:
@@ -481,25 +487,15 @@ def what_happened(failure: RunFailedData, at: datetime | None = None) -> str:
 
 
 def answers(failure: RunFailedData, at: datetime | None = None) -> Answers:
-    """The three answers to a stop. `at` is when it stopped, in the team's time zone. A place the
-    source doesn't have stops a retry the same way, so the answers say no, as its advice does."""
+    """The three answers to a stop. `at` is when it stopped, in the team's time zone."""
     at_the_write = failure.stage == "acting"
-    stop = _source_stop(failure)
-    if stop is not None and stop.delay == "not_found":
-        retry = RetryAnswer(possible=False, asks_again=False)
-        safe = f"{SAME_ON_A_RETRY} {explain_failure(failure).suggestion}"
-    else:
-        retry = RetryAnswer(
-            possible=failure.retryable, asks_again=failure.retryable and not at_the_write
-        )
-        safe = _safe_to_retry(failure, retry)
+    retry = RetryAnswer(
+        possible=failure.retryable, asks_again=failure.retryable and not at_the_write
+    )
     return Answers(
         what_happened=what_happened(failure, at),
         what_affected=MAYBE_WRITTEN if at_the_write else NOTHING_WRITTEN,
-        safe_to_retry=safe,
+        safe_to_retry=_safe_to_retry(failure, retry),
         retry=retry,
         next="retry" if retry.possible else "report",
     )
-
-
-SAME_ON_A_RETRY: Final = "No. A retry reads the same name and stops the same way."

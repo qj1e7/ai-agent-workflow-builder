@@ -151,7 +151,7 @@ describe('the next step', () => {
 describe('a repository GitHub does not have', () => {
   // Re-check of dadc3812: the run failed as one to retry, so a Retry button sat under "Safe to retry? No". The platform's one fact is the run's retryable.
   const advice = missingRepo as TroubleshootingOut
-  const stop = failed({ ...advice.failure } as Partial<Failed>)
+  const stop = failed(advice.failure)
 
   it('offers no Retry, and says a retry is not safe, from the run the platform failed', () => {
     expect(stop.retryable).toBe(false)
@@ -160,7 +160,7 @@ describe('a repository GitHub does not have', () => {
     expect(html).toContain('data-report')
     expect(advice.answers.safe_to_retry).toMatch(/^No\. /)
     expect(text(html)).toContain(advice.answers.safe_to_retry)
-    expect(text(html)).toContain(advice.answers.what_happened)
+    expect(text(html).replaceAll('&quot;', '"')).toContain(advice.answers.what_happened)
   })
 
   it('holds Retry back before the troubleshooter answers too', () => {
