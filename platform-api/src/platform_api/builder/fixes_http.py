@@ -83,9 +83,8 @@ async def read_a_fix(fix_id: str, principal: CurrentPrincipal, fixes: CurrentFix
     status_code=202,
     description="Only after an Approver approved the fix's version: tries it with the one real "
     "test run, which stops at the approval step and writes nothing, and turns the workflow back on "
-    "with it "
-    "only once that passed. Asking again answers the fix as it stands. A fix an Approver said no "
-    "to stays off.",
+    "with it only once that passed. Asking again answers the fix as it stands. A fix an Approver "
+    "said no to stays off.",
     responses={
         **OPERATORS_ONLY,
         404: error_response(NO_SUCH_FIX),

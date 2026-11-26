@@ -335,9 +335,8 @@ async def ask(body: AskIn, calls: CurrentNodeCalls) -> AskOut | JSONResponse:
     "/calls/write",
     response_model=WriteOut,
     description="Makes the run's own approved changes. The write gateway checks the approval in "
-    "our "
-    "records as it writes each one, and makes each subject once across runs. A retry makes only "
-    "the changes still to make.",
+    "our records as it writes each one, and makes each subject once across runs. A retry makes "
+    "only the changes still to make.",
     responses=REFUSALS,
 )
 async def write(body: WriteIn, calls: CurrentNodeCalls) -> WriteOut | JSONResponse:

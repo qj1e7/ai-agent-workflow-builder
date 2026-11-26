@@ -282,8 +282,7 @@ class UseCaseView(WireModel):
         description="on, paused until an Operator resumes it, or draft until an Operator turns "
         "it on (ADR 0044). A paused workflow starts no run, on its schedule or by hand. A draft "
         "never runs on its schedule, and by hand only a test run, which stops before the approval "
-        "step and "
-        "writes nothing. A deleted workflow is not shown."
+        "step and writes nothing. A deleted workflow is not shown."
     )
     next_run_at: datetime | None = Field(
         description="When the workflow next runs on its own. Null while it is a draft, while it "
@@ -329,9 +328,8 @@ class UseCaseView(WireModel):
         description="The safety checker's grade of the version in use, for a workflow n8n "
         "carries. writes_refused: a write can run without approval, so the platform refuses this "
         "version's writes and asks nobody, until the approval step is put back or the change "
-        "undone. "
-        "needs_a_fix: it uses a block that is off, or cannot run as the platform expects, so "
-        "each run stops at its first block. Null for a workflow on the shared n8n workflow.",
+        "undone. needs_a_fix: it uses a block that is off, or cannot run as the platform expects, "
+        "so each run stops at its first block. Null for a workflow on the shared n8n workflow.",
     )
     findings: list[str] = Field(
         default_factory=list[str],
@@ -725,9 +723,8 @@ class VersionView(WireModel):
     by: UserId | None = Field(
         description="Who changed it: the person who saved the schedule, rolled back or put the "
         "approval step back in the Portal, or who published it in n8n. Null for version 1, for a "
-        "version "
-        "the Software watchlist published, and for a version published in n8n by someone the "
-        "People list can't match."
+        "version the Software watchlist published, and for a version published in n8n by someone "
+        "the People list can't match."
     )
     via: Via | None = Field(
         description="Where in the Portal it was changed. Null for a version made in n8n, and "
@@ -1024,8 +1021,7 @@ class CreateAgentUseCase(WireIn):
         default=True,
         description="False sets it up as a draft (ADR 0044): it never runs on its schedule, a "
         "test run of it stops before the approval step and writes nothing, and turning it on "
-        "publishes "
-        "version 1.",
+        "publishes version 1.",
     )
 
 

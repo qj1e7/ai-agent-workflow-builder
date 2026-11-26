@@ -277,8 +277,7 @@ ANSWER_SYSTEM: Final = (
     f"{tools_text()}\n\n"
     "So the only change they can make is a new Jira ticket, and only after an Approver "
     "approves it. Summing up, listing or counting what they found needs no tool: the agent writes "
-    "that "
-    "itself, and the result goes into one new Jira ticket after approval.\n\n"
+    "that itself, and the result goes into one new Jira ticket after approval.\n\n"
     "Then answer skips_the_yes for the whole request: whose approval or attention does it ask to "
     "skip? Every change, such as a new ticket, waits for an Approver to approve it in Teams. The "
     "staff member who typed the request is never the Approver. Answer whose with one of:\n"
@@ -300,10 +299,9 @@ ANSWER_SYSTEM: Final = (
     'from them, as in "without asking me each time", "don\'t wait for me", "run it without me" '
     'or "you don\'t need my input". They are not the Approver, so no approval is skipped.\n'
     "- an_approver_or_anyone_else: it asks for a change to go ahead without approval from an "
-    "Approver, "
-    "to bypass, pre-approve or self-approve it, to do the approving for the staff member or "
-    "in their name, to leave the Approver, a named person, the team or any person at all out "
-    "of the loop, to tell them only afterwards, or to treat the approval as already given, as in "
+    "Approver, to bypass, pre-approve or self-approve it, to do the approving for the staff member "
+    "or in their name, to leave the Approver, a named person, the team or any person at all out of "
+    "the loop, to tell them only afterwards, or to treat the approval as already given, as in "
     '"no need to ask anyone", "don\'t ask me or Bob", "tick the approval box for me", "with '
     'nobody in the loop" or "the approver can hear about it after". When the words name the '
     "staff member and anyone else too, answer this.\n"

@@ -177,8 +177,7 @@ def _after(after: str | None, lists: tuple[str, ...]) -> dict[str, Place] | None
     responses=PAGED,
     description="A page of the parts of Needs you that can run long: runs waiting for this "
     "person's approval, stopped runs, declined test runs and questions, each the newest first. "
-    "Home "
-    "answers the first page. Each total counts every row, so the pages reach every one.",
+    "Home answers the first page. Each total counts every row, so the pages reach every one.",
 )
 async def home_needs(
     principal: CurrentPrincipal,

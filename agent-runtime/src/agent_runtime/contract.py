@@ -649,8 +649,7 @@ class CapabilitySpec(WireModel):
     )
     focus: bool = Field(
         description="True for what software versioning uses: checking releases, asking for "
-        "approval, "
-        "creating the upgrade ticket. Home's lists show only these."
+        "approval, creating the upgrade ticket. Home's lists show only these."
     )
     tools: list[ToolId] = Field(description="The tools that do it. Empty unless it is ready.")
     short: str | None = Field(
@@ -1389,7 +1388,7 @@ class ReplyEnvelope(BaseModel):
 class ReplyOffer(WireModel):
     """The button on a free reply's can't. It sends the registry's example request for the
     closest Ready capability as the person's next message, so the Planner reads it again and any
-    write it sets up still waits for a yes (ADR 0047)."""
+    write it sets up still waits for approval (ADR 0047)."""
 
     capability: str = Field(description="The id of a Ready capability in the registry.")
     request: str = Field(

@@ -327,7 +327,7 @@ type FixTriedResult = Literal["turned_on", "kept_paused", "test_failed", "not_pu
 
 
 class FixDecidedData(WireModel):
-    """An Approver's yes or no to a fix's set-up approval."""
+    """An Approver's approve or decline on a fix's set-up approval."""
 
     fix_id: FixId
     approval_id: ApprovalIdText

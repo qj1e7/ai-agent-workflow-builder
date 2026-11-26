@@ -598,7 +598,7 @@ export function bannerOf(facts: BannerFacts): Banner {
  * One sentence on the state, and the one action that moves it on. Pause wins over the last run, because a paused workflow starts nothing.
  * Otherwise the newest run's pill decides, and its stage words say the rest, so the banner, the pill, the row and Recent runs never disagree:
  * "Stopped today at 8:00. An agent could not finish its work.", "Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.",
- * "Waiting for a yes.", "Running now.". A run that settled, declined, got no answer or was skipped leaves the workflow On.
+ * "Waiting for approval.", "Running now.". A run that settled, declined, got no answer or was skipped leaves the workflow On.
  */
 function bannerOfState({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
   const last = useCase.last_run

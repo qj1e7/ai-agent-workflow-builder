@@ -675,7 +675,7 @@ class DecidedReply(Reply):
 
 class DecideReply(Reply):
     """An approve or decline asked in the chat. Nobody decides there: the Portal offers the
-    requests waiting for the person's yes, to open and decide on."""
+    requests waiting for the person's approval, to open and decide on."""
 
     answer: Literal["decide"] = "decide"
 
@@ -694,8 +694,9 @@ class ChangedInN8nReply(Reply):
     """A version published in n8n, as the versions sweep found and graded it (ENGINE-PLAN 2.5).
     Home lists the newest for Operators, and the chat shows each as the Changed in n8n card, whose
     Undo rolls back to the version before with POST
-    /api/v1/use-cases/{use_case_id}/versions/{version}/rollback and whose Add the yes back is POST
-    /api/v1/use-cases/{use_case_id}/add-the-yes-back, each with in_use set to version."""
+    /api/v1/use-cases/{use_case_id}/versions/{version}/rollback and whose Add the approval step
+    back is POST /api/v1/use-cases/{use_case_id}/add-the-yes-back, each with in_use set to
+    version."""
 
     answer: Literal["changed_in_n8n"] = "changed_in_n8n"
     use_case_id: str

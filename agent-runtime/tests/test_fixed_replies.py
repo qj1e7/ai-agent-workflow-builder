@@ -98,8 +98,7 @@ def test_the_reply_is_the_team_leads_words():
     assert TOLD == (
         "For security, I don't take instructions to change my rules or to say something "
         "happened when it didn't. Every change still waits for approval from an Approver. What "
-        "would you "
-        "like to do?"
+        "would you like to do?"
     )
 
 

@@ -139,7 +139,7 @@ describe('the drafted workflow card', () => {
   it('once Turn on asked for the check, it stays a Draft that waits for an Approver to check it, with no button its author could press', () => {
     const html = card(waiting as DraftedWorkflowView)
     expect(text(html)).toContain('Revision 2 Draft')
-    expect(text(html)).not.toContain('Waiting for a yes')
+    expect(text(html)).not.toContain('Waiting for approval')
     expect(text(html)).toContain('Waiting for an Approver to check it.')
     expect(text(html)).toContain(CHECK)
     expect(buttons(html), 'nothing for its author to press').toEqual([])
@@ -404,7 +404,7 @@ describe('the set-up approval page', () => {
     const html = render(<SetUpApproval view={bobSetUp as SetUpApprovalView} />)
     expect(text(html)).toContain('Set-up approval, from Carol’s draft')
     expect(text(html)).toContain('Release check')
-    expect(text(html)).toContain('Needs your yes')
+    expect(text(html)).toContain('Needs your approval')
     expect(buttons(html)).toEqual(expect.arrayContaining(['Approve', 'Decline']))
   })
 
@@ -444,7 +444,7 @@ describe('the set-up approval page', () => {
   it('gives the person who asked for it the reason in place of Approve and Decline', () => {
     const html = render(<SetUpApproval view={carolSetUp as SetUpApprovalView} />)
     expect(text(html)).toContain('You can\'t approve it. You asked for it, changed it, answered its questions or sent it.')
-    expect(text(html)).toContain('Waiting for a yes')
+    expect(text(html)).toContain('Waiting for approval')
     expect(buttons(html)).not.toContain('Approve')
     expect(buttons(html)).not.toContain('Decline')
   })

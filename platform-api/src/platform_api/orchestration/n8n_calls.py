@@ -429,8 +429,7 @@ UNKNOWN_PUBLISHER = Refused(403, "Published by someone we don't know.")
 WRITES_REFUSED = Refused(
     403,
     "Writes refused: this version can make a change without approval. Add the approval step back, "
-    "or undo "
-    "the change, in the Portal.",
+    "or undo the change, in the Portal.",
 )
 """A version the safety checker graded anything but safe never asks for a yes and never writes
 (ENGINE-PLAN 2.3.11): its ask and its writes are refused, and the run stops."""
@@ -458,7 +457,7 @@ DENIED: Mapping[DenyReason, str] = {
     DenyReason.DIGEST_MISMATCH: "These are not the changes the Approvers approved.",
     DenyReason.UNREGISTERED_ACTION: "A change is not one our platform can make.",
     DenyReason.TARGET_CHANGED: JIRA_SITE_CHANGED,
-    DenyReason.EXPIRED: "The request expired before its yes.",
+    DenyReason.EXPIRED: "The request expired before it was approved.",
     DenyReason.TEST_RUN: TEST_RUN_WRITES_NOTHING.detail,
 }
 """What the safety checker's refusal says on the block, and in the run's failure."""

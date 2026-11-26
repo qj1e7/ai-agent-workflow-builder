@@ -89,7 +89,7 @@ test.describe('Drafted workflow', () => {
     await expect(bob).toHaveURL(new RegExp(`${link}$`))
     await expect(bob.getByRole('heading', { level: 1 })).toHaveText(name)
     await expect(bob.getByText('Set-up approval, from Alice’s draft')).toBeVisible()
-    await expect(bob.locator('[data-draft-pill]')).toHaveText('Needs your yes')
+    await expect(bob.locator('[data-draft-pill]')).toHaveText('Needs your approval')
     await expect(bob.getByRole('heading', { name: 'What it reads, writes and posts' })).toBeVisible()
     for (const heading of ['Who approves each write', 'Settings', 'Safety checks']) await expect(bob.getByRole('main').getByRole('heading', { name: heading, exact: true }), `${heading} is in view`).toBeVisible()
     await expect(bob.getByRole('main').getByText('Passed', { exact: true })).toBeVisible()

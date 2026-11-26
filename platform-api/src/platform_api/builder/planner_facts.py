@@ -122,7 +122,7 @@ def _fact(u: UseCaseView) -> WorkflowFact:
 NEEDS_SOMEONE: Final[frozenset[RunState]] = frozenset(
     {"failed", "lost", "expired", "awaiting_approval"}
 )
-"""Last runs a person has to see to: Stopped, Lost, No answer and Waiting for a yes."""
+"""Last runs a person has to see to: Stopped, Lost, No answer and Waiting for approval."""
 
 
 def _needs_someone(u: UseCaseView) -> bool:

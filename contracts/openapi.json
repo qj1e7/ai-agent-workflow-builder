@@ -3620,7 +3620,7 @@
       },
       "ChangedInN8nReply": {
         "additionalProperties": false,
-        "description": "A version published in n8n, as the versions sweep found and graded it (ENGINE-PLAN 2.5).\nHome lists the newest for Operators, and the chat shows each as the Changed in n8n card, whose\nUndo rolls back to the version before with POST\n/api/v1/use-cases/{use_case_id}/versions/{version}/rollback and whose Add the yes back is POST\n/api/v1/use-cases/{use_case_id}/add-the-yes-back, each with in_use set to version.",
+        "description": "A version published in n8n, as the versions sweep found and graded it (ENGINE-PLAN 2.5).\nHome lists the newest for Operators, and the chat shows each as the Changed in n8n card, whose\nUndo rolls back to the version before with POST\n/api/v1/use-cases/{use_case_id}/versions/{version}/rollback and whose Add the approval step\nback is POST /api/v1/use-cases/{use_case_id}/add-the-yes-back, each with in_use set to\nversion.",
         "properties": {
           "answer": {
             "const": "changed_in_n8n",
@@ -4629,7 +4629,7 @@
       },
       "DecideReply": {
         "additionalProperties": false,
-        "description": "An approve or decline asked in the chat. Nobody decides there: the Portal offers the\nrequests waiting for the person's yes, to open and decide on.",
+        "description": "An approve or decline asked in the chat. Nobody decides there: the Portal offers the\nrequests waiting for the person's approval, to open and decide on.",
         "properties": {
           "answer": {
             "const": "decide",
@@ -7421,7 +7421,7 @@
       },
       "FixDecidedData": {
         "additionalProperties": false,
-        "description": "An Approver's yes or no to a fix's set-up approval.",
+        "description": "An Approver's approve or decline on a fix's set-up approval.",
         "properties": {
           "approval_id": {
             "$ref": "#/components/schemas/ApprovalIdText"

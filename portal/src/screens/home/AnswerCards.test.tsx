@@ -671,7 +671,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     const [request] = HOME.approvals
     const many = { ...HOME, approvals: Array.from({ length: 10 }, (_, n) => ({ ...request!, approval_id: `apr_${String(n)}`, run_id: `run_${String(n)}` })), approvals_total: 25, confirmations: [] }
     const html = ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: many })
-    expect(answerOf(html)).toMatch(/^These need your approval\. Create 1 Jira ticket Needs your yes Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Review and decide/)
+    expect(answerOf(html)).toMatch(/^These need your approval\. Create 1 Jira ticket Needs your approval Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Review and decide/)
     expect(buttons(html).filter((name) => name === 'Review and decide')).toHaveLength(3)
     expect(html).toMatch(/<a[^>]*href="\/workflows"[^>]*>22 more<\/a>/)
   })
@@ -714,13 +714,13 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     const cards = [...html.matchAll(/<section[^>]*>([\s\S]*?)<\/section>/g)].map((match) => text(match[1] ?? ''))
     expect(cards).toEqual([
       'Create 1 Jira ticket Approved Upgrade LangGraph from 1.2.14 to 1.2.16 Approved. Open',
-      'Create 1 Jira ticket Needs your yes Upgrade LangGraph from 1.2.14 to 1.2.16 Review and decide',
+      'Create 1 Jira ticket Needs your approval Upgrade LangGraph from 1.2.14 to 1.2.16 Review and decide',
     ])
   })
 
   it('leads one request with the sketch’s line', () => {
     const one = { ...HOME, confirmations: [] }
-    expect(answerOf(ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: one }))).toMatch(/^This needs your approval\. Create 1 Jira ticket Needs your yes/)
+    expect(answerOf(ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: one }))).toMatch(/^This needs your approval\. Create 1 Jira ticket Needs your approval/)
   })
 
   it('sends an approve to the request to decide there, never a decision in the chat', () => {

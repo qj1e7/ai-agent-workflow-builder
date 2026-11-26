@@ -16,7 +16,7 @@ const TARGET = process.env['TARGET'] ?? 'head'
 const SAMPLE = Number(process.env['SAMPLE'] ?? '0')
 const BASE_URL = process.env['BASE_URL'] ?? 'http://localhost:8080'
 const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
-const STATE_WORDS = /Done: |Now: |Not reached yet: |Waiting for a yes|Stopped here|Not needed|Declined/
+const STATE_WORDS = /Done: |Now: |Not reached yet: |Waiting for approval|Stopped here|Not needed|Declined/
 
 interface Approval {
   approval_id: string
@@ -185,7 +185,7 @@ test('@lane1 alice watches a new check move through each step in order and stop 
     const gate = last.split(',').indexOf('wait')
     await page.waitForTimeout(3_000)
     const later = (await stepsOf(page)).map((s) => s.state).join(',')
-    await expect(pill(page)).toHaveText('Waiting for a yes')
+    await expect(pill(page)).toHaveText('Waiting for approval')
     await page.evaluate(() => window.scrollTo(0, 0))
     await shotTo(page, 1, 'p5-live-run.png')
     const fills = await page.locator('ol[aria-label="Steps of this run"] > li[aria-hidden="true"]').evaluateAll((items) => items.map((li) => getComputedStyle(li).transform))
@@ -263,13 +263,13 @@ async function cannotDecide(browser: Browser, user: 'alice' | 'carol', lane: 4 |
     const posts = decisionPosts(page)
 
     await page.goto(`/runs/${runId}`)
-    await expect(pill(page)).toHaveText('Waiting for a yes')
+    await expect(pill(page)).toHaveText('Waiting for approval')
     await expect(page.locator('#decision')).toBeFocused()
     await shotTo(page, lane, file)
     const onRunPage = { ...(await decisionButtons(page)), text: await page.getByRole('main').innerText() }
 
     await page.goto(`/approvals/${approvalId}`)
-    await expect(pill(page)).toHaveText('Waiting for a yes')
+    await expect(pill(page)).toHaveText('Waiting for approval')
     const onApprovalLink = { ...(await decisionButtons(page)), url: page.url() }
 
     const card = await scrollToTeamsCard(await openTeams(page), approvalId)
@@ -406,7 +406,7 @@ test('@lane8 the Teams link opens a run at the decision, and a yes there shows o
     const linkPage = await fresh.newPage()
     const freshWatch = watchPage(linkPage)
     await linkPage.goto(linkPath)
-    await expect(pill(linkPage)).toHaveText('Waiting for a yes')
+    await expect(pill(linkPage)).toHaveText('Waiting for approval')
     await expect(linkPage.locator('#decision')).toBeFocused()
     const freshLoad = { link: message?.link, url: linkPage.url(), focused: await linkPage.evaluate(() => document.activeElement?.id ?? ''), buttons: await decisionButtons(linkPage) }
     assertClean(freshWatch)

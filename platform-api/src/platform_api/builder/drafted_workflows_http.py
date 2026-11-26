@@ -291,11 +291,10 @@ async def read_set_up_approval(
     "/setup-approvals/{approval_id}/decisions",
     status_code=201,
     description="An Approver's approve or decline to set up the revision with this digest. One "
-    "Approver "
-    "who is not a party decides. A decline needs a reason from the short list. Once approved, the "
-    "platform sets it up as a Draft in n8n, read back and compared by digest. Approval is refused "
-    "while today's rules find a flag in the revision, a setting still needed, or a change to "
-    "someone's access. 200 when the same decision was recorded before.",
+    "Approver who is not a party decides. A decline needs a reason from the short list. Once "
+    "approved, the platform sets it up as a Draft in n8n, read back and compared by digest. "
+    "Approval is refused while today's rules find a flag in the revision, a setting still needed, "
+    "or a change to someone's access. 200 when the same decision was recorded before.",
     responses={
         **SIGNED_IN,
         200: {"model": SetUpApprovalView, "description": "Recorded before"},

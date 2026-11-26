@@ -1170,7 +1170,7 @@
     },
     "FixDecidedData": {
       "additionalProperties": false,
-      "description": "An Approver's yes or no to a fix's set-up approval.",
+      "description": "An Approver's approve or decline on a fix's set-up approval.",
       "properties": {
         "approval_id": {
           "$ref": "#/$defs/ApprovalIdText"

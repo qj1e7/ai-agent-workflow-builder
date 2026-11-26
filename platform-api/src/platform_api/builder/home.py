@@ -252,8 +252,7 @@ class NeedsPage(WireModel):
 class WaitingPage(WireModel):
     waiting_on_others: list[WaitingItem] = Field(
         description="Runs waiting for someone else's approval that this person is part of, the "
-        "newest "
-        "first, 50 a page."
+        "newest first, 50 a page."
     )
     waiting_on_others_total: int
     next: str | None = Field(description=NEXT)

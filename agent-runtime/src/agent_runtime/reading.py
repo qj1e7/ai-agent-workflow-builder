@@ -176,8 +176,7 @@ class SkipRead(BaseModel):
         "staff member themselves is not asked, told or kept in the loop. "
         "an_approver_or_anyone_else when it asks for a change to go ahead without approval from "
         "an Approver, to bypass, pre-approve or self-approve it, or to leave any other person or "
-        "any "
-        "person at all out."
+        "any person at all out."
     )
     said: str | None = Field(
         default=None,
