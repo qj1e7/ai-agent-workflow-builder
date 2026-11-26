@@ -41,7 +41,6 @@ ROUTES = {
     ("POST", "/api/v1/use-cases/{use_case_id}/versions/{version}/undo"),
     ("POST", "/api/v1/use-cases/{use_case_id}/versions/{version}/rollback"),
     ("POST", "/api/v1/use-cases/{use_case_id}/add-the-yes-back"),
-    ("GET", "/api/v1/use-cases/{use_case_id}/explain"),
     ("POST", "/api/v1/drafted-workflows"),
     ("GET", "/api/v1/drafted-workflows/{drafted_id}"),
     ("POST", "/api/v1/drafted-workflows/{drafted_id}/changes"),

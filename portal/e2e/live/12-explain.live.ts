@@ -9,13 +9,11 @@ import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
 
 /**
- * Explain in the chat (ADR 0051, section 6): the Planner's answer to “explain the …” shows the report as layout B, with In short
- * reworded only where the guard lets it through. The mock model smooths code's wording, except for a workflow that reads
- * facebook/react, whose smoothing drops a negation and is refused. The Explain page is gone: no row, workflow page, version or
- * side panel links to it, and an old Explain address opens the workflow's page.
+ * Explain in the chat (ADR 0051, section 6): the Planner's answer to “explain the …” is the sentence the workflow's page shows,
+ * with Open the workflow, and no report. Code reads the request and builds the answer, so no model is asked. The Explain page is
+ * gone: no row, workflow page, version or side panel links to it, and an old Explain address opens the workflow's page.
  */
 
-const SECTIONS = ['Step by step', 'What it reads, writes and posts', 'Flags', 'Who approves each write', 'Settings', 'Approval']
 const DAILY_8 = { day: 'every_day', at: '08:00' }
 
 interface Made {
@@ -33,11 +31,11 @@ async function releaseCheck(backend: Backend, name: string, repository: string):
 const panel = (page: Page): Locator => page.locator('#side-panel')
 const panelHeading = (page: Page): Locator => page.locator('#side-panel-h')
 
-const inShort = (scope: Locator): Locator => scope.locator('[data-in-short]')
+/** The sentence a release check's page shows, as the chat's answer says it too. */
+const says = (scope: Locator, repository: string): Locator => scope.getByText(new RegExp(`check ${repository.replace('/', '\\/')} on GitHub for a new release`))
 
-async function expectEverySection(scope: Locator): Promise<void> {
-  // A row's text starts with its title, then its gist, so "Approval" never matches the gist "1 waits for approval on each run".
-  for (const title of SECTIONS) await expect(scope.locator('summary', { hasText: new RegExp(`^${title}`) }), `${title} is a row`).toBeVisible()
+async function expectNoReport(scope: Locator): Promise<void> {
+  await expect(scope.getByText(/Step by step|Who approves each write|Reworded|Code’s wording/), 'no report').toHaveCount(0)
 }
 
 test.describe('Explain this workflow', () => {
@@ -98,46 +96,25 @@ test.describe('Explain this workflow', () => {
     await context.close()
   })
 
-  test('EXPLAIN-chat: “explain the FastAPI release check” shows the card with the Reworded pill, and Show code’s wording swaps to code’s In short', async ({ browser }, info) => {
+  test('EXPLAIN-chat: “explain the FastAPI release check” answers with the sentence its page shows and Open the workflow, and no report', async ({ browser }, info) => {
     const context = await devContext(browser, 'alice', { reducedMotion: true })
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/')
     const answer = await askAndWait(page, `explain the ${fastapi.name}`)
     await expect(answer.getByRole('heading', { level: 3, name: fastapi.name })).toBeVisible()
-    await expect(answer.getByText('Reworded', { exact: true }), 'the mock model’s smoothing of the FastAPI check passes every check').toBeVisible({ timeout: 30_000 })
-    await expectEverySection(answer)
-    const reworded = (await inShort(answer).innerText()).trim()
-    expect(reworded, 'the reworded line is not code’s own').not.toContain('It changes nothing else.')
-    await shot(page, info, 'explain-chat-reworded')
+    const sentence = says(answer, 'fastapi/fastapi')
+    await expect(sentence).toHaveText('Every day at 8:00, check fastapi/fastapi on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after approval.')
+    await expectNoReport(answer)
+    await expect(answer.getByRole('button', { name: 'Open the workflow' })).toHaveCount(1)
+    await shot(page, info, 'explain-chat-sentence')
 
-    await answer.getByRole('button', { name: 'Show code’s wording' }).click()
-    await expect(answer.getByText('Code’s wording', { exact: true })).toBeVisible()
-    await expect(inShort(answer)).toContainText('It changes nothing else.')
-    await expect(answer.getByRole('button', { name: 'Show the reworded one' })).toBeVisible()
-    await expectEverySection(answer)
-    await answer.getByRole('button', { name: 'Show the reworded one' }).click()
-    await expect(inShort(answer)).toHaveText(reworded)
-
+    const said = (await sentence.innerText()).trim()
     await answer.getByRole('button', { name: 'Open the workflow' }).click()
     await expect(panelHeading(page)).toHaveText(fastapi.name)
-    assertClean(watch)
-    await context.close()
-  })
-
-  test('EXPLAIN-guard: a workflow that reads facebook/react shows code’s wording with no Reworded pill, because the guard refuses the smoothing that drops a negation', async ({ browser }, info) => {
-    const context = await devContext(browser, 'alice', { reducedMotion: true })
-    const page = await context.newPage()
-    const watch = watchPage(page)
-    await page.goto('/')
-    const answer = await askAndWait(page, `explain the ${react.name}`)
-    await expect(answer.getByRole('heading', { level: 3, name: react.name })).toBeVisible()
-    await expectEverySection(answer)
-    await expect(inShort(answer)).toContainText('GitHub “facebook/react”')
-    await expect(inShort(answer)).toContainText('It changes nothing else.')
-    await expect(answer.getByText('Reworded', { exact: true })).toHaveCount(0)
-    await expect(answer.getByRole('button', { name: /wording|reworded/i })).toHaveCount(0)
-    await shot(page, info, 'explain-chat-guard')
+    await expect(panel(page).getByText(said, { exact: true }), 'the side panel shows the same sentence').toBeVisible()
+    await page.goto(`/workflows/${fastapi.id}`)
+    await expect(page.getByRole('main').getByText(said, { exact: true }), 'the workflow’s page shows the same sentence').toBeVisible()
     assertClean(watch)
     await context.close()
   })
@@ -151,6 +128,7 @@ test.describe('Explain this workflow', () => {
     await which.getByRole('button', { name: react.name, exact: true }).click()
     const chosen = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     await expect(chosen.getByRole('heading', { level: 3, name: react.name })).toBeVisible({ timeout: 30_000 })
+    await expect(says(chosen, 'facebook/react')).toBeVisible()
 
     const none = await askAndWait(page, 'explain the Kubernetes check')
     await expect(none.getByRole('heading', { level: 3, name: 'I can’t find a workflow called that.' })).toBeVisible()
@@ -170,6 +148,8 @@ test.describe('Explain this workflow', () => {
     await expect(panelHeading(page)).toHaveText(react.name)
     const answer = await askAndWait(page, 'explain it')
     await expect(answer.getByRole('heading', { level: 3, name: react.name })).toBeVisible({ timeout: 30_000 })
+    await expect(says(answer, 'facebook/react')).toBeVisible()
+    await expectNoReport(answer)
     await context.close()
   })
 })
