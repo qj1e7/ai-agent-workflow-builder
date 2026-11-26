@@ -14,7 +14,12 @@ from platform_api.monitoring.source_stops import (
     stop_words,
 )
 from platform_api.monitoring.troubleshooter import answers, explain_failure, what_happened
-from platform_api.orchestration.n8n_calls import ExecutionFacts, FailedExecution, failure_words
+from platform_api.orchestration.n8n_calls import (
+    ExecutionFacts,
+    FailedExecution,
+    block_failure,
+    failure_words,
+)
 from platform_api.shared import N8nExecutionId
 
 # n8n-workflow 2.42.3's own words for each connection error, which n8n 2.42.6 puts on the block
@@ -358,14 +363,17 @@ def test_only_a_source_our_platform_reads_is_named_as_not_finding_a_place(source
 
 
 def test_the_answers_for_a_place_the_source_does_not_have_say_not_to_retry():
-    """Review of d7b0b1ac: a retry reads the same name and stops the same way, so the answers say
-    no, as the advice does."""
-    found = answers(run_failed(stopped(OUR_READ, f"GitHub can't find {GONE}.")))
+    """Review of d7b0b1ac and re-check of dadc3812: the run can't be retried, and the answers say
+    so from that one fact, as the advice does."""
+    failure = not_found()
+    assert not failure.retryable
+    found = answers(failure)
     assert found.safe_to_retry == (
-        "No. A retry reads the same name and stops the same way. Check that the workflow names "
-        "the right one and that it still exists on GitHub, then start a new run."
+        "No. This kind of stop can't be retried. Check that the workflow names the right one and "
+        "that it still exists on GitHub, then start a new run."
     )
     assert (found.retry.possible, found.next) == (False, "report")
+    assert what_happened(failure) == NOT_FOUND_HEADLINE
 
 
 def run_failed(message: str) -> RunFailedData:
@@ -389,8 +397,29 @@ def test_the_troubleshooter_explains_a_source_stop_from_its_facts():
     assert answers(failure).safe_to_retry.startswith("Yes.")
 
 
-def test_the_troubleshooter_explains_a_place_the_source_does_not_have_from_its_facts():
+def not_found(retryable: bool = False) -> RunFailedData:
+    """The run's stop at our Read block whose source has no such place, as the platform fails the
+    run (`block_failure`): it can't be retried."""
+    failed = FailedExecution(
+        N8nExecutionId("45"), FACTS, "Read release", f"GitHub can't find {GONE}.", OUR_READ
+    )
+    failure = block_failure(failed, read_anything=True)
+    return RunFailedData(
+        stage="working",
+        reason="WorkflowNodeError",
+        retryable=failure.retryable and retryable,
+        message=failure.message,
+    )
+
+
+@pytest.mark.parametrize("retryable", [False, True], ids=["as now", "an older run"])
+def test_the_troubleshooter_explains_a_place_the_source_does_not_have_from_its_facts(
+    retryable: bool,
+):
+    """Re-check of dadc3812: the stop is read whatever `retryable` says, so a run failed before
+    this change is explained the same way."""
     failure = run_failed(stopped(OUR_READ, f"GitHub can't find {GONE}."))
+    failure = failure.model_copy(update={"retryable": retryable})
     assert what_happened(failure) == NOT_FOUND_HEADLINE
     advice = explain_failure(failure)
     assert advice.explanation == NOT_FOUND_HEADLINE

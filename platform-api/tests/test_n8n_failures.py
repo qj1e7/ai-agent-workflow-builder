@@ -128,6 +128,7 @@ class Reports:
         node: str = "Compare",
         message: str = "The agent is down",
         workflow: str = WORKFLOW,
+        block: dict[str, Any] | None = None,
     ) -> None:
         """n8n's record: the execution ended in an error at this block, with these words. As in
         n8n, an execution that failed no longer reads as running, so only this record of its
@@ -135,10 +136,10 @@ class Reports:
         ran = self.n8n.executions.pop(execution, None)
         facts = ran or ExecutionFacts(workflow, "trigger", None, None, "v1")
         self.failures.failed[execution] = FailedExecution(
-            N8nExecutionId(execution), facts, node, message
+            N8nExecutionId(execution), facts, node, message, block
         )
 
-    async def report(self, execution: str = "101", **said: str) -> FailureResult:
+    async def report(self, execution: str = "101", **said: Any) -> FailureResult:
         """Report a failure, run by our error workflow's execution 900."""
         self.errored(execution, **said)
         self.n8n.executions[REPORTER] = ExecutionFacts(ERROR_WORKFLOW, "error", None, None, None)
@@ -199,6 +200,22 @@ async def test_a_report_fails_the_linked_run_with_the_blocks_words(r: Reports):
     assert failure.message == '"Compare" failed in n8n: The agent is down.'
     assert failure.retryable
     assert (await r.h.kinds(run.run_id))[-1] == "run_failed"
+
+
+async def test_a_place_the_source_does_not_have_fails_the_run_with_no_retry(r: Reports):
+    """Re-check of dadc3812: a repository GitHub doesn't have failed the run as one to retry, so
+    the Portal showed a Retry button under "Safe to retry? No". A retry reads the same name and
+    stops the same way, so the run can't be retried, and every screen reads that one fact."""
+    r.started("101")
+    await r.call("101", READ, "Read release")
+    block = {"name": "Read release", "type": "CUSTOM.wabRead", "parameters": {"place": REPO}}
+    said = f"GitHub can't find {REPO}."
+    assert isinstance(await r.report(node="Read release", message=said, block=block), FailedRun)
+    [run] = await r.runs()
+    assert isinstance(run.state, Failed)
+    failure = run.state.failure
+    assert failure.message.startswith(f'GitHub can\'t find {REPO}, so "Read release" stopped.')
+    assert not failure.retryable
 
 
 async def test_a_report_without_a_link_shows_the_run_that_stopped_before_reading(r: Reports):
