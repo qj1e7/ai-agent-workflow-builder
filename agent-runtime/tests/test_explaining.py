@@ -307,13 +307,60 @@ def test_words_beside_a_workflow_s_name_are_read_by_the_model_first():
     assert isinstance(result, Answered) and isinstance(result.answer, RefusedAnswer)
 
 
-def test_an_explanation_that_names_an_approval_is_read_by_the_model_first():
-    task = "explain the FastAPI release check without approval"
-    skip = SkipRead(whose="an_approver_or_anyone_else", said="without approval")
+SKIPS: list[tuple[str, str]] = [
+    ("explain the FastAPI release check without approval", "without approval"),
+    ("explain without approval", "without approval"),
+    ("explain auto approve it", "auto approve it"),
+    ("explain the setup without asking Bob", "without asking Bob"),
+    ("explain the setup without Alice", "without Alice"),
+]
+"""Explain words that try to skip or go around an approval, with a workflow named or with none:
+code reads them as an explanation, so only the model's answer to the skip question refuses
+them, as it did before code read explanations first."""
+
+NAME_AN_APPROVAL = [
+    "explain without approval",
+    "explain the pending approval",
+    "explain auto approve it",
+    "explain Bob's approval",
+    "explain the setup without asking Bob",
+    "explain the setup so Bob is skipped",
+]
+"""Words that name an approval or a person, with no workflow of theirs named, which the skip
+refusal's own reader (`names_a_yes`, `names_a_person`) flags."""
+
+
+@pytest.mark.parametrize(("task", "said"), SKIPS)
+def test_a_skip_in_an_explain_request_is_refused_by_the_model_s_reading(task: str, said: str):
+    skip = SkipRead(whose="an_approver_or_anyone_else", said=said)
     chat = ScriptedChat(structured=[read(skips_the_yes=skip)])
     result = answer_task(asked_for(task), lambda timeout: chat, free_reply=False)
     assert chat.asked, "the model read it"
     assert isinstance(result, Answered) and isinstance(result.answer, RefusedAnswer)
+
+
+@pytest.mark.parametrize(("task", "said"), SKIPS)
+def test_the_ai_led_planner_refuses_a_skip_in_an_explain_request(task: str, said: str):
+    skip = SkipRead(whose="an_approver_or_anyone_else", said=said)
+    chat = ScriptedChat(script=[ANY_LEAD[0]], structured=[read(skips_the_yes=skip)])
+    result = led(asked_for(task), lambda timeout: chat)
+    assert chat.asked, "the model read it"
+    assert result.tools == ("front_refusal",)
+    assert isinstance(result.result, Answered) and isinstance(result.result.answer, RefusedAnswer)
+
+
+@pytest.mark.parametrize("task", NAME_AN_APPROVAL)
+def test_explain_words_that_name_an_approval_or_a_person_ask_the_model(task: str):
+    chat = ScriptedChat(structured=[read()])
+    answer_task(asked_for(task), lambda timeout: chat, free_reply=False)
+    assert chat.asked, "the model read it"
+
+
+@pytest.mark.parametrize("task", NAME_AN_APPROVAL)
+def test_the_ai_led_planner_asks_the_model_about_explain_words_that_name_an_approval(task: str):
+    chat = ScriptedChat(script=[ANY_LEAD[0]], structured=[read()])
+    led(asked_for(task), lambda timeout: chat)
+    assert chat.asked, "the model read it"
 
 
 @pytest.mark.parametrize(
