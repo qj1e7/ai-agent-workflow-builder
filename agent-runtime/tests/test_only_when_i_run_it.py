@@ -16,6 +16,7 @@ from agent_runtime.reading import (
     render_schedule,
 )
 from tests.test_answers import read
+from tests.test_planner_led import marks, run, shown, tool
 from tests.test_release_check_routes import facts
 from tests.test_release_check_routes import read as release_read
 
@@ -178,6 +179,20 @@ def test_who_runs_a_release_check_by_hand_is_never_crossed_beside_its_row(
     assert isinstance(answer, SetupCardAnswer), answer
     assert answer.rows[0] == UnderstoodRow(kind="schedule", text=said, state="understood")
     assert all(p.mark != "cant" for p in parts_of(fields, task, answer)), "nothing is crossed"
+
+
+def test_the_ai_led_watch_tool_shows_who_runs_it_by_hand_uncrossed():
+    task = "Check n8n for new releases, I'll run it manually"
+    result, _ = run(
+        task, tool("watch_software", software="n8n"), read=release_read(), facts=facts()
+    )
+    answer = shown(result)
+
+    assert isinstance(answer, SetupCardAnswer), answer
+    assert answer.rows[0] == UnderstoodRow(
+        kind="schedule", text="Run it manually", state="understood"
+    )
+    assert all(mark != "cant" for _, mark, _ in marks(result)), marks(result)
 
 
 @pytest.mark.parametrize(("words", "said"), WHO_RUNS_IT)
