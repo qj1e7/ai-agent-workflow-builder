@@ -36,11 +36,13 @@ interface World {
   readonly made?: { readonly key: string; readonly made: Made }
   readonly setUp?: SetUp | null
   readonly kept?: CardKept
+  /** Settings has no working AI model. */
+  readonly modelOff?: boolean
 }
 
 const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run }: World = {}): string {
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, modelOff = false }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], ALICE)
   if (run) queryClient.setQueryData(keys.run(scope, run.run_id), run)
@@ -48,6 +50,7 @@ function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread =
   else queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
   if (setUp) queryClient.setQueryData(keys.setUp(scope, CREATED.use_case_id), setUp)
   if (watched) queryClient.setQueryData(keys.watchlist(scope), watched)
+  if (modelOff) queryClient.setQueryData(keys.modelSettings(scope), { active: null })
   if (made) queryClient.setQueryData(keys.made(scope, made.key), made.made)
   const memory = newCardMemory()
   if (kept) memory.keep(kept)
@@ -120,5 +123,12 @@ describe('The card when the test run stopped', () => {
     expect(labels(html)).not.toContain('Try again')
     const open = [...html.matchAll(/<a\b([^>]*)>[^<]*Open the workflow/g)][0]?.[1] ?? ''
     expect(open).toMatch(/primary/)
+  })
+
+  it('holds Try again back when the stop can be retried but no AI model is connected, as the run page and Home do', () => {
+    const html = building(stoppedWith(true), { useCase: DRAFT, modelOff: true })
+    expect(labels(html)).not.toContain('Try again')
+    expect(labels(html)).toContain('Open the workflow')
+    expect(html).toContain('A test run can start again once an AI model is connected.')
   })
 })
