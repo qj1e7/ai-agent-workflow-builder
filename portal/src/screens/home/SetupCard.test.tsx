@@ -638,10 +638,11 @@ describe('the set-up card tried on practice systems (ADR 0054)', () => {
   })
 })
 
-describe('Building in n8n', () => {
+describe('The build panel', () => {
   it('draws the blocks, says what the builder did and lists the checks, with the footnote that holds today', () => {
     const html = render(<BuildPanel id={CREATED.use_case_id} />)
-    expect(text(html)).toContain('Building in n8n')
+    expect(text(html)).toContain('Setting it up…')
+    expect(text(html), 'no title names n8n').not.toContain('Building in n8n')
     expect(text(html)).toContain('Saved as a draft in n8n.')
     expect(html).toContain('<svg')
     expect(text(html)).toContain('The blocks fit together.')
@@ -651,12 +652,16 @@ describe('Building in n8n', () => {
   })
 
   it('says On, version 1, published in n8n, only once the platform says so', () => {
-    expect(text(render(<BuildPanel id={CREATED.use_case_id} />, { useCase: ON }))).toContain('On. Version 1, published in n8n.')
+    const html = text(render(<BuildPanel id={CREATED.use_case_id} />, { useCase: ON }))
+    expect(html).toContain('On. Version 1, published in n8n.')
+    expect(html).toContain('Set up. Version 1.')
+    expect(html).not.toContain('Setting it up…')
   })
 
   it('never says n8n for a workflow the platform didn’t lay out there', () => {
     const shared = { ...CREATED, n8n_workflow_id: null, build_log: [], blocks: [] }
     const html = text(render(<BuildPanel id={CREATED.use_case_id} />, { setUp: { ...HELD, created: shared, at: 0 } }))
     expect(html).not.toContain('n8n')
+    expect(html).toContain('Setting it up…')
   })
 })

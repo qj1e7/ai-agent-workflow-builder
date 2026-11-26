@@ -11,7 +11,8 @@ import { useAddTheYesBack, useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow
 import { OperatorsNote } from '../../shell/OperatorsNote'
 import { PageHead } from '../../shell/PageHead'
 import { ActionMenu, type MenuItem } from '../../ui/ActionMenu'
-import { Button } from '../../ui/Button'
+import { Button, ButtonLink } from '../../ui/Button'
+import { changePath } from '../home/edit'
 import { useFocusAfterReread } from '../../ui/focus'
 import { useFromChat } from '../../ui/fromChat'
 import { openedFromList } from '../../ui/fromList'
@@ -201,6 +202,8 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const nothingToCheck = isWatchlist(useCase) && (watching.data?.software.length ?? 0) === 0
   const runNowLeads = mainActionOf(useCase, viewer) === 'run' && !nothingToCheck
   const mayPause = controls.includes('pause')
+  // The chat's edit card changes when it runs, the one thing the platform changes in a saved workflow. The watchlist and one made in n8n have their own places for it.
+  const mayChange = mayChangeSchedule(useCase, viewer) && held === null
   const banner = bannerOf({ useCase, viewer, now, nameOf })
   const gate = useCase.plan.some((block) => block.kind === 'approval')
 
@@ -370,6 +373,11 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
                 Pause
               </Button>
+            ) : null}
+            {mayChange ? (
+              <ButtonLink to={changePath(id)}>
+                Change
+              </ButtonLink>
             ) : null}
             {openable ? <OpenInN8nEditor useCaseId={id} hold={openable} variant="secondary" /> : null}
             {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={!runNowLeads && runNow.pending} place={placeOf('delete')} /> : null}

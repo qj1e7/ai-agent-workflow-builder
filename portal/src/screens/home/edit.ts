@@ -66,6 +66,34 @@ export const scheduleText = (schedule: Schedule): string => upperFirst(repeatWor
 /** "Weekdays 8:00", as the card's one row says it, the old one struck and the new one after it. */
 export const scheduleOnCard = (schedule: Schedule | null): string => (schedule ? scheduleShort(schedule) : 'Not scheduled')
 
+/** Where Change on a workflow's page goes: Home, which draws that workflow's edit card in the chat. */
+export const changePath = (useCaseId: string): string => `/?change=${encodeURIComponent(useCaseId)}`
+
+/**
+ * The edit card for one workflow, made from the workflow itself with no model, as Resume brings a saved draft back as the card it
+ * was. Its After leaves the day and the time open, so the card asks them with its buttons and saves only on Save change.
+ */
+export function changeReply(useCase: Pick<UseCaseView, 'use_case_id' | 'name' | 'schedule'>): EditReply {
+  const saved = useCase.schedule
+  return {
+    answer: 'edit',
+    use_case_id: useCase.use_case_id,
+    name: useCase.name,
+    watchlist: false,
+    missing: null,
+    software: null,
+    choices: [],
+    before: saved ? { day: saved.day, at: saved.at } : null,
+    after: { day: null, at: null },
+    hour: null,
+    cant: null,
+    holds_save: false,
+    leaves_out_days: false,
+    parts: [],
+    trace_id: null,
+  }
+}
+
 /** The workflow the reply names, or the one they picked from its choices. */
 export function targetOf(reply: EditReply, picks: Picks): EditChoice | null {
   if (reply.use_case_id !== null && reply.name !== null) {

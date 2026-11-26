@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import { useHome } from '../api/homeQueries'
-import { useApprovals, useRuns, useTeamsMessages } from '../api/queries'
-import type { Me, RunView, TeamsStubMessage } from '../api/types'
+import { useApproval, useApprovals, useRuns, useTeamsMessages } from '../api/queries'
+import type { ApprovalView, Me, RunView, TeamsStubMessage } from '../api/types'
+import { APPROVE, canDecideNow, partyOf, useDecision, type Decision } from '../screens/run/decision'
 import { shortTime } from '../screens/run/words'
-import { ButtonLink } from '../ui/Button'
+import { Button, ButtonLink } from '../ui/Button'
 import { IconX } from '../ui/icons'
 import { motionAllowed } from '../ui/motion'
 import { ChatIcon, Mark } from './icons'
@@ -60,7 +61,7 @@ function linkOf(message: TeamsStubMessage): string {
 
 /**
  * The message as a real Teams channel shows it: the platform's Adaptive Card, with one link to the
- * approval page and no Approve or Decline button (ADR 0036). The Approver decides on that page.
+ * approval page and no Approve or Decline button (ADR 0036). An Approver who may decide also gets TeamsDecide under it.
  */
 export function MessageBody({ message, onOpen }: { message: TeamsStubMessage; onOpen: () => void }) {
   return (
@@ -81,7 +82,38 @@ export function MessageBody({ message, onOpen }: { message: TeamsStubMessage; on
   )
 }
 
-function Message({ message, onOpen }: { message: TeamsStubMessage; onOpen: () => void }) {
+/**
+ * Approve and Decline in the practice copy, for an Approver the platform says may decide this request, and nothing for anyone else:
+ * the card's own button opens the approval page. It posts the same decision as the run page, with the same digest, so the platform
+ * checks the person and the request again at the write (ADR 0036, changed 26 Nov 2026).
+ */
+export function TeamsDecide({ approval, decision }: { approval: ApprovalView | undefined; decision: Pick<Decision, 'pending' | 'recorded' | 'steps' | 'error' | 'decide'> }) {
+  if (!approval) return null
+  const busy = decision.pending !== null
+  if (decision.recorded !== null) return <p role="status">{decision.recorded === 'approve' ? 'You approved this.' : 'You declined this.'}</p>
+  if (!canDecideNow(approval, decision)) return null
+  return (
+    <>
+      <div className={styles['buttons']}>
+        <Button variant="primary" loading={decision.pending === 'approve'} disabled={busy && decision.pending !== 'approve'} onClick={() => decision.decide(APPROVE)}>
+          Approve
+        </Button>
+        <Button loading={decision.pending === 'decline'} disabled={busy && decision.pending !== 'decline'} onClick={() => decision.decide({ verdict: 'decline', reason: null })}>
+          Decline
+        </Button>
+      </div>
+      {decision.error ? <p role="alert">{decision.error}</p> : null}
+    </>
+  )
+}
+
+function DecideHere({ approvalId, me }: { approvalId: string; me: Me }) {
+  const approval = useApproval(approvalId).data
+  const decision = useDecision(approval, partyOf(approval, me.id))
+  return <TeamsDecide approval={approval} decision={decision} />
+}
+
+function Message({ message, me, onOpen }: { message: TeamsStubMessage; me: Me; onOpen: () => void }) {
   return (
     <li className={styles['message']} data-approval-id={message.approval_id}>
       <span className={styles['app']}>
@@ -92,6 +124,7 @@ function Message({ message, onOpen }: { message: TeamsStubMessage; onOpen: () =>
           <b>{PRODUCT}</b> · {shortTime(message.ts)}
         </p>
         <MessageBody message={message} onOpen={onOpen} />
+        <DecideHere approvalId={message.approval_id} me={me} />
       </div>
     </li>
   )
@@ -122,6 +155,22 @@ function useStuckToBottom(): (node: HTMLDivElement | null) => (() => void) | und
   }, [])
 }
 
+/** The drawer's top bar. Close says its word, so it is no icon to guess. */
+export function DrawerHead({ note, onClose }: { note: string; onClose: () => void }) {
+  return (
+    <div className={styles['head']}>
+      <div>
+        <h2>Microsoft Teams</h2>
+        <small>{note}</small>
+      </div>
+      <button type="button" className={styles['close']} aria-label="Close Teams" onClick={onClose} data-close="">
+        <IconX size={16} />
+        Close
+      </button>
+    </div>
+  )
+}
+
 function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: () => void }) {
   const messages = useTeamsMessages({ poll: true })
   const shown = (messages.data ?? []).slice(-SHOWN_MESSAGES)
@@ -130,15 +179,7 @@ function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: 
 
   return (
     <div className={styles['inner']} ref={inner}>
-      <div className={styles['head']}>
-        <div>
-          <h2>Microsoft Teams</h2>
-          <small>{TEAMS_NOTE}</small>
-        </div>
-        <button type="button" className={styles['close']} aria-label="Close Teams" onClick={onClose} data-close="">
-          <IconX size={18} />
-        </button>
-      </div>
+      <DrawerHead note={TEAMS_NOTE} onClose={onClose} />
       <p className={styles['channel']}>
         {channel ? <b># {channel}</b> : null}
         <span className={styles['signedIn']}>
@@ -149,7 +190,7 @@ function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: 
         {shown.length > 0 ? (
           <ol className={styles['messages']} aria-label="Messages">
             {shown.map((message) => (
-              <Message key={message.id} message={message} onOpen={onOpen} />
+              <Message key={message.id} message={message} me={me} onOpen={onOpen} />
             ))}
           </ol>
         ) : (
