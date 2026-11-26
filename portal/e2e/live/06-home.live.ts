@@ -90,9 +90,10 @@ test('a yes from the Teams card’s link takes the item off Home at once, withou
   await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
   const message = page.getByRole('dialog', { name: 'Teams, practice copy' }).locator(`li[data-approval-id="${approvalId}"]`)
   await message.scrollIntoViewIfNeeded()
-  // Like real Teams, the card has no Approve button: its link opens the approval page, and Bob decides there.
+  // The card's link opens the approval page, and Bob decides there. The drawer closes first, so its own Approve is not in the way.
   await message.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
-  await page.getByRole('button', { name: 'Approve', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Teams, practice copy' })).toBeHidden()
+  await page.locator('#decision').getByRole('button', { name: 'Approve', exact: true }).click()
   await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: 'Chat' }).click()
   await expect(itemOf(page, approvalId)).toHaveCount(0, { timeout: 15_000 })
   await page.getByRole('button', { name: /^Teams, practice copy/ }).click()

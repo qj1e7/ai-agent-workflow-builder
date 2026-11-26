@@ -156,6 +156,11 @@ def _stopped(plan: SimulationPlan, run: SimulatedRun, execution: ExecutionRecord
     if at is None or block is None:
         return _Seen("failed", "It failed, and n8n names no block.")
     if block.node_type.startswith(OURS):
+        stop = source_stop(at, execution.failed_block, words)
+        if stop is not None:
+            # A place not found, in the words a real run's stop says it with (failure_words).
+            said = stop_words(stop)
+            return _Seen("stopped", f'"{at}" stopped it: {said}', at, named=True, said=said)
         # The gateway's own words, as n8n shows only its status for an answer to try again.
         said = next((c.detail for c in reversed(run.calls) if c.block == at and c.detail), words)
         if said:

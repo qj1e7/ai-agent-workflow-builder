@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useReducer, useRef, ty
 import { useCacheScope, useErrorWords } from '../../api/context'
 import { useChangeDrafted } from '../../api/draftedQueries'
 import { usePlannerAnswer } from '../../api/plannerQueries'
-import type { ChangedInN8nReply, PlannerAnswerIn } from '../../api/types'
+import type { ChangedInN8nReply, EditReply, PlannerAnswerIn } from '../../api/types'
 import type { PanelItem } from '../../ui/sidePanel'
 import { deskOf, desksReducer, panelOf, type Changing, type DeskAction, type Desks, type Note } from './chatState'
 import { newCardMemory, type CardMemory } from './cardMemory'
@@ -48,6 +48,8 @@ export interface Chat {
   readonly arrive: (found: readonly ChangedInN8nReply[]) => void
   /** Shows the card of a drafted workflow they started with a button. */
   readonly arriveDraft: (draftedId: string) => void
+  /** Shows the edit card of one workflow, made from the workflow itself, as Change on its page asks. */
+  readonly arriveEdit: (reply: EditReply) => void
   /** Puts a new card for a drafted workflow's revision in the thread, so the older card settles. */
   readonly arriveRevision: (draftedId: string, revision: number) => void
   readonly newChat: () => void
@@ -169,6 +171,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
           here({ type: 'arrived', reply })
         }
       },
+      arriveEdit: (reply) => here({ type: 'arrived', reply }),
       arriveDraft: (draftedId) => here({ type: 'arrived', reply: { answer: 'draft_started', drafted_id: draftedId, refused: null, parts: [], trace_id: null } }),
       arriveRevision: (draftedId, revision) => here({ type: 'draft_card', draftedId, revision }),
       // A card they hadn't finished saves itself as a draft as it leaves the page, so New chat only needs to know there was one.

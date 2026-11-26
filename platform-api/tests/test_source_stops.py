@@ -14,7 +14,12 @@ from platform_api.monitoring.source_stops import (
     stop_words,
 )
 from platform_api.monitoring.troubleshooter import answers, explain_failure, what_happened
-from platform_api.orchestration.n8n_calls import ExecutionFacts, FailedExecution, failure_words
+from platform_api.orchestration.n8n_calls import (
+    ExecutionFacts,
+    FailedExecution,
+    block_failure,
+    failure_words,
+)
 from platform_api.shared import N8nExecutionId
 
 # n8n-workflow 2.42.3's own words for each connection error, which n8n 2.42.6 puts on the block
@@ -319,6 +324,58 @@ def test_our_own_blocks_keep_their_words():
     assert stopped(read, ABORTED) == f'"Read release" failed in n8n: {ABORTED}.'
 
 
+GONE = "zzfake-owner/no-such-repo-xyz"
+OUR_READ = block("Read release", "CUSTOM.wabRead", 1, {"source": "github_releases", "place": GONE})
+NOT_FOUND_HEADLINE = f'GitHub can\'t find {GONE}, so "Read release" stopped.'
+NOT_FOUND_CAUSE = (
+    "The workflow may name the wrong one, or it may have been renamed, deleted or made private."
+)
+
+
+def test_a_place_our_read_s_source_does_not_have_is_named_with_the_source_and_the_place():
+    """25 Nov walk-through: a release check of a repository GitHub doesn't have stopped with
+    '"Read release" failed in n8n: Our platform could not do this step (HTTP 503)'. The Read
+    block now shows our platform's words, and the stop names GitHub and the repository."""
+    said = f"GitHub can't find {GONE}."
+    assert stopped(OUR_READ, said) == f"{NOT_FOUND_HEADLINE} {NOT_FOUND_CAUSE}"
+    retried = {**OUR_READ, **RETRIED}
+    assert stopped(retried, said, read_anything=False) == (
+        f'Stopped before it read anything. GitHub can\'t find {GONE}, so "Read release" '
+        f"stopped after 3 tries. {NOT_FOUND_CAUSE}"
+    )
+
+
+def test_n8n_s_own_block_never_speaks_for_our_platform():
+    said = f"GitHub can't find {GONE}."
+    assert stopped(GITHUB, said) == f'"Get releases" failed in n8n: {said}'
+
+
+@pytest.mark.parametrize("source", ["Acme", "The repository", "Our platform"])
+def test_only_a_source_our_platform_reads_is_named_as_not_finding_a_place(source: str):
+    """Review of d7b0b1ac: the source is read from an allow-list, so words of another shape that
+    happen to say "can't find" are n8n's words for the block, never a source stop."""
+    said = f"{source} can't find {GONE}."
+    assert stopped(OUR_READ, said) == f'"Read release" failed in n8n: {said}'
+    assert (
+        read_stop(f'{source} can\'t find {GONE}, so "Read release" stopped. {NOT_FOUND_CAUSE}')
+        is None
+    )
+
+
+def test_the_answers_for_a_place_the_source_does_not_have_say_not_to_retry():
+    """Review of d7b0b1ac and re-check of dadc3812: the run can't be retried, and the answers say
+    so from that one fact, as the advice does."""
+    failure = not_found()
+    assert not failure.retryable
+    found = answers(failure)
+    assert found.safe_to_retry == (
+        "No. This kind of stop can't be retried. Check that the workflow names the right one and "
+        "that it still exists on GitHub, then start a new run."
+    )
+    assert (found.retry.possible, found.next) == (False, "report")
+    assert what_happened(failure) == NOT_FOUND_HEADLINE
+
+
 def run_failed(message: str) -> RunFailedData:
     return RunFailedData(
         stage="working", reason="WorkflowNodeError", retryable=True, message=message
@@ -338,6 +395,40 @@ def test_the_troubleshooter_explains_a_source_stop_from_its_facts():
         "that n8n can reach it."
     )
     assert answers(failure).safe_to_retry.startswith("Yes.")
+
+
+def not_found(retryable: bool = False) -> RunFailedData:
+    """The run's stop at our Read block whose source has no such place, as the platform fails the
+    run (`block_failure`): it can't be retried."""
+    failed = FailedExecution(
+        N8nExecutionId("45"), FACTS, "Read release", f"GitHub can't find {GONE}.", OUR_READ
+    )
+    failure = block_failure(failed, read_anything=True)
+    return RunFailedData(
+        stage="working",
+        reason="WorkflowNodeError",
+        retryable=failure.retryable and retryable,
+        message=failure.message,
+    )
+
+
+@pytest.mark.parametrize("retryable", [False, True], ids=["as now", "an older run"])
+def test_the_troubleshooter_explains_a_place_the_source_does_not_have_from_its_facts(
+    retryable: bool,
+):
+    """Re-check of dadc3812: the stop is read whatever `retryable` says, so a run failed before
+    this change is explained the same way."""
+    failure = run_failed(stopped(OUR_READ, f"GitHub can't find {GONE}."))
+    failure = failure.model_copy(update={"retryable": retryable})
+    assert what_happened(failure) == NOT_FOUND_HEADLINE
+    advice = explain_failure(failure)
+    assert advice.explanation == NOT_FOUND_HEADLINE
+    assert advice.likely_cause == NOT_FOUND_CAUSE
+    assert advice.suggested_action == "ask_maintainer"
+    assert advice.suggestion == (
+        "Check that the workflow names the right one and that it still exists on GitHub, then "
+        "start a new run."
+    )
 
 
 def test_the_troubleshooter_names_no_system_it_does_not_know():
@@ -364,6 +455,8 @@ def test_the_troubleshooter_keeps_its_advice_for_any_other_block_failure():
         SourceStop("Jira", "refused", 30_000, 'The "big" search', 1),
         SourceStop(None, "cut_off", 30_000, "Notion", 5),
         SourceStop("Slack", "unreachable", 30_000, "Post in Slack", 1),
+        SourceStop("GitHub", "not_found", None, "Read release", 1, "zzfake-owner/no-such-repo"),
+        SourceStop("GitHub", "not_found", None, 'The "old" read', 3, "a/b.c"),
     ],
 )
 def test_the_words_give_back_the_facts_they_were_made_from(stop: SourceStop):

@@ -1,0 +1,26 @@
+{
+  "run_id": "run_01JB9",
+  "failure": {
+    "stage": "working",
+    "reason": "WorkflowNodeError",
+    "retryable": false,
+    "message": "Stopped before it read anything. GitHub can't find zzfake-owner/no-such-repo-xyz, so \"Read release\" stopped. The workflow may name the wrong one, or it may have been renamed, deleted or made private."
+  },
+  "advice": {
+    "explanation": "GitHub can't find zzfake-owner/no-such-repo-xyz, so \"Read release\" stopped.",
+    "likely_cause": "The workflow may name the wrong one, or it may have been renamed, deleted or made private.",
+    "suggested_action": "ask_maintainer",
+    "suggestion": "Check that the workflow names the right one and that it still exists on GitHub, then start a new run."
+  },
+  "answers": {
+    "what_happened": "GitHub can't find zzfake-owner/no-such-repo-xyz, so \"Read release\" stopped.",
+    "what_affected": "Nothing. No ticket was written.",
+    "safe_to_retry": "No. This kind of stop can't be retried. Check that the workflow names the right one and that it still exists on GitHub, then start a new run.",
+    "retry": {
+      "possible": false,
+      "asks_again": false
+    },
+    "next": "report"
+  },
+  "found": null
+}

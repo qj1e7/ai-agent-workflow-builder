@@ -241,6 +241,19 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"[^>]*>More actions/)
   })
 
+  it('gives an Operator a Change button, a link to the Home chat with this workflow’s card, before More actions and never the one primary action', () => {
+    const html = render({ useCase: SCHEDULED })
+    const link = new RegExp(`<a\\b[^>]*href="/\\?change=${SCHEDULED.use_case_id}"[^>]*>([\\s\\S]*?)</a>`).exec(mainOf(html))
+    expect(text(link?.[1] ?? '')).toBe('Change')
+    expect(link?.[0]).not.toMatch(/_primary_/)
+    expect(mainOf(html).indexOf('href="/?change=')).toBeLessThan(mainOf(html).indexOf('More actions'))
+  })
+
+  it('offers no Change to an Approver, or for the Software watchlist, which has its own page for its schedule', () => {
+    expect(mainOf(render({ me: BOB, useCase: SCHEDULED }))).not.toContain('?change=')
+    expect(mainOf(render({ useCase: WATCHLIST }))).not.toContain('?change=')
+  })
+
   it('makes Run now the one main button of a workflow with no schedule, first in the row, with Delete still last in the closed menu', () => {
     const html = render()
     const row = buttons(html).filter((label) => ['Run now', 'Pause', 'More actions'].includes(label))

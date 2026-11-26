@@ -48,7 +48,6 @@ from platform_api.orchestration.n8n_calls import (
     CHANGED_CALL,
     GITHUB_RELEASES,
     NO_EXECUTION,
-    READ_LIMIT,
     START_EXPIRED,
     START_LIFETIME,
     START_OTHER_WORKFLOW,
@@ -59,18 +58,20 @@ from platform_api.orchestration.n8n_calls import (
     NodeCall,
     NodeKind,
     NodeOption,
+    NotFoundAtSource,
     NothingToChange,
     OptionKind,
     ProposeCall,
     ReadCall,
     ReadFailed,
-    ReadItems,
     Refused,
+    SourceRead,
     TellCall,
     TryLater,
     Waiting,
     WriteAnswer,
     WriteCall,
+    read_answer,
     release_compared,
     release_of,
 )
@@ -94,6 +95,9 @@ TOO_MANY_CALLS = Refused(409, "This simulated run made too many calls, so the ga
 TOO_MUCH = Refused(409, "This simulated run sent too much, so the gateway stopped it.")
 N8N_SILENT = TryLater("The simulation n8n did not answer.")
 SOURCE_NOT_FOUND = "The place was not found at the source."
+"""What a Read of a source the real platform answers with a try again gets for a place not
+found, as a Confluence page. Where the real read refuses, as GitHub's, the simulation refuses as
+it does (`_not_found`)."""
 SOURCE_TIMED_OUT = "The source did not answer in time."
 AGENT_TIMED_OUT = "The agent did not answer in time."
 
@@ -231,8 +235,16 @@ class ExecutionReads(Protocol):
     async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None: ...
 
 
+def _not_found(source: str, place: str) -> CallResult:
+    """A place not found, played as the real read answers it: for GitHub's releases, the answer
+    `read_answer` gives our API's read of a repository GitHub doesn't have."""
+    if source == GITHUB_RELEASES:
+        return read_answer(NotFoundAtSource("GitHub", place))
+    return TryLater(SOURCE_NOT_FOUND)
+
+
 class ReleaseReads(Protocol):
-    async def releases(self, repo: str) -> ReadItems | ReadFailed: ...
+    async def releases(self, repo: str) -> SourceRead: ...
 
 
 @dataclass(frozen=True)
@@ -257,7 +269,7 @@ class MockGitHub:
         self._base_url = base_url.rstrip("/")
         self._client = client or httpx.AsyncClient(timeout=10.0, follow_redirects=False)
 
-    async def releases(self, repo: str) -> ReadItems | ReadFailed:
+    async def releases(self, repo: str) -> SourceRead:
         if not REPO.match(repo) or ".." in repo:
             return ReadFailed(f'"{repo}" is not a GitHub repository name.')
         try:
@@ -267,7 +279,7 @@ class MockGitHub:
         except httpx.HTTPError as error:
             return ReadFailed(f"Mock GitHub did not answer ({type(error).__name__}).")
         if response.status_code == 404:
-            return ReadFailed(f"GitHub has no repository {repo}.")
+            return NotFoundAtSource("GitHub", repo)
         if response.status_code != 200:
             return ReadFailed(f"Mock GitHub answered {response.status_code}.")
         found: object = response.json()
@@ -525,22 +537,18 @@ class SimulatedCalls:
         if isinstance(given, Refused):
             return given
         if place in given.gone:
-            return TryLater(SOURCE_NOT_FOUND)
+            return _not_found(source, place)
         match given.serve:
             case "recorded":
-                items = tuple(cast(Mapping[str, Json], item) for item in given.items)
-                return Answer(items[:READ_LIMIT], cut_off=len(items) > READ_LIMIT)
+                return read_answer([cast(Mapping[str, Json], item) for item in given.items])
             case "mock" if source == GITHUB_RELEASES and self._github is not None:
-                read = await self._github.releases(place)
-                if isinstance(read, ReadFailed):
-                    return TryLater(read.detail)
-                return Answer(tuple(read[:READ_LIMIT]), cut_off=len(read) > READ_LIMIT)
+                return read_answer(await self._github.releases(place))
             case "mock":
                 return Refused(
                     409, f'Only GitHub releases have a mock. Give "{block}" recorded items.'
                 )
             case "not_found":
-                return TryLater(SOURCE_NOT_FOUND)
+                return _not_found(source, place)
             case "timeout":
                 return TryLater(SOURCE_TIMED_OUT)
 

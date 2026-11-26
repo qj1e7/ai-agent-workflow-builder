@@ -7,6 +7,7 @@ import questionForAlice from '../../../../contracts/fixtures/builder/home.alice.
 import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, NeedsPage, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
 import { withNeedsPages } from '../../api/homeQueries'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
+import missingRepo from '../../../../contracts/fixtures/troubleshooting/missing-repo.json'
 import { displayName } from '../../api/people'
 import type { CapabilitiesView } from '../../api/types'
 import { actionsOf, approverHeading, approverLine, drawnKeys, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retriedFirstWords, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
@@ -284,6 +285,13 @@ describe('what each item lets you do', () => {
     ])
     const final = { ...stopped, item: { ...STOP, retryable: false } } as Need
     expect(actionsOf(final)).toEqual([{ kind: 'open', label: 'See why it stopped', to: '/runs/run_01JB9', item: { kind: 'run', id: 'run_01JB9' } }])
+  })
+
+  it('offers no Retry for a repository GitHub does not have, as the run page does', () => {
+    // Re-check of dadc3812: Home reads the same fact as the run page, the run's retryable, from the run the platform failed.
+    const missing = { ...stopped, item: { ...STOP, retryable: missingRepo.failure.retryable } } as Need
+    expect(actionsOf(missing)).toEqual([{ kind: 'open', label: 'See why it stopped', to: '/runs/run_01JB9', item: { kind: 'run', id: 'run_01JB9' } }])
+    expect(missingRepo.answers.safe_to_retry).toMatch(/^No\. /)
   })
 
   it('waits for the model instead of offering a retry that would fail again, and says so', () => {

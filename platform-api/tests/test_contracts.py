@@ -304,6 +304,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "stubs/mock-jira-tickets.json": TypeAdapter(MockJiraTickets),
     "stubs/mock-jira-ticket.done.json": TypeAdapter(MockJiraTicket),
     "troubleshooting/failure.json": TypeAdapter(TroubleshootingOut),
+    "troubleshooting/missing-repo.json": TypeAdapter(TroubleshootingOut),
     "agent/task-request.json": TypeAdapter(TaskRequest),
     "agent/task-finished.json": task_result_adapter,
     "agent/task-failed.json": task_result_adapter,

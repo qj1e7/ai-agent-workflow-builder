@@ -1,4 +1,5 @@
 import troubleshooting from '@contracts/fixtures/troubleshooting/failure.json'
+import missingRepo from '@contracts/fixtures/troubleshooting/missing-repo.json'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { TroubleshootingOut } from '../../api/types'
@@ -144,5 +145,25 @@ describe('the next step', () => {
     const html = text(draw(failed({ retryable: false }), withAnswers({ safe_to_retry: said }, { possible: false, asks_again: false })))
     expect(html).toContain('add the binding to the workflow, then start a new run.')
     expect(html).not.toContain('template')
+  })
+})
+
+describe('a repository GitHub does not have', () => {
+  // Re-check of dadc3812: the run failed as one to retry, so a Retry button sat under "Safe to retry? No". The platform's one fact is the run's retryable.
+  const advice = missingRepo as TroubleshootingOut
+  const stop = failed(advice.failure)
+
+  it('offers no Retry, and says a retry is not safe, from the run the platform failed', () => {
+    expect(stop.retryable).toBe(false)
+    const html = draw(stop, advice)
+    expect(html).not.toContain('>Retry<')
+    expect(html).toContain('data-report')
+    expect(advice.answers.safe_to_retry).toMatch(/^No\. /)
+    expect(text(html)).toContain(advice.answers.safe_to_retry)
+    expect(text(html).replaceAll('&quot;', '"')).toContain(advice.answers.what_happened)
+  })
+
+  it('holds Retry back before the troubleshooter answers too', () => {
+    expect(draw(stop, undefined, OPERATOR, true)).not.toContain('>Retry<')
   })
 })

@@ -32,6 +32,15 @@ The team lead chose this layout on 25 Nov 2026. A run's page and its side panel 
 
 New words, for the team lead to confirm: "Waiting for approval", "Approved by Bob", "Show full text", "Run history (3 steps)", "Show agent messages", "Hide agent messages", "An Approver decides in Teams (asked 9:01).", "You can't approve your own run." and the found and wants lines above. Switch "New words" to Show to see them in place.
 
+## Four fixes from the 25 Nov walk-through, 26 Nov 2026
+
+- **Approval page.** The "Why you" line is gone. The person who started the run still reads "You can't approve your own run."
+- **Teams practice drawer.** A "Teams" button in the rail's foot opens a dialog. It has a Close button with its word on it, closes on a click outside it, keeps focus inside and gives it back to the Teams button. A message that needs an approval shows Approve and Decline to an Approver who may decide it, and "Open in AI Workflow Builder" to everyone else.
+- **Build panel title.** "Setting it up…" while it builds, "Set up. Version 1." when it is on. No title names n8n. The "Open in n8n" buttons stay.
+- **Change on a workflow's page.** A secondary "Change" button, before Pause. It opens the Home chat with that workflow's edit card, which asks the day and the time with buttons and saves only on "Save change", as a saved draft reopens as its card.
+
+New words, for the team lead to confirm: "Setting it up…", "Set up. Version 1.", "Change", "Close", "You approved this.", "You declined this." and "I couldn't open that workflow just now. Try Change again from its page."
+
 ## Mission control, light, 22 Nov 2026
 
 The team lead chose this look on 22 Nov 2026 (ADR 0052). These are the Portal's style rules from now on. The earlier Calm look, on the branch `docs/sketch-calm-look`, was not merged.

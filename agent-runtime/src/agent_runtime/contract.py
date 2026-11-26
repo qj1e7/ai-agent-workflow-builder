@@ -937,7 +937,15 @@ class ReleasesNotRead(WireModel):
     retryable: bool = Field(description="True when trying again later may work.")
 
 
-type ReadReleasesResult = Annotated[ReleasesRead | ReleasesNotRead, Field(discriminator="status")]
+class ReleasesNotFound(WireModel):
+    """GitHub has no such repository, or none it shows us. Trying again finds none."""
+
+    status: Literal["not_found"] = "not_found"
+
+
+type ReadReleasesResult = Annotated[
+    ReleasesRead | ReleasesNotRead | ReleasesNotFound, Field(discriminator="status")
+]
 
 
 type FactSection = Literal["watchlist", "workflows", "needs_you"]

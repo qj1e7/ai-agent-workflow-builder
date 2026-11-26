@@ -10,7 +10,7 @@ import styles from './SetupCard.module.css'
 const FOOTNOTE = 'The builder saves a draft. It can’t publish by itself.'
 
 /**
- * Building in n8n, beside the chat: the workflow's blocks as n8n holds them, appearing as the build log says, then lit by the test
+ * The build, beside the chat: the workflow's blocks as n8n holds them, appearing as the build log says, then lit by the test
  * run's own events. The status line and the checks are the log's and the run's words, and On waits for the platform.
  */
 export function BuildPanel({ id }: { id: string }) {
@@ -34,7 +34,7 @@ function BuildView({ id, test }: { id: string; test: Parameters<typeof useBuilt>
   return (
     <div className={runStyles['panelView']}>
       <div className={runStyles['head']}>
-        <p className={runStyles['kind']}>{inN8n ? 'Building in n8n' : 'Building'}</p>
+        <p className={runStyles['kind']}>{on ? `Set up. Version ${String(useCase?.version ?? created.version)}.` : 'Setting it up…'}</p>
         <DraftPill label={on ? 'On' : 'Draft'} tone={on ? 'new' : 'quiet'} />
       </div>
       <p className="muted" role="status">

@@ -125,6 +125,34 @@ test('Teams opens a dialog, Escape closes it, and focus goes back to the Teams b
   await expect(teams).toBeFocused()
 })
 
+test('Teams closes with its Close button, or with a click outside it, and focus goes back to the Teams button', async ({ page }) => {
+  await page.goto('/')
+  const teams = page.getByRole('button', { name: /^Teams, practice copy/ })
+  const dialog = page.getByRole('dialog', { name: 'Teams, practice copy' })
+  await teams.click()
+  await expect(dialog.getByRole('button', { name: 'Close Teams' })).toHaveText('Close')
+  await dialog.getByRole('button', { name: 'Close Teams' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(teams).toBeFocused()
+
+  await teams.click()
+  await expect(dialog).toBeVisible()
+  await page.mouse.click(30, 300)
+  await expect(dialog).toBeHidden()
+  await expect(teams).toBeFocused()
+})
+
+test('Tab stays inside the open Teams drawer', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Teams, practice copy' })
+  await expect(dialog.getByRole('button', { name: 'Close Teams' })).toBeFocused()
+  for (let press = 0; press < 12; press += 1) {
+    await page.keyboard.press('Tab')
+    expect(await dialog.evaluate((node) => node.contains(document.activeElement)), `focus after ${String(press + 1)} Tab presses`).toBe(true)
+  }
+})
+
 test('Teams pressed before the signed-in person is known still puts focus on Close', async ({ page }) => {
   await page.route('**/api/v1/me', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1500))

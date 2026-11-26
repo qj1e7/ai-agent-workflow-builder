@@ -411,6 +411,16 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
 .log .t { color: var(--text-2); font-variant-numeric: tabular-nums; }
 .log li.bad > span:last-child { color: var(--stop-text); }
 .log li.now > span:last-child { color: var(--wait-text); }
+/* Teams practice drawer: a dialog with Close, a click outside closes it, focus stays inside and goes back to Teams (26 Nov 2026) */
+.tdrawer { position: fixed; inset: 0 0 0 auto; width: min(440px, 100%); height: 100%; max-height: 100%; margin: 0; padding: 0; border: 0; background: var(--page); color: var(--ink); box-shadow: var(--shadow-3); }
+.tdrawer::backdrop { background: rgba(15, 26, 43, .45); }
+.tdrawer .th { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; background: #4b53bc; color: #fff; }
+.tdrawer .th h2 { font-size: var(--fs-body); }
+.tdrawer .th small { display: block; opacity: .9; }
+.tdrawer .th .btn { background: #fff; color: #2a2f73; }
+.tdrawer .tmsg { margin: 16px 18px; padding: 14px; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-1); }
+.tdrawer .tmsg .meta { color: var(--ink-2); font-size: var(--fs-small); }
+.tdrawer .tmsg .c-act { display: flex; gap: 8px; margin-top: 12px; }
 .toast { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 20; max-width: min(520px, calc(100% - 32px)); padding: 10px 16px; border-radius: var(--r-md); background: var(--ink); color: var(--on-ink); font-size: var(--fs-small); font-weight: 600; box-shadow: var(--shadow-3); }
 .live .toast:not([hidden]) { animation: rise var(--t-small) var(--ease-out); }
 .tap { animation: tap 420ms var(--ease-out); }
@@ -946,6 +956,7 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
         <li><button type="button" data-rail="watch" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/></svg><span>Watchlist</span><span class="cnt" data-live="n-watch"></span></button></li>
       </ul>
       <div class="rail-foot">
+        <button type="button" data-teams aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Teams</span></button>
         <button type="button" data-rail="settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
         <span class="me" id="me" title="Alice, Operator"><span class="person" id="av" aria-hidden="true">A</span><span class="vh" id="who">Alice, Operator</span></span>
       </div>
@@ -971,6 +982,7 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
       <section class="page" id="page" hidden aria-label="Page"></section>
     </div>
     <div class="n8n" id="n8n" hidden aria-label="n8n editor"></div>
+    <dialog class="tdrawer" id="teams" aria-labelledby="teamsH"></dialog>
     <div class="toast" id="toast" role="status" hidden></div>
     <div class="dock" id="dock">
       <form class="composer" id="composer"><span class="ask-face" id="askFace"></span><input id="cin" type="text" autocomplete="off" aria-label="Ask, or describe a task" placeholder="Ask, or describe a task"><button class="send" type="submit" aria-label="Send"></button></form>
@@ -1762,7 +1774,7 @@ const apprView = (full = false) => `<div class="pv" data-live="appr">
   <div class="pv-head"><div><p class="pv-kind">Approval, from Alice’s FastAPI release check</p><h3>Create 1 Jira ticket</h3></div><span class="pill lg" data-live="appr-pill"></span></div>
   <p class="d-found">${nw('FastAPI 0.121.0 is out (18 Nov).')}</p><p class="d-wants">${nw('This run wants to create 1 Jira ticket in MOCK:')}</p>${ticketHTML()}
   <p class="d-who">${nw('An Approver decides in Teams (asked 9:01).')}</p>
-  ${full ? `<dl class="dl2"><div><dt>Sent</dt><dd>Today, 9:01, in Teams</dd></div><div><dt>Why you</dt><dd>No one can approve their own work.</dd></div></dl>
+  ${full ? `<dl class="dl2"><div><dt>Sent</dt><dd>Today, 9:01, in Teams</dd></div></dl>
   <div class="pv-actions"><button class="btn ghost" type="button" data-open="run">See the run</button></div>` : ''}
   <div data-live="appr-thread"></div>
   <div class="pv-foot" data-live="appr-foot"></div>
@@ -1908,7 +1920,7 @@ function canvasSVG(id, o = {}) {
   return `<div class="cv${o.editor ? ' edit' : ''}"${o.build ? ' data-build' : ''}${o.live ? ' data-cv-live' : ''}><svg viewBox="0 20 900 320" role="${o.editor ? 'group' : 'img'}" aria-label="${(W.wf[id] || W.drafts[id] || {}).name} in n8n">${edges}${nodes}</svg></div>`;
 }
 const buildView = (k) => { const d = W.drafts[k]; return `<div class="pv" data-bview>
-  <div class="pv-head"><div><p class="pv-kind">Building in n8n</p><h3>${d.name}</h3><p class="muted" data-bstat>Starting…</p></div><span class="pill lg" data-bpill>Draft</span></div>
+  <div class="pv-head"><div><p class="pv-kind" data-bkind>Setting it up…</p><h3>${d.name}</h3><p class="muted" data-bstat>Starting…</p></div><span class="pill lg" data-bpill>Draft</span></div>
   ${canvasSVG(k, { build: true, draft: { sched: d.sched, yes: d.then === 'jira', then: d.then } })}
   <div class="bchecks" data-bchecks></div>
   <p class="small muted">Only our blocks and n8n’s safe ones. The builder saves a draft. It can’t publish by itself.</p>
@@ -2103,7 +2115,7 @@ function patchWf(el) {
   $('[data-live="wf-flow"]', el).innerHTML = flowHTML(steps, ran ? st : {}, { first: short(f.sched), note, run: ran });
   $('[data-live="wf-vers"]', el).innerHTML = versRows(id);
   const open = id === 'fastapi' && ['stopped', 'waiting'].includes(W.stage) ? '<button class="btn" type="button" data-open="run">Open the run</button>' : '';
-  $('[data-live="wf-acts"]', el).innerHTML = `${open}${canEdit() ? `<button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>` : ''}`;
+  $('[data-live="wf-acts"]', el).innerHTML = `${open}${canEdit() ? `<button class="btn ghost" type="button" data-change="${id}">Change</button><button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>` : ''}`;
   const ver = $('[data-live="n8n-ver"]', el);
   if (ver) { ver.textContent = `Version ${f.ver}, published by ${f.by}, ${f.on}`; $('[data-live="n8n-canvas"]', el).innerHTML = canvasSVG(id); }
 }
@@ -2766,12 +2778,29 @@ function turnOn(c) {
   $('[data-p-left]', c).innerHTML = '';
   $('[data-p-act]', c).innerHTML = `<span class="okline">${ICON.check}On. First run ${firstRun(d.sched)}.</span>`;
   const v = bview();
-  if (v) { bstat('On. Version 1, published in n8n.'); const bp = $('[data-bpill]', v); bp.textContent = 'On'; bp.dataset.s = 'on'; }
+  if (v) { $('[data-bkind]', v).textContent = 'Set up. Version 1.'; bstat('On. Version 1, published in n8n.'); const bp = $('[data-bpill]', v); bp.textContent = 'On'; bp.dataset.s = 'on'; }
   refresh();
 }
 
+/* ---------- Teams practice drawer ---------- */
+function teamsHTML() {
+  const waiting = W.appr === 'waiting' || W.appr === 'approved' || W.appr === 'declined';
+  const decider = W.user === 'bob' && W.appr === 'waiting';
+  const act = !waiting ? '' : decider
+    ? '<button class="btn approve" type="button" data-tclose-after>Approve</button><button class="btn ghost decline" type="button" data-tclose-after>Decline</button>'
+    : W.appr === 'waiting' ? '<button class="btn" type="button" data-topen>Open in AI Workflow Builder</button>'
+    : `<span class="okline">${W.appr === 'approved' ? 'Approved by Bob at 9:04.' : 'Declined by Bob at 9:04.'}</span>`;
+  return `<div class="th"><div><h2 id="teamsH">Microsoft Teams</h2><small>Practice copy. Nothing reaches the real Teams.</small></div><button class="btn sm" type="button" data-tclose>Close</button></div>
+  <p class="tmsg meta" style="box-shadow:none;background:none;margin-bottom:0"># Release checks · signed in as ${W.user === 'bob' ? 'Bob' : 'Alice'}</p>
+  ${waiting ? `<div class="tmsg"><p class="meta"><b>AI Workflow Builder</b> · 9:01</p><p><b>Create 1 Jira ticket</b>, from Alice’s FastAPI release check.</p><p class="muted small">Upgrade FastAPI from 0.115.2 to 0.121.0</p><div class="c-act">${act}</div></div>` : '<p class="tmsg muted">No messages yet. When a run needs an approval, its message shows here.</p>'}`;
+}
+function openTeams() { const d = $('#teams'); d.innerHTML = teamsHTML(); if (!d.open) d.showModal(); $('[data-tclose]', d).focus(); }
+function closeTeams() { const d = $('#teams'); if (d.open) d.close(); $('[data-teams]').focus(); }
+$('#teams').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeTeams(); });
+$('#teams').addEventListener('cancel', (e) => { e.preventDefault(); closeTeams(); });
+
 /* ---------- Changing a workflow by talking ---------- */
-function editAsk(s, forced) {
+function editAsk(s, forced, open) {
   const id = forced || findWf(s);
   if (!id) {
     W.pendingEdit = s;
@@ -2783,6 +2812,7 @@ function editAsk(s, forced) {
   else if (dayOf(s)) to.day = dayOf(s);
   else if (WEEKLY_RE.test(s)) to.day = undefined;
   if (timeOf(s)) to.time = timeOf(s);
+  if (open) to.day = undefined;
   W.focus = id;
   if (to.day !== undefined && sameS(to, f.sched)) return pushText(`${f.name} already runs ${lower(long(f.sched))}.`);
   const e = { key: `e${(EN += 1)}`, wf: id, from: { ...f.sched }, to, status: 'asking' };
@@ -3775,6 +3805,10 @@ app.addEventListener('click', (e) => {
   if (pick('[data-chip]')) { quiet(chip(pick('[data-chip]').dataset.chip)); return; }
   if (pick('[data-rail]')) { quiet(railGo(pick('[data-rail]').dataset.rail)); return; }
   if (pick('.g-home')) { quiet(goHome()); return; }
+  if (pick('[data-teams]')) { openTeams(); return; }
+  if (pick('[data-tclose]')) { closeTeams(); return; }
+  if (pick('[data-topen]')) { closeTeams(); quiet(openView('appr')); return; }
+  if (pick('[data-tclose-after]')) { const ok = pick('.approve'); closeTeams(); if (ok) quiet(approve()); else decline(); return; }
   if (pick('[data-focus-box]')) { cin.focus(); return; }
   if (pick('[data-filter]')) { const [k, v] = pick('[data-filter]').dataset.filter.split('|'); W[k] = v; refresh(); return; }
   if (pick('[data-stab]')) { W.stab = +pick('[data-stab]').dataset.stab; renderPage(); $(`#stab${W.stab}`)?.focus(); return; }
@@ -3847,6 +3881,7 @@ app.addEventListener('click', (e) => {
   if (pick('[data-remove]')) { W.langserve = false; refresh(); return; }
   if (pick('[data-restore]')) { W.langserve = true; refresh(); return; }
   if (pick('[data-keyask]')) { W.key = false; refresh(); return; }
+  if (pick('[data-change]')) { const id = pick('[data-change]').dataset.change; quiet(goHome().then(() => editAsk('', id, true))); return; }
   if (pick('[data-pause]')) { const id = pick('[data-pause]').dataset.pause; W.paused[id] = !W.paused[id]; refresh(); toast(W.paused[id] ? 'Paused. It won’t run until you resume it.' : 'On again.'); return; }
   if (pick('[data-addsoft]')) {
     const b = pick('[data-addsoft]'); const k = b.dataset.addsoft; const card = b.closest('.card');

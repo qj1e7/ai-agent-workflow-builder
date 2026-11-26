@@ -9,6 +9,7 @@ from agent_runtime.abilities import why_not
 from agent_runtime.answers import SkipRead, TaskRead, answer_of, decide, parts_of
 from agent_runtime.contract import (
     CantAnswer,
+    PartAnswer,
     PlannerFacts,
     SetupCardAnswer,
     WatchedFact,
@@ -37,7 +38,7 @@ def facts(*watched: str) -> PlannerFacts:
     return PlannerFacts(watchlist=held, watchlist_schedule=MONDAY_9, watchlist_project="MOCK")
 
 
-def rows(answer: SetupCardAnswer) -> dict[str, tuple[str, str, str | None]]:
+def rows(answer: SetupCardAnswer | PartAnswer) -> dict[str, tuple[str, str, str | None]]:
     return {row.kind: (row.text, row.state, row.note) for row in answer.rows}
 
 
@@ -219,3 +220,91 @@ def test_words_beside_the_software_the_card_doesnt_hold_come_back_crossed(words:
     assert [row.text for row in answer.cant] == [crossed]
     held = [p.text for p in parts_of(fields, task, answer) if p.mark == "will_do"]
     assert not any(crossed in text for text in held), held
+
+
+ON_GITHUB = (
+    "Check FastAPI on GitHub for new releases every weekday at 9am, and create a Jira ticket "
+    "when there's a new one."
+)
+"""The 25 Nov walk-through's request, typed on Home with the local stack's model."""
+DAILY_ON_GITHUB = ON_GITHUB.replace("every weekday at 9am", "every day at 9:00")
+IN_MOCK = (
+    "Check FastAPI on GitHub for new releases every weekday at 9am, and create a Jira ticket "
+    "in the MOCK project when there is a new one."
+)
+FASTAPI_TICKET = TicketRead(creates=True, says="list", said="create a Jira ticket")
+
+
+def fastapi(**fields: Any) -> TaskRead:
+    return read(software="FastAPI", ticket=FASTAPI_TICKET, **fields)
+
+
+@pytest.mark.parametrize(
+    ("task", "schedule", "shown"),
+    [
+        (ON_GITHUB, "Weekdays at 9am", "Every weekday at 9am"),
+        (ON_GITHUB, "Every weekday at 9:00", "Every weekday at 9am"),
+        (ON_GITHUB, "every weekday 9am", "Every weekday at 9am"),
+        (DAILY_ON_GITHUB, "Daily at 9:00", "Every day at 9:00"),
+        (DAILY_ON_GITHUB, "Every day at 9am", "Every day at 9:00"),
+    ],
+)
+def test_a_schedule_the_model_wrote_another_way_is_read_and_never_also_crossed(
+    task: str, schedule: str, shown: str
+):
+    """25 Nov walk-through: "on" in "on GitHub" stood before the schedule, so its words were never
+    found when the model wrote them another way. The card held the schedule, and the same words
+    came back crossed: "Can't do: Weekday at 9am. I couldn't read this as a schedule."."""
+    fields = fastapi(schedule=schedule)
+    answer = answer_of(fields, task, facts())
+    assert isinstance(answer, SetupCardAnswer), answer
+    assert rows(answer)["schedule"][:2] == (shown, "understood")
+    assert all(p.mark != "cant" for p in parts_of(fields, task, answer))
+
+
+@pytest.mark.parametrize(
+    "place",
+    [PlaceRead(project="MOCK", said="in the MOCK project"), PlaceRead(project="MOCK"), None],
+    ids=["place read", "key only", "place not read"],
+)
+def test_the_project_its_ticket_names_is_its_own_and_never_also_crossed(place: PlaceRead | None):
+    """25 Nov walk-through: with the project between the ticket and "when there is a new one", the
+    ticket's own words stopped before it, so "new" came back crossed. With no place read, "MOCK
+    project when there is a new" did, though the builder read MOCK as the ticket's project."""
+    fields = fastapi(schedule="every weekday at 9am", place=place)
+    answer = answer_of(fields, IN_MOCK, facts())
+    assert isinstance(answer, SetupCardAnswer), answer
+    assert rows(answer)["where"][:2] == ("Jira project MOCK", "understood")
+    assert all(p.mark != "cant" for p in parts_of(fields, IN_MOCK, answer))
+
+
+DUE = "Check FastAPI on GitHub for new releases and create a Jira ticket "
+
+
+@pytest.mark.parametrize(
+    ("task", "crossed"),
+    [
+        (f"{DUE}before Friday at 5pm.", "Friday at 5pm"),
+        (f"{DUE}due Friday at 5pm.", "due Friday at 5pm"),
+        (f"{DUE}and set the due date to Friday at 5pm.", "set the due date to Friday at 5pm"),
+    ],
+)
+def test_a_due_date_the_model_read_as_the_schedule_is_never_taken_as_it(task: str, crossed: str):
+    """Review of d7b0b1ac: a later run of schedule words was read alone, so a due date the model
+    misread as "Fridays at 5pm" became the schedule. It is crossed as before, and the card keeps
+    the model's schedule as filled in, never as the person's own words."""
+    fields = fastapi(schedule="Fridays at 5pm")
+    answer = answer_of(fields, task, facts())
+    card = answer.alternative if isinstance(answer, CantAnswer) else answer
+    assert isinstance(card, SetupCardAnswer | PartAnswer), answer
+    assert rows(card)["schedule"][:2] == ("Fridays at 5pm", "changed")
+    assert [p.text for p in parts_of(fields, task, answer) if p.mark == "cant"] == [crossed]
+
+
+def test_a_ticket_in_words_that_name_no_jira_project_reads_no_project():
+    """Review of d7b0b1ac: "create a Jira ticket in CSV format" read CSV as the Jira project."""
+    task = "Check FastAPI for new releases every weekday at 9am, and create a ticket in CSV format"
+    answer = answer_of(fastapi(schedule="every weekday at 9am"), task, facts())
+    card = answer.alternative if isinstance(answer, CantAnswer) else answer
+    assert isinstance(card, SetupCardAnswer | PartAnswer), answer
+    assert rows(card)["where"][1] == "missing"

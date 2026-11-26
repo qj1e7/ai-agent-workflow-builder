@@ -33,6 +33,7 @@ from platform_api.orchestration.n8n_calls import (
     TEST_RUN_WRITES_NOTHING,
     AskCall,
     NodeCall,
+    NotFoundAtSource,
     ProposeCall,
     ReadFailed,
     ReadItems,
@@ -125,11 +126,11 @@ class FakeWaker:
 
 
 class FakeGitHub:
-    def __init__(self, answer: ReadItems | ReadFailed) -> None:
+    def __init__(self, answer: ReadItems | ReadFailed | NotFoundAtSource) -> None:
         self.answer = answer
         self.asked: list[str] = []
 
-    async def releases(self, repo: str) -> ReadItems | ReadFailed:
+    async def releases(self, repo: str) -> ReadItems | ReadFailed | NotFoundAtSource:
         self.asked.append(repo)
         return self.answer
 
@@ -360,13 +361,35 @@ def test_read_plays_a_missing_source_and_a_timeout_at_once(gw: Gateway) -> None:
     nonce = gw.run(scenario(blocks))
     missing = gw.call("calls/read", READ)
     slow = gw.call("calls/read", {**READ, "node_name": "Read slow"})
-    for answer in (missing, slow):
-        assert answer.status_code == 503
-        assert answer.json()["retryable"] is True
-    assert "not found" in missing.json()["detail"]
+    assert (missing.status_code, missing.json()) == (404, {"detail": "GitHub can't find a/b."})
+    assert slow.status_code == 503
+    assert slow.json()["retryable"] is True
     assert "in time" in slow.json()["detail"]
     calls = gw.record(nonce)["calls"]
-    assert [(c["outcome"], c["status"]) for c in calls] == [("try_again", 503)] * 2
+    assert [(c["outcome"], c["status"]) for c in calls] == [("refused", 404), ("try_again", 503)]
+
+
+@pytest.mark.parametrize(
+    ("answer", "github"),
+    [
+        ({"serve": "not_found"}, [RELEASE]),
+        ({"serve": "recorded", "items": [RELEASE], "gone": ["a/b"]}, [RELEASE]),
+        ({"serve": "mock"}, NotFoundAtSource("GitHub", "a/b")),
+    ],
+    ids=["not found", "gone", "mock GitHub"],
+)
+def test_a_missing_repository_is_played_as_the_real_read_answers_it(
+    answer: dict[str, Any], github: ReadItems | NotFoundAtSource
+) -> None:
+    """25 Nov walk-through: the simulation played Source not found as an answer to try again and
+    passed with its own words, while the real read of a repository GitHub doesn't have stopped
+    with only "Our platform could not do this step (HTTP 503)". Both now answer what our API
+    answers for a place its source doesn't have (test_n8n_calls), so they can't disagree."""
+    gateway = Gateway(github=FakeGitHub(github))
+    with gateway.client:
+        gateway.run(scenario({"Read releases": answer}))
+        played = gateway.call("calls/read", READ)
+    assert (played.status_code, played.json()) == (404, {"detail": "GitHub can't find a/b."})
 
 
 def test_mock_github_failing_is_a_try_again() -> None:
@@ -728,7 +751,7 @@ async def test_mock_github_answers_as_the_read_block_expects() -> None:
     assert await mock.releases("a/b") == [
         {"kind": "release", "id": "1.2.16", "name": "1.2.16", "published_at": "2026-10-28"}
     ]
-    assert isinstance(await mock.releases("a/missing"), ReadFailed)
+    assert await mock.releases("a/missing") == NotFoundAtSource("GitHub", "a/missing")
     assert isinstance(await mock.releases("../../user"), ReadFailed)
     await client.aclose()
     assert asked == [

@@ -1,3 +1,4 @@
+import alice from '@contracts/fixtures/approvals/apr_01JB8.alice.json'
 import bob from '@contracts/fixtures/approvals/apr_01JB8.bob.json'
 import teams from '@contracts/fixtures/stubs/teams-messages.json'
 import decidedTeams from '@contracts/fixtures/stubs/teams-messages.decided.json'
@@ -10,9 +11,11 @@ import { createApiClient } from '../api/client'
 import { approvalQuery } from '../api/queries'
 import { authorizedFetch, createDevSession } from '../api/session'
 import type { ApprovalView, RunView, RunViewOf, TeamsStubMessage } from '../api/types'
-import { BADGE_MAX_ASKS, BADGE_POLL_MS, badgeAsks, badgeText, MessageBody, teamsLabel, TEAMS_TITLE, withSetUps } from './TeamsPanel'
+import { BADGE_MAX_ASKS, BADGE_POLL_MS, badgeAsks, badgeText, DrawerHead, MessageBody, teamsLabel, TeamsDecide, TEAMS_TITLE, withSetUps } from './TeamsPanel'
 
 const BOB = bob as ApprovalView
+const ALICE_APPROVAL = alice as ApprovalView
+const idle = { pending: null, recorded: null, steps: null, error: null, decide: () => undefined } as const
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const links = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [m[1], text(m[2] ?? '')])
 
@@ -145,5 +148,40 @@ describe('what the badge asks the platform', () => {
     stop()
     expect(perPoll).toEqual([BADGE_MAX_ASKS, BADGE_MAX_ASKS, BADGE_MAX_ASKS, BADGE_MAX_ASKS])
     expect(BADGE_POLL_MS).toBeGreaterThanOrEqual(30_000)
+  })
+})
+
+describe('the practice Teams drawer', () => {
+  const buttonsOf = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((m) => text(m[1] ?? ''))
+
+  it('has a Close button with the word Close on it, still named Close Teams', () => {
+    const html = renderToStaticMarkup(<DrawerHead note="Practice copy." onClose={() => undefined} />)
+    expect(buttonsOf(html)).toEqual(['Close'])
+    expect(html).toContain('aria-label="Close Teams"')
+  })
+
+  it('gives an Approver who may decide Approve, the one primary button, and Decline', () => {
+    const html = renderToStaticMarkup(<TeamsDecide approval={BOB} decision={idle} />)
+    expect(buttonsOf(html)).toEqual(['Approve', 'Decline'])
+    expect(html.match(/_primary_/g)).toHaveLength(1)
+  })
+
+  it('gives the person who started the run, and anyone else who may not decide, no Approve or Decline', () => {
+    expect(renderToStaticMarkup(<TeamsDecide approval={ALICE_APPROVAL} decision={idle} />)).toBe('')
+    expect(renderToStaticMarkup(<TeamsDecide approval={{ ...BOB, you_can_decide: false, why_not: 'not_an_approver' }} decision={idle} />)).toBe('')
+    expect(renderToStaticMarkup(<TeamsDecide approval={undefined} decision={idle} />)).toBe('')
+  })
+
+  it('offers nothing more once this person’s decision is recorded, and says what was recorded', () => {
+    const html = renderToStaticMarkup(<TeamsDecide approval={BOB} decision={{ ...idle, recorded: 'approve' }} />)
+    expect(buttonsOf(html)).toEqual([])
+    expect(text(html)).toBe('You approved this.')
+    expect(text(renderToStaticMarkup(<TeamsDecide approval={BOB} decision={{ ...idle, recorded: 'decline' }} />))).toBe('You declined this.')
+  })
+
+  it('shows the platform’s refusal, so a press that fails is never silent', () => {
+    const html = renderToStaticMarkup(<TeamsDecide approval={BOB} decision={{ ...idle, error: 'Someone changed this request. Read it again.' }} />)
+    expect(html).toContain('role="alert"')
+    expect(text(html)).toContain('Someone changed this request. Read it again.')
   })
 })

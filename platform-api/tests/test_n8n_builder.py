@@ -21,12 +21,14 @@ from platform_api.orchestration import (
     AgentUnavailable,
     CannotRun,
     NodeOption,
+    NotFoundAtSource,
     OwnWorkflow,
     Publisher,
     RanVersion,
     ReadFailed,
     ReadReleasesRequest,
     ReadReleasesResult,
+    ReleasesNotFound,
     ReleasesNotRead,
     ReleasesRead,
     WriteEntry,
@@ -362,3 +364,11 @@ async def test_a_read_block_gets_the_releases_newest_first_or_github_s_trouble(n
         "github_releases", REPO, None
     )
     assert down == ReadFailed("down")
+
+
+async def test_a_repository_github_does_not_have_is_not_found_at_the_source(n8n_lab: N8nLab):
+    """25 Nov walk-through: zzfake-owner/no-such-repo-xyz was read as GitHub trouble to try
+    again, so the Read block stopped with only "Our platform could not do this step (HTTP 503)"."""
+    gone = "zzfake-owner/no-such-repo-xyz"
+    read = await n8n_lab.facts(Releases(ReleasesNotFound())).read("github_releases", gone, None)
+    assert read == NotFoundAtSource("GitHub", gone)

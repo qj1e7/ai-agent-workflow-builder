@@ -6,7 +6,9 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from platform_api.monitoring import NOTHING_READ_YET
 from platform_api.orchestration.n8n import ExecutionRecord
+from platform_api.orchestration.n8n_calls import ExecutionFacts, FailedExecution, failure_words
 from platform_api.orchestration.recorded_samples import RecordedSamples
 from platform_api.orchestration.scenario_grades import (
     AFTER_WRITE,
@@ -32,6 +34,7 @@ from platform_api.orchestration.simulated_calls import (
     ProposedChange,
     SimulatedRun,
 )
+from platform_api.shared import N8nExecutionId
 from tests.test_scenarios import (
     PROPOSE,
     START,
@@ -51,6 +54,7 @@ DROPPED = (
     "the request immediately or wait and retry later."
 )
 UP_TO_ASK = (START, "Read releases", "Compare", "Propose a change", "Ask for approval")
+FACTS = ExecutionFacts("copy-1", "manual", None, None, "v1")
 
 
 def staged(plan: SimulationPlan) -> dict[ScenarioKind, Staged]:
@@ -234,6 +238,25 @@ def test_source_not_found_passes_when_the_played_read_stops_it_with_a_reason() -
     graded = grade(plan, staged(plan)["source_not_found"], run, stopped)
     assert graded.verdict == "passed"
     assert graded.happened == f'"Read releases" stopped it: {SOURCE_NOT_FOUND}'
+
+
+def test_our_read_s_missing_repository_is_graded_in_the_words_a_real_run_stops_with() -> None:
+    """25 Nov walk-through: the simulation graded our Read's not found by the gateway's own words,
+    while n8n's record of a real run held only "Our platform could not do this step (HTTP 503)".
+    n8n's record now holds our words, and the grade says what the real run's stop says."""
+    plan = planned(release_check())
+    said = "GitHub can't find langchain-ai/langgraph."
+    run = simulated(calls=[call("Read releases", "read", "refused", said)])
+    block = our_read()
+    failed = FailedExecution(N8nExecutionId("41"), FACTS, "Read releases", said, block)
+    stopped = execution("error", (START, "Read releases"), "Read releases", said, block)
+    graded = grade(plan, staged(plan)["source_not_found"], run, stopped)
+    assert graded.verdict == "passed"
+    words = failure_words(failed, read_anything=False).removeprefix(f"{NOTHING_READ_YET} ")
+    assert words.startswith(
+        'GitHub can\'t find langchain-ai/langgraph, so "Read releases" stopped.'
+    )
+    assert graded.happened == f'"Read releases" stopped it: {words}'
 
 
 def test_our_blocks_stop_is_told_in_the_gateways_words() -> None:

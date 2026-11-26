@@ -7,7 +7,7 @@ import { useHome, type Pager } from '../../api/homeQueries'
 import { isOperator } from '../../api/me'
 import { useCapabilities, useDrafts } from '../../api/plannerQueries'
 import { useSweepOnFocus } from '../../api/workflowQueries'
-import { useMe, useModelSettings, useWatchlist } from '../../api/queries'
+import { useMe, useModelSettings, useUseCase, useWatchlist } from '../../api/queries'
 import type { HomeOut, PlannerReply } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -16,6 +16,7 @@ import { motionAllowed } from '../../ui/motion'
 import { Toast } from '../../ui/Toast'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { restoreDraft } from './card'
+import { changeReply } from './edit'
 import { NEEDS_YOU_ANCHOR, type Page } from './AnswerCards'
 import { CapabilityLists } from './CapabilityLists'
 import { APPROVER_SUGGESTIONS, approverHeading, approverLine, HOME_NEEDS_SHOWN, needsOf, needsTotal, suggestionsOf, type Needs } from './home'
@@ -76,6 +77,7 @@ export function HomeBody({ greeting, home, now }: { greeting: string; home: Home
 const PHONE = '(max-width: 600px)'
 
 const DRAFT_GONE = 'That draft is gone. Ask for it again below.'
+const CHANGE_UNREAD = 'I couldn’t open that workflow just now. Try Change again from its page.'
 /** Answers that are a card to work on. Focus goes to the card's heading; any other answer hands it back to the box. */
 const CARD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['setup_card', 'part', 'watchlist', 'edit'])
 /** Answers that ask them to type one thing in a field of their own. Focus goes to the field. */
@@ -121,6 +123,10 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   const wanted = operator ? params.get('draft') : null
   const drafts = useDrafts(wanted !== null)
   const reopened = useRef<string | null>(null)
+  // Change on a workflow's page lands here with its id in the address, and its edit card joins the chat, made from the workflow itself.
+  const changeId = operator ? params.get('change') : null
+  const changing = useUseCase(changeId ?? '', changeId !== null)
+  const changed = useRef<string | null>(null)
   /** The draft id the newest card wrote in the address, as opposed to one Resume brought here. */
   const written = useRef<string | null>(null)
   const offline = model.data !== undefined && model.data.active === null
@@ -176,6 +182,26 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
       boxRef.current?.focus()
     }, 0)
   }, [wanted, newestDraft, drafts.data, drafts.isStale, drafts.isFetchedAfterMount, thread.last, setParams, resume, type, setProblem])
+
+  const { arriveEdit } = chat
+  useEffect(() => {
+    if (changeId === null) {
+      changed.current = null
+      return
+    }
+    if (changed.current === changeId) return
+    if (changing.isError) {
+      changed.current = changeId
+      setParams({}, { replace: true })
+      setProblem(CHANGE_UNREAD)
+      return
+    }
+    if (!changing.data || !changing.isFetchedAfterMount) return
+    changed.current = changeId
+    setParams({}, { replace: true })
+    focusOn.current = thread.last + 1
+    arriveEdit(changeReply(changing.data))
+  }, [changeId, changing.data, changing.isError, changing.isFetchedAfterMount, thread.last, setParams, setProblem, arriveEdit])
 
   // The fold draws the box anew at the bottom of the chat, so focus goes with it.
   const wasEmpty = useRef(empty)

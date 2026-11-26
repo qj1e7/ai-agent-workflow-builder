@@ -641,13 +641,18 @@ def main() -> int:
         workflow, {"name": "source_not_found", "blocks": {"Read releases": {"serve": "not_found"}}}
     )
     reads = [(c["outcome"], c["detail"]) for c in kept["calls"]]
+    gone = "GitHub can't find langchain-ai/langgraph."
     check(
         record.get("status") == "error" and "Compare" not in ran(record),
         f"not found: Read failed and nothing after it ran ({error(record)})",
     )
     check(
-        reads == [("try_again", "The place was not found at the source.")] * RETRY["maxTries"],
-        f"not found: the gateway kept each try and why ({reads})",
+        error(record) == gone,
+        f"not found: n8n's record holds our words, as a real run's does ({error(record)})",
+    )
+    check(
+        reads == [("refused", gone)] * RETRY["maxTries"],
+        f"not found: the gateway refused each try in the same words ({reads})",
     )
 
     empty = {"serve": "recorded", "items": []}

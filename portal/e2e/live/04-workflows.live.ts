@@ -82,6 +82,19 @@ test('alice opens a workflow from Workflows, presses Run now, and lands on the n
   await context.close()
 })
 
+test('alice presses Change on a workflow’s page, and its edit card opens in the Home chat and asks the day', async ({ browser, request }) => {
+  const workflow = await agentWorkflow(request, 'change')
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto(`/workflows/${workflow.id}`)
+  await expect(heading(page)).toHaveText(workflow.name)
+  await page.getByRole('link', { name: 'Change', exact: true }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('main')).toContainText(`Change ${workflow.name}`)
+  await expect(page.getByRole('main')).toContainText('Which day should it run?')
+  await context.close()
+})
+
 test('alice pauses a workflow, its next run reads Paused and Run now goes, and resuming brings them back', async ({ browser, request }) => {
   const workflow = await agentWorkflow(request, 'pause')
   const context = await devContext(browser, 'alice')
