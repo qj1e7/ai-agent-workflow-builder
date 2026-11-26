@@ -12,8 +12,8 @@ roles may ask.
 
 The answer is the sentence the workflow's page shows, which the Portal builds, so a request only
 to explain is read before any model call (`explain_before_the_model`). Words beside a workflow's
-name, and words that name an approval, wait for the model's reading and its answer to the skip
-question first, as every other request does."""
+name, and words that name an approval or a person, wait for the model's reading and its answer to
+the skip question first, as every other request does."""
 
 import re
 from dataclasses import dataclass
@@ -22,7 +22,7 @@ from typing import Final
 from agent_runtime.abilities import words
 from agent_runtime.contract import ExplainAnswer, PlannerFacts
 from agent_runtime.edits import name_runs
-from agent_runtime.reading import names_a_yes, trim
+from agent_runtime.reading import names_a_person, names_a_yes, trim
 
 type Span = tuple[int, int]
 
@@ -77,13 +77,20 @@ def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
 
 def explain_before_the_model(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
     """The explanation code gives with no model call: a request only to explain, with no word
-    beside the workflow's name and no word that names an approval. Words that name none of the
-    person's workflows go too, since the platform says them back or asks which. Anything else
-    is None, and waits for the model's reading."""
+    beside the workflow's name and nothing the skip refusal's reader flags, an approval or a
+    person (`names_a_yes`, `names_a_person`). Words that name none of the person's workflows
+    go too, since the platform says them back or asks which. Anything else is None, and waits
+    for the model's reading, so its answer to the skip question can refuse it."""
     read = _read(text, facts)
-    if read is None or not read.whole or names_a_yes(text):
+    if read is None or not read.whole or _may_skip(text):
         return None
     return read.answer
+
+
+def _may_skip(text: str) -> bool:
+    """Whether the words name an approval or a person, as the skip refusal reads a quote, so
+    "explain the setup without asking Bob" is the model's to read."""
+    return names_a_yes(text) or names_a_person(text, 0, len(text))
 
 
 def _read(text: str, facts: PlannerFacts | None) -> _Read | None:
