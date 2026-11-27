@@ -1,51 +1,135 @@
-/* Values come from the prototype in docs/design/portal-routines/prototype.html. Light only, on purpose. */
+/* Mission control, light (ADR 0052). Values come from the chat-first sketch, docs/design/chat-first/prototype.html, and its README. Light only, on purpose. */
 :root {
   color-scheme: light;
-  --frame: #eef1f4;
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --sunk: #f3f5f7;
-  --active: #e7ebef;
-  --chat: #f7f8fa; /* the conversation's ground, a shade off white so the answers' bubbles and cards stand on it */
-  --ink: #121417;
+
+  /* Neutrals, from ink to the page. */
+  --n-0: #ffffff;
+  --n-25: #f8f9fb;
+  --n-50: #f1f4f8;
+  --n-100: #e8ecf2;
+  --n-200: #dbe1ea;
+  --n-300: #c2cad7;
+  --n-500: #5d6a7e;
+  --n-600: #475569;
+  --n-800: #1c2942;
+  --n-900: #0f1a2b;
+  --n-950: #0a1222;
+
+  --bg-app: var(--n-50);
+  --surface: var(--n-0);
+  --subtle: var(--n-25);
+  --sunk: var(--n-100);
+  --ink: var(--n-900);
+  --text-2: var(--n-600);
+  --line: var(--n-200);
+  --line-strong: var(--n-300);
+  --edge: #7d8899; /* a field's edge, 3:1 or more on white and on the page */
+  --action: var(--n-900); /* the one filled button */
+  --action-hover: var(--n-800);
   --on-ink: #ffffff;
-  --primary: #121417;
-  --primary-hover: #2e3238;
-  --muted: #4d535b;
-  --rail: #c5cbd2;
-  --edge: #7d858e;  /* edges a person must see, such as form fields: 3:1 or more on white and grey */
-  --hair: #e1e5e9;
-  --rule: #eaedf0;
-  --link: #1b6c80;
-  --accent: #1b6c80;
-  --accent-soft: #e2f0f3;
-  --accent-ink: #0f4a59;
-  --safety: #0a7068; /* the safety checker: its note, its ring on the yes it added, and our blocks' badge */
-  --nav-mark: #1b6c80;
-  --brand: #02a7e1; /* NCS blue, for the logo only */
-  --brand-ink: #0b78a8; /* the top bar's AI mark */
-  --info-bg: #e9f3f5;
-  --info-ink: #0f4a59;
-  --float: 0 1px 2px rgba(18, 20, 23, 0.06), 0 12px 32px rgba(18, 20, 23, 0.14);
-  --focus: #2f6bff;
-  --amber: #e89a0c;
-  --amber-ink: #7e4a00;
-  --on-amber: #1d1400;
-  --amber-soft: #fff6e0;
-  --amber-line: #efd08c;
-  --red: #c4242a;
-  --red-ink: #a51f1f;
-  --red-soft: #fdeeed;
-  --red-line: #f2c4c1;
-  --green: #1d7a42;
-  --green-ink: #1b6b3b;
-  --green-soft: #e6f4eb;
-  --green-line: #b2dbbf;
+  --focus: var(--n-900); /* a 3 px ink ring */
+  --focus-on-rail: #ffffff;
+  --focus-halo: rgb(15 26 43 / 0.14); /* around a box whose edge turns ink, such as the Planner's */
+
+  /* Status: one meaning per colour, always with a word and a shape. */
+  --ok: #1e9e58; /* fine: On, Done, Working, Up to date */
+  --ok-bg: #e6f6ec;
+  --ok-text: #11693a;
+  --ok-edge: #b2dbbf;
+  --wait: #f0a21b; /* a person needs to act */
+  --wait-bg: #fff3da;
+  --wait-text: #7a4500;
+  --wait-line: #c27803;
+  --wait-edge: #f3d79c;
+  --stop: #e2483c; /* stopped */
+  --stop-bg: #fdebe8;
+  --stop-text: #b0261c;
+  --stop-edge: #f2c4c1;
+  --run: #3e6ff6; /* at work right now */
+  --run-bg: #e8eeff;
+  --run-text: #1d4cd0;
+  --off: var(--n-500); /* paused, draft, declined or not reached */
+  --off-bg: var(--n-100);
+  --off-text: var(--n-600);
   --on-status: #ffffff;
+  --on-wait: var(--n-950);
+
+  /* Identity, never a status. Violet marks the AI's hand-offs. */
+  --ai: #7b5cff;
+  --ai-bg: #f0ecff;
+  --ai-text: #5532d6;
+  --ai-line: #ddd4ff;
+  --brand: #02a7e1; /* NCS blue, for the logo only */
+  --brand-ink: #0b78a8; /* the logo's square, dark enough for its letters */
+
+  /* The rail. */
+  --rail: var(--n-950);
+  --rail-text: #c3ccdb;
+  --rail-active: var(--n-800);
+  --rail-hover: #151f33;
+  --rail-count: #26344f;
+  --rail-count-text: #e9eef6;
+  --alert-bg: #ffd7d2; /* Home's count while anything needs the person */
+  --alert-text: #7d1209;
+
+  /* The light stage. */
+  --stage: #fbfcfe;
+  --stage-grid: #dfe5ee;
+  --stage-dim: #7d8899;
+  --stage-wire: #5d6a7e;
+
+  /* Soft shadows instead of borders. */
+  --shadow-1: 0 1px 2px rgb(15 26 43 / 0.06), 0 1px 1px rgb(15 26 43 / 0.04);
+  --shadow-2: 0 1px 2px rgb(15 26 43 / 0.06), 0 4px 14px rgb(15 26 43 / 0.06);
+  --shadow-3: 0 2px 6px rgb(15 26 43 / 0.08), 0 16px 40px rgb(15 26 43 / 0.14);
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+
+  /* Atkinson Hyperlegible Next in six sizes and three weights. */
+  --font: 'Atkinson Hyperlegible Next', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fs-display: 2.25rem; /* Home's heading */
+  --fs-title: 1.625rem; /* page titles and the gate's timer */
+  --fs-head: 1.125rem; /* section heads, tile names and the Planner's lead line */
+  --fs-body: 1rem;
+  --fs-small: 0.875rem; /* labels and buttons */
+  --fs-tiny: 0.8125rem; /* counts, the stage's key and the labels on a small step line */
+  --fw-regular: 400;
+  --fw-semi: 600;
+  --fw-bold: 700;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --gutter: var(--space-6);
+
+  /* Emil Kowalski's curves: a strong ease-out for anything entering or answering a press, ease-in-out for things moving on screen. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-move: var(--ease-in-out);
+  /* Motion durations. Every animation and transition uses one of these. */
+  --dur-press: 120ms; /* a control answers a press, hover or focus */
+  --dur-small: 200ms; /* something small appears, moves or changes */
+  --dur-panel: 260ms; /* a dialog, drawer or section opens */
+  --dur-attn: 380ms; /* something needs a look: a new error, a request waiting */
+  --dur-success: 560ms; /* a one-off positive reaction, never longer than 600ms */
+  --dur-pulse: 2200ms; /* a waiting step's ring */
+  --stagger: 40ms; /* gap between cards arriving on a new screen */
+  --move: var(--dur-panel); /* the run line travelling to the next step */
+  --press-scale: 0.96; /* the one press effect */
+
+  /* Faces and people keep today's colours. */
   --lead: #3e5bd8;
   --lead-tint: #dfe5ff;
   --checker: #0a7068;
   --checker-tint: #d3f0ec;
+  --safety: var(--checker); /* the safety checker: its note, its ring on the yes it added, and our blocks' badge */
   --trouble: #7a4bd6;
   --trouble-tint: #ece3ff;
   --agent-1: #b02a6b;
@@ -71,13 +155,8 @@
   --mock-dim: #b9addb;
   --mock-on: #f3efff;
   --mock-on-ink: #2a2140;
+  --teams: #4b53bc; /* the practice Teams drawer's bar, in Teams' own colour */
   --scrim: rgba(15, 20, 28, 0.4);
-
-  /* Radius is tight and chosen once: cards 8, controls and wells 6, the sheet 16. */
-  --r-card: 8px;
-  --r-ctl: 6px;
-  --r-well: 6px;
-  --r-sheet: 16px;
 
   /* One stacking scale; nothing uses a z-index outside it. */
   --z-raised: 1;
@@ -88,43 +167,48 @@
   --z-overlay: 41;
   --z-toast: 45;
 
-  --font: 'Atkinson Hyperlegible Next', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  /* Emil Kowalski's curves: a strong ease-out for anything entering or answering a press, ease-in-out for things moving on screen. */
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-move: var(--ease-in-out);
-  /* Motion durations. Every animation and transition uses one of these. */
-  --dur-press: 120ms;   /* a control answers a press, hover or focus */
-  --dur-small: 200ms;   /* something small appears, moves or changes */
-  --dur-panel: 260ms;   /* a dialog, drawer or section opens */
-  --dur-attn: 380ms;    /* something needs a look: a new error, a request waiting */
-  --dur-success: 560ms; /* a one-off positive reaction, never longer than 600ms */
-  --stagger: 40ms;      /* gap between cards arriving on a new screen */
-  --move: var(--dur-panel); /* the run line travelling to the next step */
-  /* Short names for prototype tokens, used by the CSS modules. */
+  /* Older names, for the screens' own stylesheets until each screen is redrawn (ADR 0052). Shared pieces use the names above. */
+  --frame: var(--bg-app);
+  --bg: var(--bg-app);
+  --chat: var(--bg-app);
+  --active: var(--sunk);
   --mist: var(--sunk);
-  --line: var(--rail);
-  --fail: var(--red-ink);
-  --fail-line: var(--red-line);
-  --fail-tint: var(--red-soft);
-  --radius-button: var(--r-ctl);
-
-  --text-14: 0.875rem;
-  --text-16: 1rem;
-  --text-18: 1.125rem;
-  --text-22: 1.375rem;
-  --text-28: 1.75rem;
-
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
-  --space-8: 64px;
-
-  --gutter: var(--space-6);
+  --muted: var(--text-2);
+  --primary: var(--action);
+  --primary-hover: var(--action-hover);
+  --hair: var(--line);
+  --rule: var(--line);
+  --link: var(--ink);
+  --accent: var(--off);
+  --accent-soft: var(--off-bg);
+  --accent-ink: var(--off-text);
+  --info-bg: var(--off-bg);
+  --info-ink: var(--off-text);
+  --float: var(--shadow-3);
+  --amber: var(--wait);
+  --amber-ink: var(--wait-text);
+  --amber-soft: var(--wait-bg);
+  --amber-line: var(--wait-edge);
+  --on-amber: var(--on-wait);
+  --red: var(--stop);
+  --red-ink: var(--stop-text);
+  --red-soft: var(--stop-bg);
+  --red-line: var(--stop-edge);
+  --green: var(--ok);
+  --green-ink: var(--ok-text);
+  --green-soft: var(--ok-bg);
+  --green-line: var(--ok-edge);
+  --radius-button: var(--r-sm);
+  --fail: var(--stop-text);
+  --fail-line: var(--stop-edge);
+  --fail-tint: var(--stop-bg);
+  --r-card: var(--r-md);
+  --r-ctl: var(--r-sm);
+  --r-well: var(--r-sm);
+  --r-sheet: var(--r-lg);
+  --text-14: var(--fs-small);
+  --text-16: var(--fs-body);
+  --text-18: var(--fs-head);
 }
 
 @media (max-width: 759px) {

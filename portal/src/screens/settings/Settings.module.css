@@ -18,7 +18,7 @@
   border-radius: var(--r-ctl);
   background: none;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   white-space: nowrap;
   transition:
     background-color var(--dur-press) ease,
@@ -54,13 +54,13 @@
 }
 
 .panel h2 {
-  font-size: 1.2rem;
+  font-size: var(--fs-head);
 }
 
 .note {
   max-width: 75ch;
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .now {
@@ -99,7 +99,7 @@
 
 .small {
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .pill {
@@ -112,8 +112,8 @@
   border: 1px solid var(--hair);
   border-radius: 999px;
   background: var(--surface);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-semi);
   line-height: 1.6;
 }
 
@@ -152,7 +152,7 @@
 
 .waiting span {
   display: block;
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .waiting > div {
@@ -175,7 +175,7 @@
 }
 
 .form h3 {
-  font-size: 1rem;
+  font-size: var(--fs-body);
 }
 
 .grid {
@@ -195,12 +195,12 @@
 }
 
 .field label {
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .help {
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .input,
@@ -211,7 +211,7 @@
   border: 1px solid var(--edge);
   border-radius: var(--r-ctl);
   background: var(--surface);
-  font-size: var(--text-16);
+  font-size: var(--fs-body);
   line-height: 1.5;
   transition: border-color var(--dur-press) ease;
 }
@@ -247,7 +247,7 @@
   align-items: flex-start;
   gap: 8px;
   color: var(--green-ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .found svg,
@@ -261,8 +261,8 @@
   align-items: flex-start;
   gap: 6px;
   color: var(--red-ink);
-  font-size: var(--text-14);
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .said {
@@ -273,7 +273,7 @@
   padding: 8px 12px;
   border-radius: var(--r-well);
   background: var(--sunk);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .people {
@@ -299,8 +299,8 @@
   height: 34px;
   place-items: center;
   border-radius: 50%;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .who {
@@ -320,8 +320,8 @@
   border-radius: 4px;
   background: var(--sunk);
   color: var(--muted);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-semi);
   vertical-align: 1px;
 }
 
@@ -332,7 +332,7 @@
 }
 
 .rolesText {
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   text-align: right;
 }
 
@@ -341,7 +341,7 @@
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   cursor: pointer;
 }
 
@@ -369,7 +369,7 @@
 
 .fieldset legend {
   padding: 0;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .rowNote {
@@ -389,7 +389,7 @@
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
   gap: 8px;
-  font-size: 0.95rem;
+  font-size: var(--fs-body);
 }
 
 .rules svg {
@@ -400,7 +400,7 @@
 .history > summary {
   min-height: 44px;
   padding: 10px 0;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 
@@ -417,7 +417,7 @@
   grid-template-columns: 120px minmax(0, 1fr);
   gap: 12px;
   padding: 6px 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-small);
 }
 
 .timeline li span {
@@ -485,7 +485,7 @@
 
 .connectionTop h3 {
   margin-right: auto;
-  font-size: 1.05rem;
+  font-size: var(--fs-body);
 }
 
 .facts {
@@ -493,7 +493,7 @@
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 4px 16px;
   margin: 0;
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .facts dt {

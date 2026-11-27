@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { useCacheScope, useSession } from '../api/context'
 import { useDevUsers } from '../api/queries'
 import { cx } from '../ui/cx'
-import { SettingsIcon } from './icons'
+import { SlidersIcon } from './icons'
 import styles from './TestControls.module.css'
 
 export const TEST_NOTE = 'Only on a practice stack. Real sign-in hides this.'
@@ -19,7 +19,7 @@ function Panel({ choose }: { choose: (id: string) => void }) {
   const users = useDevUsers().data
   const panelId = useId()
   return (
-    <div className={styles['root']}>
+    <div className={styles['root']} data-test-controls="">
       {open ? (
         <div id={panelId} className={styles['panel']} role="region" aria-label="Test controls">
           <p className={styles['title']}>Test controls</p>
@@ -43,7 +43,7 @@ function Panel({ choose }: { choose: (id: string) => void }) {
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((value) => !value)}
       >
-        <SettingsIcon size={16} />
+        <SlidersIcon size={16} />
         <span className={styles['label']}>{open ? 'Hide test controls' : 'Test controls'}</span>
       </button>
     </div>

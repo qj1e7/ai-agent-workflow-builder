@@ -4,8 +4,8 @@
 
 .heading {
   margin-top: 4px;
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .block [data-color='good'] {

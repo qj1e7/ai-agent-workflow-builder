@@ -1,85 +1,206 @@
+/* The sketch's dark rail: 92 px wide and as tall as the window, its three items on top and its foot at the bottom. */
 .rail {
   position: sticky;
-  top: calc(53px + env(safe-area-inset-top, 0px));
-  display: grid;
-  gap: 4px;
-  padding: 12px 8px;
+  top: 0;
+  z-index: var(--z-nav);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100dvh;
+  padding: 18px var(--space-2) var(--space-4);
+  background: var(--rail);
+  color: var(--rail-text);
 }
 
-.link {
-  position: relative;
+/* The AI mark, on the logo's NCS blue. */
+.logo {
   display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 4px;
-  min-height: 58px;
-  padding: 10px 4px 8px;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 18px;
   border-radius: 10px;
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 700;
+  background: var(--brand-ink);
+  color: var(--on-ink);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: 10px 2px 9px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--rail-text);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
+  line-height: 1.2;
   text-decoration: none;
   transition:
     background-color var(--dur-press) ease,
     color var(--dur-press) ease,
-    transform var(--dur-press) var(--ease-out);
+    scale var(--dur-press) var(--ease-out);
 }
 
-.link:active {
-  transform: scale(0.97);
+.item > svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
 }
 
-.link[aria-current='page'] {
-  background: var(--active);
-  color: var(--ink);
+.item:active {
+  scale: var(--press-scale);
 }
 
-/* A total, not an alert, so it is quiet: the sketch's white badge. */
+.item:focus-visible {
+  outline-color: var(--focus-on-rail);
+}
+
+.item[aria-current='page'] {
+  background: var(--rail-active);
+  color: var(--on-ink);
+}
+
+.item[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  inset-inline-start: calc(-1 * var(--space-2));
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--on-ink);
+}
+
+/* A quiet total. Home's turns red while anything needs the person, and Teams' is amber while a yes waits there. */
 .count {
   position: absolute;
-  top: 4px;
-  right: 6px;
-  min-width: 18px;
-  padding: 0 5px;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 16px;
+  top: var(--space-1);
+  inset-inline-end: 10px;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--rail-count);
+  color: var(--rail-count-text);
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-semi);
+  line-height: 21px;
   text-align: center;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .link:hover {
-    background: var(--active);
-    color: var(--ink);
+.count[data-tone='alert'] {
+  background: var(--alert-bg);
+  color: var(--alert-text);
+}
+
+.count[data-tone='wait'] {
+  background: var(--wait);
+  color: var(--on-wait);
+}
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+
+/* The test controls' toggle sits at the bottom of the rail's column, so the person stays clear of it. */
+@media (min-width: 861px) {
+  :global(#root):has([data-test-controls]) .foot {
+    padding-bottom: 52px;
   }
 }
 
-/* At 900 px and narrower the rail is a row of small buttons under the top bar, left-aligned, as in the sketch. */
-@media (max-width: 900px) {
+/* A short window scrolls the rail, so its foot stays in reach. */
+@media (min-width: 861px) and (max-height: 40rem) {
   .rail {
-    z-index: var(--z-nav);
-    top: env(safe-area-inset-top, 0px);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--hair);
-    background: var(--surface);
+    overflow-y: auto;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .item:not([aria-current='page']):hover {
+    background: var(--rail-hover);
+    color: var(--on-ink);
+  }
+}
+
+/* At 860 px and narrower the rail is a bar across the top: the mark and the three items on the left, the foot on the right. */
+@media (max-width: 860px) {
+  .rail {
+    flex-flow: row wrap;
+    align-items: center;
+    height: auto;
+    padding: var(--space-2) 10px;
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
   }
 
-  .link {
-    grid-auto-flow: column;
-    align-items: center;
+  .logo {
+    width: 34px;
+    height: 34px;
+    margin: 0 6px 0 0;
+  }
+
+  .items {
+    flex-flow: row wrap;
+  }
+
+  .item {
+    flex-direction: row;
     gap: 6px;
-    min-height: 32px;
-    padding: 6px 10px;
+    width: auto;
+    min-height: 36px;
+    padding: 7px 10px;
+  }
+
+  .item > svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* The sketch drops the marker in the bar. It moves under the item instead, so the current page is never shown by colour alone. */
+  .item[aria-current='page']::before {
+    inset: auto 10px 0;
+    width: auto;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
   }
 
   .count {
     position: static;
+  }
+
+  .foot {
+    flex-direction: row;
+    margin: 0 0 0 auto;
+  }
+}
+
+/* Narrower still, the foot keeps its icons and the person, and each label is read out but not shown. */
+@media (max-width: 720px) {
+  .foot .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }

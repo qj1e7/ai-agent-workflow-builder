@@ -15,8 +15,8 @@
   border-radius: 999px;
   background: var(--sunk);
   color: var(--muted);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-semi);
   line-height: 1.6;
   white-space: nowrap;
 }
@@ -116,7 +116,7 @@
   background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   cursor: pointer;
   transition:
     background-color var(--dur-press) ease,
@@ -148,7 +148,7 @@
   display: block;
   margin-bottom: 4px;
   color: var(--ink);
-  font-size: 1.125rem;
+  font-size: var(--fs-head);
 }
 
 .quiet button {
@@ -158,7 +158,7 @@
 .problem {
   margin-bottom: 16px;
   color: var(--red-ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .back {
@@ -169,7 +169,7 @@
   margin-bottom: 14px;
   padding: 4px 0;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   text-decoration: none;
   transition: color var(--dur-press) ease;
 }
@@ -196,8 +196,8 @@
 
 .kind {
   color: var(--muted);
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .btns {
@@ -227,7 +227,7 @@
 }
 
 .dialog h2 {
-  font-size: 1.4rem;
+  font-size: var(--fs-title);
 }
 
 .dialog .btns {
@@ -255,12 +255,12 @@
 
 .banner p {
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .banner > :nth-child(4) {
   grid-column: 2 / -1;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 
 .bannerMark {
@@ -332,21 +332,21 @@
 
 .factrows dt {
   color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .factrows dd {
   margin: 2px 0 0;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .factrows dd small {
   display: block;
   margin-top: 4px;
   color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 400;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-regular);
 }
 
 .request {
@@ -368,7 +368,7 @@
 .requestNote {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 1.05rem;
+  font-size: var(--fs-body);
 }
 
 .pill[data-status='answered'] {
@@ -407,7 +407,7 @@
 
 .replyWhen {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .replyForm {
@@ -438,7 +438,7 @@
 
 .replyStatus legend {
   padding: 0;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .replyStatus label {
@@ -450,7 +450,7 @@
 
 .opsNote {
   margin-bottom: 16px;
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 /* The side panel's links and buttons for a workflow: Open the run, then Pause or Resume. */
@@ -484,7 +484,7 @@
 
 .largePills .pill {
   padding: 3px 12px;
-  font-size: 0.9rem;
+  font-size: var(--fs-small);
 }
 
 /* The Workflows page: a block is Needs you, All workflows or Following up. */
@@ -496,8 +496,8 @@
 
 .block h2,
 .section h2 {
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
 }
 
 /* The rows of All workflows, and of the Watchlist, are one bordered list. */
@@ -552,13 +552,13 @@
 }
 
 .main b {
-  font-size: 1rem;
+  font-size: var(--fs-body);
   overflow-wrap: anywhere;
 }
 
 .sub {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
   overflow-wrap: anywhere;
 }
 
@@ -566,7 +566,7 @@
 .sentence {
   max-width: 68ch;
   margin-bottom: 16px;
-  font-size: 1.05rem;
+  font-size: var(--fs-body);
   line-height: 1.6;
 }
 
@@ -592,7 +592,7 @@
 
 .small {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .whenRow {
@@ -624,7 +624,7 @@
   background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .rows {
@@ -670,7 +670,7 @@
   padding: 0 14px;
   border: 1px solid var(--rail);
   border-radius: var(--r-ctl);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 @media (max-width: 480px) {
@@ -696,8 +696,8 @@ details.more > summary {
   min-width: 44px;
   min-height: 44px;
   padding-block: 10px;
-  font-size: 0.95rem;
-  font-weight: 800;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 
@@ -708,7 +708,7 @@ details.rule > summary {
   width: fit-content;
   min-height: 44px;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -716,7 +716,7 @@ details.rule > summary {
 
 details.rule > p {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .actions {
@@ -774,5 +774,5 @@ details.rule > p {
 .actionProblem {
   flex-basis: 100%;
   color: var(--red-ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }

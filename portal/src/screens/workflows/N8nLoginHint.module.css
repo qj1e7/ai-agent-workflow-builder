@@ -10,7 +10,7 @@
   margin: 0;
   max-width: 100%;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
   /* A long email wraps inside its box and never widens the page. */
   overflow-wrap: anywhere;
 }

@@ -11,13 +11,13 @@
   margin-bottom: 14px;
   padding: 4px 0;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   text-decoration: none;
   transition: color var(--dur-press) ease;
 }
 
 .back span {
-  font-size: 1.25rem;
+  font-size: var(--fs-head);
   line-height: 1;
 }
 
@@ -36,15 +36,15 @@
 }
 
 .head h1 {
-  font-size: 1.45rem;
-  font-weight: 800;
+  font-size: var(--fs-title);
+  font-weight: var(--fw-bold);
   line-height: 1.2;
 }
 
 /* "run by Carol", after the name. */
 .by {
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   min-width: 0;
 }
 
@@ -57,8 +57,8 @@
 .kind {
   margin: 0;
   color: var(--muted);
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .pill {
@@ -69,8 +69,8 @@
   border: 1px solid var(--hair);
   border-radius: 999px;
   background: var(--surface);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-semi);
   line-height: 1.6;
   white-space: nowrap;
 }
@@ -120,7 +120,7 @@
   min-height: 1.5em;
   margin-top: 8px;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .status:empty {
@@ -139,7 +139,7 @@
   min-height: 44px;
   padding: 0 2px;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 
@@ -164,7 +164,7 @@
   background: none;
   color: var(--ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -178,8 +178,8 @@
 
 .found {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: var(--fs-head);
+  font-weight: var(--fw-bold);
   line-height: 1.35;
 }
 
@@ -192,7 +192,7 @@
   padding: 12px 14px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--trouble) 6%, var(--surface));
-  font-size: 1rem;
+  font-size: var(--fs-body);
 }
 
 .troubleBody {

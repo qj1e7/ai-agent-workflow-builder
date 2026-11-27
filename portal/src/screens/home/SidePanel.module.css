@@ -33,7 +33,7 @@
 }
 
 .bar h2 {
-  font-size: 1.125rem;
+  font-size: var(--fs-head);
   overflow-wrap: anywhere;
 }
 

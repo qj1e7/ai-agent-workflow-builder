@@ -15,7 +15,7 @@
 
 .head h3 {
   min-width: 0;
-  font-size: 1.05rem;
+  font-size: var(--fs-body);
 }
 
 .rename {
@@ -42,7 +42,7 @@
 }
 
 .part h4 {
-  font-size: 0.9375rem;
+  font-size: var(--fs-small);
 }
 
 .part p {
@@ -60,7 +60,7 @@
   background: var(--sunk);
   color: var(--ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   line-height: 1.4;
   cursor: pointer;
 }
@@ -125,8 +125,8 @@ button.chip:hover {
   border-radius: 999px;
   background: var(--sunk);
   color: var(--ink);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-semi);
 }
 
 .tag[data-state='missing'] {
@@ -144,8 +144,8 @@ button.chip:hover {
 }
 
 .editor label {
-  font-weight: 700;
-  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-small);
 }
 
 .editor input,
@@ -174,12 +174,12 @@ button.chip:hover {
 
 .help {
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--fs-tiny);
 }
 
 .problem {
   color: var(--red-ink);
-  font-size: 0.9375rem;
+  font-size: var(--fs-small);
 }
 
 .btns {
@@ -196,7 +196,7 @@ button.chip:hover {
   background: none;
   color: var(--ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -213,7 +213,7 @@ button.chip:hover {
 .how summary {
   min-height: 44px;
   padding: 10px 0;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 
@@ -247,8 +247,8 @@ button.chip:hover {
   padding: 0 10px;
   border-radius: 999px;
   background: var(--sunk);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-semi);
 }
 
 .stepTag[data-writes] {
@@ -308,7 +308,7 @@ button.chip:hover {
 .pq {
   flex-basis: 100%;
   color: var(--ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .pick {
@@ -325,7 +325,7 @@ button.chip:hover {
   background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   cursor: pointer;
 }
 
@@ -342,7 +342,7 @@ button.chip:hover {
 
 .pnote {
   color: var(--muted);
-  font-size: 0.9375rem;
+  font-size: var(--fs-small);
 }
 
 .value {
@@ -372,8 +372,8 @@ button.chip:hover {
 .valueLabel {
   flex-basis: 100%;
   color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .trouble {
@@ -390,8 +390,8 @@ button.chip:hover {
   border-radius: 6px;
   background: color-mix(in srgb, var(--safety) 8%, var(--surface));
   color: var(--safety);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .good,
@@ -422,7 +422,7 @@ button.chip:hover {
   align-items: center;
   gap: 6px;
   color: var(--red-ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .checks li[data-ok] {
@@ -431,13 +431,13 @@ button.chip:hover {
 
 .footnote {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .guess {
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 0.8125rem;
+  font-size: var(--fs-tiny);
   background: var(--sunk);
   color: var(--muted);
 }

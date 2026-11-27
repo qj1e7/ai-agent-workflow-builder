@@ -14,7 +14,7 @@
   grid-template-columns: 76px minmax(0, 1fr);
   gap: 10px;
   padding: 9px 14px;
-  font-size: 0.94rem;
+  font-size: var(--fs-body);
   overflow-wrap: anywhere;
 }
 
@@ -34,13 +34,13 @@
 .t {
   padding-top: 1px;
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
 }
 
 .who {
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .wait {
@@ -49,7 +49,7 @@
 
 .bad {
   color: var(--red-ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .in {

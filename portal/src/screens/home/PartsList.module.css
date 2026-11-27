@@ -22,8 +22,8 @@
   height: 22px;
   margin-top: 4px;
   border-radius: 50%;
-  font-size: 0.8125rem;
-  font-weight: 800;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-bold);
   line-height: 1;
 }
 
@@ -55,8 +55,8 @@
 .label {
   padding-top: 5px;
   color: var(--muted);
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
   overflow-wrap: anywhere;
 }
 
@@ -82,7 +82,7 @@
 .part[data-mark='no'] .body,
 .part[data-mark='later'] .body {
   color: var(--muted);
-  font-size: 0.9375rem;
+  font-size: var(--fs-small);
 }
 
 .leftovers {
