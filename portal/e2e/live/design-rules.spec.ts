@@ -334,8 +334,9 @@ test('Principle 11: Home’s box shows where focus is, with an ink edge and a ha
   const rest = await look()
   await box(page).focus()
   await expect(composer).toHaveCSS('box-shadow', /rgba?\(15, 26, 43, 0\.14\)/)
+  // The halo shows at once, and the edge eases to ink over --dur-small, as the sketch's box does.
+  await expect(composer, 'the edge turns ink').toHaveCSS('border-top-color', 'rgb(15, 26, 43)')
   const focused = await look()
-  expect(focused.border, 'the edge turns ink').toBe('rgb(15, 26, 43)')
   expect(focused.border).not.toBe(rest.border)
   expect(focused.shadow).not.toBe(rest.shadow)
   await context.close()
