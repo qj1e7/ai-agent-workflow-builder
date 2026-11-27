@@ -3,13 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { STEP_STATE_WORDS, StepLine, type StepDraw } from './StepLine'
 
 const STEPS: readonly StepDraw[] = [
-  { key: 'a', icon: 'schedule', state: 'done' },
-  { key: 'b', icon: 'read', state: 'done' },
-  { key: 'c', icon: 'gate', state: 'wait' },
-  { key: 'd', icon: 'write', state: 'todo' },
+  { key: 'a', name: 'Check releases', icon: 'schedule', state: 'done' },
+  { key: 'b', name: 'Compare', icon: 'read', state: 'done' },
+  { key: 'c', name: 'Ask for approval', icon: 'gate', state: 'wait' },
+  { key: 'd', name: 'Post to Teams', icon: 'write', state: 'todo' },
 ]
 
-const draw = (props: Partial<Parameters<typeof StepLine>[0]> = {}) => renderToStaticMarkup(<StepLine steps={STEPS} label="Last run: waiting for approval" {...props} />)
+const draw = (props: Partial<Parameters<typeof StepLine>[0]> = {}) => renderToStaticMarkup(<StepLine steps={STEPS} label="Last run" {...props} />)
 
 const statesOf = (html: string) => [...html.matchAll(/data-state="(\w+)"/g)].map((match) => match[1])
 
@@ -20,9 +20,9 @@ function withReducedMotion(reduce: boolean): void {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('the small step line', () => {
-  it('is one picture with one name, so a screen reader reads the sentence and not four circles', () => {
+  it('is one picture with one name that says each step and where it stands, built from the steps', () => {
     const html = draw()
-    expect(html).toMatch(/^<span class="[^"]*" role="img" aria-label="Last run: waiting for approval">/)
+    expect(html).toMatch(/^<span class="[^"]*" role="img" aria-label="Last run: Check releases done, Compare done, Ask for approval waiting, Post to Teams not reached">/)
     expect(html.match(/role="img"/g)).toHaveLength(1)
   })
 
@@ -30,14 +30,15 @@ describe('the small step line', () => {
     expect(statesOf(draw())).toEqual(['done', 'done', 'wait', 'todo'])
   })
 
-  it("draws a stopped step as stop and a step not reached as dashed, the sketch's two looks", () => {
+  it("draws a stopped step as stop and a step not reached as dashed, the sketch's two looks, and names them", () => {
     const html = draw({
       steps: [
-        { key: 'a', icon: 'read', state: 'err' },
-        { key: 'b', icon: 'write', state: 'skip' },
+        { key: 'a', name: 'Read', icon: 'read', state: 'err' },
+        { key: 'b', name: 'Write', icon: 'write', state: 'skip' },
       ],
     })
     expect(statesOf(html)).toEqual(['err', 'skip'])
+    expect(html).toContain('aria-label="Last run: Read stopped, Write skipped"')
   })
 
   it("comes in the sketch's two sizes", () => {

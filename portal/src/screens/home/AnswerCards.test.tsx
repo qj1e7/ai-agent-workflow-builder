@@ -230,6 +230,11 @@ describe('the software card', () => {
   const WATCHED = statuses as WatchlistView
   const ask = (software: string, listed: { name: string; software_id: string } | null): WatchlistReply => ({ trace_id: null, answer: 'watchlist', software, word: 'version', already_listed: listed, also: null, covers: [], parts: [] })
 
+  it('draws its pill through the one Pill, so it has the sketch’s tint and icon and not plain text', () => {
+    const html = draw(ask('LangGraph', { name: 'LangGraph', software_id: 'sw_01JBW00000000000000000002' }), { watched: WATCHED })
+    expect(html).toMatch(/<span class="[^"]*pill[^"]*"[^>]*data-tone="wait"[^>]*>Newer out<\/span>/)
+  })
+
   it('names a watched software with its pill and where it stands, in the watchlist’s own words', () => {
     const html = draw(ask('LangGraph', { name: 'LangGraph', software_id: 'sw_01JBW00000000000000000002' }), { watched: WATCHED })
     expect(text(html)).toContain('LangGraph Newer out You run 1.2.14. Newest is 1.2.16.')
