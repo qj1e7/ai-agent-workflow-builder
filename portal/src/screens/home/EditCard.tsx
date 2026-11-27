@@ -6,6 +6,7 @@ import { useChatScheduleChange, useChatWatchlistSchedule, useUndoVersion, useVer
 import { Button, ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { cx } from '../../ui/cx'
+import { Pill } from '../../ui/Pill'
 import { IconCheck } from '../../ui/icons'
 import { OpenButton } from '../../ui/OpenItem'
 import { nextRunAt, undoProblem } from '../workflows/workflow'
@@ -37,7 +38,6 @@ import {
 import { crossParts, PartsList, type Part } from './PartsList'
 import { useMainButton } from './primary'
 import { useSaidOnce, type Say } from './StateAnswers'
-import runStyles from '../run/RunPage.module.css'
 import styles from './EditCard.module.css'
 import partsStyles from './PartsList.module.css'
 import setup from './SetupCard.module.css'
@@ -355,9 +355,9 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
         headingId={`${id}-heading`}
         title={`Change ${chosen.name}`}
         pill={
-          <span className={cx(runStyles['pill'], runStyles[tone])} data-edit-pill>
+          <Pill tone={tone} data-edit-pill>
             {label}
-          </span>
+          </Pill>
         }
         status={
           left === null ? undefined : (

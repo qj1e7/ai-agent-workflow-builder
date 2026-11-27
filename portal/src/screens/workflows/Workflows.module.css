@@ -793,10 +793,6 @@ details.rule > p {
   font-weight: var(--fw-semi);
 }
 
-.cState .pill {
-  white-space: normal;
-}
-
 .cName b {
   font-size: var(--fs-body);
 }

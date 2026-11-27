@@ -579,10 +579,8 @@ export interface PlanBlock {
   readonly kind: BlockKind
 }
 
-export type StationState = StepState
 export type FaceState = 'idle' | 'thinking' | 'working' | 'waiting' | 'success' | 'error' | 'stopped'
 /** The picture in a step's dot: the clock or the person that started the run, an agent reading, the gate, the write. */
-export type { StepIcon }
 
 /** What a step says under its name. */
 export type Under =
@@ -601,7 +599,7 @@ export interface Station {
   readonly icon: StepIcon
   /** The agent above an agent's step, once it joined. */
   readonly agent: AgentRef | null
-  readonly state: StationState
+  readonly state: StepState
   readonly face: FaceState
   readonly under: Under | null
 }
@@ -642,7 +640,7 @@ function stationOf(stations: readonly Skeleton[], spot: Spot | null): number {
 /** The step a stop is drawn at. A stop at the start stays on the start step. */
 const stopStationOf = (stations: readonly Skeleton[], spot: Spot | null): number => (spot?.at === 'started' ? 0 : stationOf(stations, spot))
 
-function stateOf(model: RunModel, station: Skeleton, index: number, current: number, failed: number): StationState {
+function stateOf(model: RunModel, station: Skeleton, index: number, current: number, failed: number): StepState {
   const { phase } = model
   const at = station.spot.at
   const unfilled = at === 'agent' && station.agent === null
@@ -675,11 +673,11 @@ function stateOf(model: RunModel, station: Skeleton, index: number, current: num
   return index === current ? 'now' : 'todo'
 }
 
-const FACE: Readonly<Record<StationState, FaceState>> = { todo: 'idle', now: 'working', wait: 'waiting', done: 'success', err: 'error', no: 'idle', skip: 'stopped' }
+const FACE: Readonly<Record<StepState, FaceState>> = { todo: 'idle', now: 'working', wait: 'waiting', done: 'success', err: 'error', no: 'idle', skip: 'stopped' }
 const PLANNER: AgentRef = { id: PLANNER_ID, display: 'Planner' }
 
 /** Before any agent joins, the Planner is picking them under the first step, so its face is the one at work there, or stopped. */
-function faceAgent(model: RunModel, station: Skeleton, state: StationState): AgentRef | null {
+function faceAgent(model: RunModel, station: Skeleton, state: StepState): AgentRef | null {
   if (station.agent || station.key !== 'agent:0' || model.agents.length > 0) return station.agent
   return state === 'now' || state === 'err' ? PLANNER : null
 }
@@ -703,7 +701,7 @@ function sentUnder(model: RunModel): Under | null {
   return { kind: 'sent', to: (asked.sentTo[open] ?? []).filter((person) => !before.has(person.id)).map((person) => person.display) }
 }
 
-function underOf(model: RunModel, stations: readonly Skeleton[], index: number, state: StationState): Under | null {
+function underOf(model: RunModel, stations: readonly Skeleton[], index: number, state: StepState): Under | null {
   const at = stations[index]?.spot.at
   if (at === 'gate' && state === 'wait') return sentUnder(model)
   if (state === 'now') {

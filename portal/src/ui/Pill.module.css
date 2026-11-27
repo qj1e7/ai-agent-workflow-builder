@@ -2,18 +2,20 @@
 .pill {
   --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='3.6' fill='none' stroke='black' stroke-width='1.8'/%3E%3C/svg%3E");
   display: inline-flex;
-  flex: none;
-  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: flex-start;
   gap: 6px;
   min-height: 26px;
-  padding: 0 10px 0 8px;
+  padding: 4.6px 10px 4.6px 8px;
   border-radius: 999px;
   background: var(--off-bg);
   color: var(--off-text);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);
   line-height: 1.2;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .pill::before {
@@ -21,6 +23,7 @@
   width: 12px;
   height: 12px;
   flex: none;
+  margin-top: 2.4px;
   background: currentcolor;
   mask: var(--pi) center / contain no-repeat;
 }
@@ -31,6 +34,8 @@
 
 .large {
   min-height: 28px;
+  padding-block: 5.6px;
+
 }
 
 .on,

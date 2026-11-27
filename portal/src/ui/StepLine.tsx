@@ -22,15 +22,20 @@ export const STEP_STATE_WORDS: Readonly<Record<StepState, string>> = {
   skip: 'Skipped: ',
 }
 
+/** Each state in a short word, for the line's one name. */
+const STEP_SAID: Readonly<Record<StepState, string>> = { todo: 'not reached', now: 'now', wait: 'waiting', done: 'done', err: 'stopped', no: 'declined', skip: 'skipped' }
+
 export interface StepDraw {
   readonly key: string
+  /** The step's name, which the line's accessible name says with its state. */
+  readonly name: string
   readonly icon: StepIcon
   readonly state: StepState
 }
 
 interface StepLineProps {
   readonly steps: readonly StepDraw[]
-  /** What the whole line says, such as "Last run: Stopped at Compare". It is the line's only name. */
+  /** What the line is, such as "Last run". The line's name adds each step and its state: "Last run: Compare done, Ask for approval waiting". */
   readonly label: string
   /** The sketch's two sizes: 28 px circles on a board tile and the Workflows table, and 22 px circles beside a name in a card. */
   readonly size?: 'md' | 'sm'
@@ -43,7 +48,7 @@ interface StepLineProps {
 export function StepLine({ steps, label, size = 'md' }: StepLineProps) {
   const ring = motionAllowed()
   return (
-    <span className={styles['line']} role="img" aria-label={label} data-size={size === 'sm' ? 'sm' : undefined}>
+    <span className={styles['line']} role="img" aria-label={`${label}: ${steps.map((step) => `${step.name} ${STEP_SAID[step.state]}`).join(', ')}`} data-size={size === 'sm' ? 'sm' : undefined}>
       {steps.map((step) => {
         const Picture = STEP_ICON[step.icon]
         return (

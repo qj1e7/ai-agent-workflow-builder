@@ -6,12 +6,11 @@ import type { ChangedInN8nReply } from '../../api/types'
 import { useAddTheYesBack, useRollback, useUseCaseInN8n } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
-import { cx } from '../../ui/cx'
+import { Pill } from '../../ui/Pill'
 import { IconCheck } from '../../ui/icons'
 import { useTakeBackPress } from '../workflows/InN8n'
 import { ADD_THE_YES_BACK, backToVersionToast, gradePill, UNDO, yesBackToast } from '../workflows/n8nChange'
 import { heldOf, heldWords, mayTakeBack, openingOf, TAKE_IT_BACK } from '../workflows/n8nHold'
-import runStyles from '../run/RunPage.module.css'
 import { useAsker } from './asker'
 import { CardMemoryContext } from './cardMemory'
 import { buttonsOf, OPEN, problemOf, refusedPhase, statusOf, wordsOf, type Phase } from './changed'
@@ -69,9 +68,9 @@ export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
     <Card
       title="Changed in n8n"
       pill={
-        <span className={cx(runStyles['pill'], runStyles[TONE[pill.tone]])} data-changed-pill>
+        <Pill tone={TONE[pill.tone]} data-changed-pill>
           {pill.label}
-        </span>
+        </Pill>
       }
       status={
         status ? (

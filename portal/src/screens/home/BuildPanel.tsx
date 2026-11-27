@@ -35,7 +35,7 @@ function BuildView({ id, test }: { id: string; test: Parameters<typeof useBuilt>
     <div className={runStyles['panelView']}>
       <div className={runStyles['head']}>
         <p className={runStyles['kind']}>{on ? `Set up. Version ${String(useCase?.version ?? created.version)}.` : 'Setting it up…'}</p>
-        <DraftPill label={on ? 'On' : 'Draft'} tone={on ? 'new' : 'quiet'} />
+        <DraftPill label={on ? 'On' : 'Draft'} tone={on ? 'on' : 'quiet'} />
       </div>
       <p className="muted" role="status">
         {statusOf(stage, replay.lines, { inN8n, version: useCase?.version ?? created.version })}

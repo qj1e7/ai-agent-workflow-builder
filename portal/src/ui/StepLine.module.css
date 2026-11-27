@@ -73,17 +73,18 @@
   background: var(--wait-line) !important;
 }
 
-/* A step not reached, declined or skipped is dashed, and so is the link into it. */
+/* A step not reached, declined or skipped is dashed, and so is the link into it. The edge is --edge, 3:1 on white, where the sketch's lighter line is 1.65:1. */
 .todo,
 .no,
 .skip {
+  border-color: var(--edge);
   border-style: dashed;
 }
 
 .todo::before,
 .no::before,
 .skip::before {
-  background: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 7px) !important;
+  background: repeating-linear-gradient(90deg, var(--edge) 0 4px, transparent 4px 7px) !important;
 }
 
 .line[data-size='sm'] .dot {

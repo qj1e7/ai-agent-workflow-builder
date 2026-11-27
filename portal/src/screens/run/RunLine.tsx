@@ -4,19 +4,16 @@ import { cx } from '../../ui/cx'
 import { IconCheck, IconMessage, IconX } from '../../ui/icons'
 import { usePauseUnseen } from '../../ui/loops'
 import { motionAllowed } from '../../ui/motion'
-import { STEP_ICON, STEP_STATE_WORDS } from '../../ui/StepLine'
+import { STEP_ICON, STEP_STATE_WORDS, type StepState } from '../../ui/StepLine'
 import { TicketLink } from '../jira/TicketKeys'
-import type { Station, StationState, Under } from './runModel'
+import type { Station, Under } from './runModel'
 import { sentToWords, UNSENT_WORDS, workingWords, type Settled } from './words'
 import styles from './RunLine.module.css'
-
-/** The state in words, for a screen reader: the line shows it by shape and colour. */
-export const STATE_WORDS = STEP_STATE_WORDS
 
 /** A link takes the state of the step it leads into. */
 type Link = 'solid' | 'flow' | 'wait' | 'stop' | 'dead' | 'todo'
 
-const LINK_INTO: Readonly<Record<StationState, Link>> = {
+const LINK_INTO: Readonly<Record<StepState, Link>> = {
   todo: 'todo',
   now: 'flow',
   wait: 'wait',
@@ -152,7 +149,7 @@ export function RunLine({ stations, arrivedLive, settled, small = false, hidden,
                   </span>
                 </span>
                 <span className={styles['label']}>
-                  <span className="visually-hidden">{STATE_WORDS[state]}</span>
+                  <span className="visually-hidden">{STEP_STATE_WORDS[state]}</span>
                   {station.label}
                 </span>
                 {station.under ? (
