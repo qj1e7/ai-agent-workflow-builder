@@ -20,14 +20,47 @@
 
 The team lead asked for the sketch to match what main decided since 13 Nov. These changed:
 
-- **No Watchlist in the rail.** The Software watchlist is a workflow (ADR 0053, item 4, and #361). It shows on Home's board, in the slim list and on Workflows like any other workflow, with its state, its next run and its last run. Its page is a workflow page with the list drawn in it: its title, state and Pause on top, then When with its quiet Change, Who approves and Next run, then "The list" with Add software, the filter chips and the rows, problems first. It has no Change button and no Delete. A software opened from the list goes back to it, and a software's "Checked by" links to it. While it is on, every software on the list without a release check of its own reads "checked by the Software watchlist". While it is paused, they read "not checked automatically". The Planner's "See the watchlist" opens it beside the chat.
+- **No Watchlist in the rail.** The Software watchlist is a workflow (ADR 0053, item 4, and #361). It shows on Home's board, in the slim list and on Workflows like any other workflow, with its state, its next run and its last run. Its page is a workflow page, as the app's:
+  - its title and state, with Run now and Pause on top (Resume while paused, and no Run now while the list is empty);
+  - When with its quiet Change, Who approves and Next run;
+  - its steps "with the last run": Read versions reads GitHub, Maven Central and npm;
+  - "The list" with Add software, the filter chips and the rows, problems first;
+  - Recent runs and Versions, and, for people with n8n access, the In n8n tab and Open in n8n.
+
+  It has no Change button and no Delete. A software opened from the list goes back to it. The Planner's "See the watchlist" opens it beside the chat.
+- **Checked by, as the app's list says it.** While the watchlist is on, every software on it reads "checked by Software watchlist", FastAPI and React included. While it is paused, every one reads "not checked automatically". A software's page says Checked by "Software watchlist" (a link) or "Not checked automatically", with "last checked Mon 9:00". Its buttons are the app's: History, Remove from watchlist with Undo, and Ask the team for one GitHub can't find. "Watch for new releases" is gone. "Open the last check" opens the watchlist's Monday check, whose history says what OSV found.
+- **Run now and More actions.** A workflow page has "More actions" last in its title row, with Run now while it is on, and Delete. Delete asks first, in the app's words, then goes to Workflows with "Deleted React release check." and Undo, which says "Put back.". Run now opens the run it starts. Its page leads with what was found, then the steps and the folded run history, and it joins Recent runs and the last run. A FastAPI run started while GitHub doesn't answer stops the same way.
+- **Changing the watchlist from the chat**, as the app's edit card does. "Make the software watchlist run at 13:00" gets the change card, with "This changes when all 6 software on the watchlist are checked. Saving makes you the owner of this schedule. Its checks then count as your work, so you won't be able to approve them." Once saved: "Saved. Next run Monday, 13:00. You now own this schedule, so you can't approve its checks."
+- **Practice systems** (ADR 0054, #372 and #376), in the app's words:
+  - the set-up card says "Trying it on practice systems. Each case can take up to 2 minutes." while it builds, then "Tried 6 cases on practice systems: 6 passed.", each case, and "Turn on still runs the real test, which writes nothing.";
+  - a drafted workflow's card shows the same result under In short, or "It will be tried on practice systems once every setting is filled." while a setting is missing;
+  - a drafted workflow's page shows it while it is a Draft.
+- **Drafted workflows on Home** say where they stand, as Workflows does, such as "Sent for approval at 9:05".
+- **The Planner's cards in the app's words** (#353, #354, #356):
+  - The release check card's Watch row reads "New releases of LangGraph", then the repository with "Found on GitHub" and Change, then "You run 0.2.60". Then reads "Create 1 Jira ticket", with no choice box.
+  - Asking for a release check the person already has gets "You already have this one.": the workflow, "It already watches fastapi/fastapi, every day at 8:00.", and Set up another, which opens the card as "FastAPI release check 2", or Open it.
+  - Any software, a package included, gets its own release check card. The package card is gone.
+  - "Add Grafana to the watchlist" gets "Grafana is software, so it belongs on the Software watchlist, which checks the software on it for new releases.", where it is published, Version we run for a package, and Add Grafana or Never mind. Software already on the list gets "LangGraph is already on the Software watchlist." with its line and Open it.
+  - "Add Kubernetes to the watchlist and check it every day" gets "Kubernetes isn't on your Software watchlist yet. The watchlist is a workflow that checks 6 software, every Monday at 9:00, and you asked for every day.", then "How should I add Kubernetes?" with "Add it, and check all 7 every day" and "Add it, keep Mondays".
+  - "Can you check if React has a new release?" and "Check the latest version of LangGraph" get the version answer, not a card.
+  - Add software on the watchlist's page hands "Add Grafana to the watchlist" to the Planner.
 - **Jira at the rail's foot.** Teams, Jira, Settings and the person sit at the rail's foot. Jira opens the practice Jira, and shows only while no real Jira is set up, as the app has it. The sketch draws no Jira page, only its title and lead.
 - **Four states** (ADR 0053, item 2, and #355). A workflow shows Needs you, On, Paused or Draft, on the board, the slim list, Workflows and its page. Needs you is only for the person who has something to do, the same rule as their Needs you list. Alice reads Needs you on a stopped run and "On · waiting for approval" while Bob decides. Bob reads Needs you while he can decide and "On · last run stopped" on a stop. A drafted workflow is a Draft, and Needs you for an Approver who may decide its set-up. The filter chips are All, Needs you, On, Paused and Draft. Run results (Stopped, Waiting for approval, Done, Declined) stay on runs, as before.
 - **One Turn on** (ADR 0053, item 1, and #352). The set-up card's one button is Turn on. It runs the test, which writes nothing, and turns the workflow on if it passes, with no second button. How to start says "Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes."
 
-Already in the sketch, so unchanged: the Explain page's removal (#386), the run page that leads with the decision (#388), the set-up questions in their rows (#387), the Teams dialog, the build title and Change (#390), the approval words (#391), the Home heading "What can I help you with today?", Explain's plain sentence (#393), and one Change button in the title row, with the When row's Change as a quiet text link.
+Already in the sketch, so unchanged: the Explain page's removal (#386), the run page that leads with the decision (#388), the set-up questions in their rows (#387), the Teams dialog, the build title and Change (#390), the approval words (#391), the Home heading "What can I help you with today?", Explain's plain sentence (#393), one Change button in the title row, with the When row's Change as a quiet text link, and the troubleshooter's white card with Retry under its answers (#396). The run page's boxed steps and folded history in #396 are the Portal's, and the light stage stays the target.
 
-New words, for the team lead to confirm: "The list", "Every Monday at 9:00, check each software on the list for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after approval.", and for the sketch only "In the app, this page stays as it is today.". The state words, "Jira", "Practice Jira" and "Practice copy. Nothing reaches a real Jira." are the app's own.
+The 19 Nov and 22 Nov notes under "Since version 3" describe the package card, which this replaces.
+
+New words, for the team lead to confirm:
+
+- "The list", "with the last run", "Read versions", "Reads GitHub, Maven Central and npm" and "Create tickets".
+- The watchlist's sentence: "Every Monday at 9:00, check each software on the list for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after approval."
+- On a run: "Today's run, just now", "Monday's run, 9:00", "Running now.", "Nothing new since the last check.", "Started by Alice with Run now.", "Found nothing new, so nothing was written.", "Version checker asked GitHub, Maven Central and npm for the newest version of 6 software." and "Couldn't read LangServe on GitHub: GitHub answered 404 Not Found.".
+- In Recent runs: "Today, just now", "Mon, 9:00" and "Last Mon, 9:00".
+- For the sketch only: "In the app, this page stays as it is today.".
+
+Everything else added here is the app's own words: the state words, "Jira", "Practice Jira", More actions and the delete dialog, the software page, the practice systems lines, the edit card's note, and the Planner's answers.
 
 ## A run's page, decision first, 25 Nov 2026
 
