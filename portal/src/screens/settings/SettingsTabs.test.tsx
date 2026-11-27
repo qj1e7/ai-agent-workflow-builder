@@ -180,6 +180,11 @@ describe('the Connections tab', () => {
     expect(text(cardOf(html, 'jira'))).not.toContain(GITHUB_KEY_NOTE)
   })
 
+  it('gives a card that needs someone the amber pill, so it is never plain', () => {
+    expect(cardOf(html, 'teams')).toMatch(/class="_pill_\w+" data-tone="wait"/)
+    expect(cardOf(html, 'jira')).toMatch(/class="_pill_\w+" data-tone="ok"/)
+  })
+
   it('says a connection that does not answer, when it last worked, and the one fix', () => {
     const teams = text(cardOf(html, 'teams'))
     expect(teams).toContain('Not working right now')
