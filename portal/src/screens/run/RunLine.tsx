@@ -4,24 +4,15 @@ import { cx } from '../../ui/cx'
 import { IconCheck, IconMessage, IconX } from '../../ui/icons'
 import { usePauseUnseen } from '../../ui/loops'
 import { motionAllowed } from '../../ui/motion'
-import { STEP_ICON, STEP_STATE_WORDS, type StepState } from '../../ui/StepLine'
+import { STEP_ICON, STEP_STATE_WORDS } from '../../ui/StepLine'
 import { TicketLink } from '../jira/TicketKeys'
 import type { Station, Under } from './runModel'
+import { LINK_INTO, type Link } from './stage'
 import { sentToWords, UNSENT_WORDS, workingWords, type Settled } from './words'
 import styles from './RunLine.module.css'
 
-/** A link takes the state of the step it leads into. */
-type Link = 'solid' | 'flow' | 'wait' | 'stop' | 'dead' | 'todo'
-
-const LINK_INTO: Readonly<Record<StepState, Link>> = {
-  todo: 'todo',
-  now: 'flow',
-  wait: 'wait',
-  done: 'solid',
-  err: 'stop',
-  no: 'solid',
-  skip: 'dead',
-}
+/** The state in words, for a screen reader: the line shows it by shape and colour. */
+export const STATE_WORDS = STEP_STATE_WORDS
 
 const MARCHES: ReadonlySet<Link> = new Set(['flow', 'wait'])
 
@@ -38,7 +29,7 @@ function Working({ since, small }: { since: number; small: boolean }) {
   return <span className={styles['timer']}>{words}</span>
 }
 
-function UnderStep({ under, small }: { under: Under; small: boolean }) {
+export function UnderStep({ under, small }: { under: Under; small: boolean }) {
   switch (under.kind) {
     case 'timer':
       return <Working since={under.since} small={small} />

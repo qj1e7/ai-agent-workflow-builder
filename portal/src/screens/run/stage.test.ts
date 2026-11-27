@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import type { Station, StationState } from './runModel'
+import type { StepState } from '../../ui/StepLine'
+import type { Station } from './runModel'
 import { geometryOf, handoffsOf, MAX_STAGE_STEPS, stageOf, STAGE_STATE_WORDS } from './stage'
 
 const agent = { id: 'version_checker', display: 'Version checker' }
 
-function station(key: string, state: StationState, kind: 'started' | 'agent' | 'gate' | 'write', who: Station['agent'] = null): Station {
+function station(key: string, state: StepState, kind: 'started' | 'agent' | 'gate' | 'write', who: Station['agent'] = null): Station {
   const spot = kind === 'agent' ? ({ at: 'agent', index: 0 } as const) : ({ at: kind } as const)
   const icon = kind === 'gate' ? 'gate' : kind === 'write' ? 'write' : kind === 'agent' ? 'read' : 'schedule'
   return { key, spot, label: key, icon, agent: who, state, face: 'idle', under: null }
 }
 
-const line = (...states: StationState[]): Station[] => [
+const line = (...states: StepState[]): Station[] => [
   station('trigger', states[0] ?? 'todo', 'started'),
   station('agent:0', states[1] ?? 'todo', 'agent', agent),
   station('gate', states[2] ?? 'todo', 'gate'),
@@ -107,6 +108,6 @@ describe('where each part sits', () => {
 
   it('draws a track between the edges of two circles on their centre line', () => {
     const geometry = geometryOf(5, 1000)
-    expect(geometry.track(0)).toBe(`M${100 + geometry.node / 2} ${geometry.centreY}H${300 - geometry.node / 2}`)
+    expect(geometry.track(1)).toBe(`M${100 + geometry.node / 2} ${geometry.centreY}H${300 - geometry.node / 2}`)
   })
 })

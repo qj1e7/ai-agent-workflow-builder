@@ -159,8 +159,25 @@
   display: none;
 }
 
-.stoppedLine {
-  margin-top: 6px;
+/* The light stage, then the decision and the history. From 1240 px the decision and the history sit beside the stage, as the sketch has it. */
+.body {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+  margin-top: var(--space-5);
+}
+
+.side {
+  display: grid;
+  min-width: 0;
+}
+
+@container (min-width: 1240px) {
+  .body:has(> :nth-child(2)) {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  }
 }
 
 .troubleBody {

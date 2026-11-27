@@ -2,14 +2,14 @@ import type { Locator, Page } from '@playwright/test'
 import { showHistory } from './ui'
 
 /**
- * Each link of the run line, in order: the state it draws, with "+" when it marches. On a stopped run the line shows
- * on its own, and on other runs it sits in Run history, so this opens the history first.
+ * Each link of the run line, in order: the state it draws, with "+" when it marches. The run page draws its links as the stage's
+ * tracks, which never march: the glow on a hand-off is a dot, not dashes. The side panel's small line sits in Run history, so this
+ * opens the history first when there is one.
  */
 export async function runLinks(scope: Page | Locator): Promise<string[]> {
-  await showHistory(scope)
+  if ((await scope.locator('[data-stage]').count()) === 0) await showHistory(scope)
   return scope
-    .getByRole('list', { name: 'Steps of this run' })
-    .locator('[data-link]')
+    .locator('[data-stage] [data-link], ol[aria-label="Steps of this run"] [data-link]')
     .evaluateAll((links) => links.map((link) => `${link.getAttribute('data-link') ?? ''}${link.hasAttribute('data-march') ? '+' : ''}`))
 }
 
@@ -32,18 +32,10 @@ export async function holdRunAtWork(page: Page, runId: string): Promise<void> {
   })
 }
 
-/** Where the march's dashes are now, read twice a beat apart. Equal readings mean the dashes hold still. */
-export async function marchReadings(page: Page): Promise<[string, string]> {
-  const read = () => page.locator('[data-link="flow"]').first().evaluate((link) => getComputedStyle(link, '::before').transform)
-  const first = await read()
-  await page.waitForTimeout(150)
-  return [first, await read()]
-}
-
-/** The CSS properties each animation on the run line's links changes. A cheap march changes only transform. */
+/** The CSS properties each animation on the run line's links changes, and on the stage's glowing hand-offs. A cheap march changes only transform. */
 export function linkAnimations(page: Page): Promise<string[][]> {
   return page
-    .locator('[data-link]')
+    .locator('[data-link], [data-glow]')
     .evaluateAll((links) =>
       links.flatMap((link) =>
         link

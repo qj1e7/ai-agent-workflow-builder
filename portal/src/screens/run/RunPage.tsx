@@ -25,7 +25,7 @@ import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, StopAnswers, StopNext } from './Outcome'
 import { useQuestions } from './questions'
 import { RunDecision } from './RunDecision'
-import { RunLine } from './RunLine'
+import { RunStage } from './RunStage'
 import { RunPill } from './RunPill'
 import { RunPlaceContext, type RunPlace } from './place'
 import { isFinished } from './runModel'
@@ -316,21 +316,13 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
           <RunInN8n runId={run.run_id} name={run.use_case_name} seq={shown.seq} ended={modelFinished} />
         </div>
       ) : null}
-      {main}
-      {failure && shownView !== 'n8n' ? (
-        <div className={styles['stoppedLine']}>
-          <RunLine stations={stations} arrivedLive={arrivedLive} settled={null} />
+      <div className={styles['body']}>
+        {shownView === 'n8n' ? null : <RunStage stations={stations} arrivedLive={arrivedLive} />}
+        <div className={styles['side']}>
+          {main}
+          <History rows={rows} messages={messages} loadedUpTo={loadedUpTo} open={open} onToggle={detail.choose} listRef={logList} />
         </div>
-      ) : null}
-      <History
-        rows={rows}
-        messages={messages}
-        loadedUpTo={loadedUpTo}
-        open={open}
-        onToggle={detail.choose}
-        listRef={logList}
-        line={shownView === 'n8n' || failure ? null : <RunLine stations={stations} arrivedLive={arrivedLive} settled={null} />}
-      />
+      </div>
       <div className="visually-hidden" aria-live="polite">
         {announce ?? ''}
       </div>
