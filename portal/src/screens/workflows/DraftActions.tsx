@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
@@ -13,11 +13,19 @@ import styles from './Workflows.module.css'
 
 const DRAFT_WORDS = 'A draft. It runs only as a test, which writes nothing, until you turn it on after a test run passes.'
 
+interface Draft {
+  /** The one sentence on where the draft stands: what it does until a test run passes, or how the last one went. */
+  readonly words: string
+  readonly buttons: ReactNode
+  readonly problem: ReactNode
+}
+
 /**
- * A draft's own controls on its page and in the panel, as the set-up card has them (ADR 0044): Test run, which opens the run, and Turn it
- * on once a test run passed. The workflow reads On only once the platform answers that it is on.
+ * A draft's own controls, as the set-up card has them (ADR 0044): Test run, which opens the run, and Turn it on once a test run passed.
+ * The workflow reads On only once the platform answers that it is on. A page puts the buttons in its title row and the words under the
+ * sentence, and the panel puts all three together in DraftActions. Null while the person has no test to press.
  */
-export function DraftActions({ useCase, viewer }: { useCase: UseCaseView; viewer: Viewer }) {
+export function useDraft(useCase: UseCaseView, viewer: Viewer): Draft | null {
   const start = useStartRun()
   const turnOn = useTurnOn()
   const latch = useLatch()
@@ -38,10 +46,10 @@ export function DraftActions({ useCase, viewer }: { useCase: UseCaseView; viewer
     )
   const on = () => latch.run((settled) => turnOn.mutate(useCase.use_case_id, { onError: (error) => setProblem(`Could not turn it on. ${words(error)}`), onSettled: settled }))
 
-  return (
-    <div className={styles['draft']}>
-      <p className="muted">{passed && last ? stageWords(stageOfLast(last), (id) => id) : DRAFT_WORDS}</p>
-      <div className={styles['draftButtons']}>
+  return {
+    words: passed && last ? stageWords(stageOfLast(last), (id) => id) : DRAFT_WORDS,
+    buttons: (
+      <>
         <Button variant={passed ? 'secondary' : 'primary'} loading={start.isPending} onClick={test}>
           Test run
         </Button>
@@ -50,12 +58,25 @@ export function DraftActions({ useCase, viewer }: { useCase: UseCaseView; viewer
             Turn it on
           </Button>
         ) : null}
-      </div>
-      {problem ? (
-        <p className={styles['problem']} role="alert">
-          {problem}
-        </p>
-      ) : null}
+      </>
+    ),
+    problem: problem ? (
+      <p className={styles['problem']} role="alert">
+        {problem}
+      </p>
+    ) : null,
+  }
+}
+
+/** A draft's words, buttons and problem in one block, as the side panel has them. */
+export function DraftActions({ useCase, viewer }: { useCase: UseCaseView; viewer: Viewer }) {
+  const draft = useDraft(useCase, viewer)
+  if (!draft) return null
+  return (
+    <div className={styles['draft']}>
+      <p className="muted">{draft.words}</p>
+      <div className={styles['draftButtons']}>{draft.buttons}</div>
+      {draft.problem}
     </div>
   )
 }

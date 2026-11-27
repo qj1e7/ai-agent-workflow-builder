@@ -45,6 +45,29 @@ function Case({ found }: { found: SimulatedCaseView }) {
   )
 }
 
+/** The cases in order. Folded, the ones that passed open on request and any other stays in view. */
+function Cases({ cases, fold }: { cases: readonly SimulatedCaseView[]; fold: boolean }) {
+  const list = (items: readonly SimulatedCaseView[]) => (
+    <ul className={styles['cases']}>
+      {items.map((found) => (
+        <Case key={found.kind} found={found} />
+      ))}
+    </ul>
+  )
+  const passed = cases.filter((found) => found.verdict === 'passed')
+  if (!fold || passed.length === 0) return list(cases)
+  const others = cases.filter((found) => found.verdict !== 'passed')
+  return (
+    <>
+      {others.length > 0 ? list(others) : null}
+      <details className={styles['foldedCases']}>
+        <summary>Show cases</summary>
+        {list(passed)}
+      </details>
+    </>
+  )
+}
+
 /** Starts the version's try again, wherever its Check is: a drafted revision's, or a workflow's current version. */
 export interface TryAgain {
   readonly pending: boolean
@@ -74,9 +97,10 @@ function TryAgainButton({ tryAgain, label }: { tryAgain: TryAgain; label: string
 /**
  * A version tried on practice systems (ADR 0054): a drafted revision, or a workflow the Planner built from our blocks. The result
  * leads, then what failed and why. A failed case never blocks Turn on, and a pass never stands in for the real test run Turn on
- * starts. It never claims a result it doesn't have.
+ * starts. It never claims a result it doesn't have. On a workflow's page the cases that passed fold under the result, a failed one
+ * stays in view, and the draft's own line already says a test run still comes first, so this one does not say it again.
  */
-export function SimulationResult({ simulation, tryAgain }: { simulation: SimulationView; tryAgain: TryAgain }) {
+export function SimulationResult({ simulation, tryAgain, onWorkflowPage = false, testLineShown = false }: { simulation: SimulationView; tryAgain: TryAgain; onWorkflowPage?: boolean; testLineShown?: boolean }) {
   const again = (label: string) => (simulation.can_try_again ? <TryAgainButton tryAgain={tryAgain} label={label} /> : null)
   switch (simulation.state) {
     case 'unavailable':
@@ -119,13 +143,7 @@ export function SimulationResult({ simulation, tryAgain }: { simulation: Simulat
           <p className={styles['said']}>
             <b>{simulationLead(simulation)}</b>
           </p>
-          {simulation.cases.length > 0 ? (
-            <ul className={styles['cases']}>
-              {casesInOrder(simulation.cases).map((found) => (
-                <Case key={found.kind} found={found} />
-              ))}
-            </ul>
-          ) : null}
+          {simulation.cases.length > 0 ? <Cases cases={casesInOrder(simulation.cases)} fold={onWorkflowPage} /> : null}
           {simulation.not_tried.map((block) => (
             <p key={block.block} className={styles['note']}>
               {`${NOT_TRIED_ANYWHERE} “${block.block}”. ${block.why}`}
@@ -133,7 +151,7 @@ export function SimulationResult({ simulation, tryAgain }: { simulation: Simulat
           ))}
           <p className={styles['note']}>
             {failed ? `${YOU_DECIDE} ` : ''}
-            {STILL_TESTS}
+            {testLineShown ? '' : STILL_TESTS}
           </p>
         </section>
       )

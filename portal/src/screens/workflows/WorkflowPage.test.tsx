@@ -112,9 +112,9 @@ const whenOf = (html: string) =>
     .replace(/ Next run: .*$/, '')
     .replace(/ Not running: .*$/, '')
     .replace(/ Set by \w+\.$/, '')
-    .replace(/ (Change|Set) when it runs/, '')
-/** The next run, said under When. */
-const nextOf = (html: string) => /(?:Next run: |(?=Not running: ))(.*)$/.exec(sectionText(html, 'When'))?.[1] ?? ''
+    .replace(/ (Change|Set)( (?=[A-Z])|$)/, ' ').trim()
+/** The next run, the third fact of the strip under the sentence. */
+const nextOf = (html: string) => sectionText(html, 'Next run')
 const sentenceOfHtml = (html: string) => text(/<p class="[^"]*sentence[^"]*">([\s\S]*?)<\/p>/.exec(mainOf(html))?.[1] ?? '')
 
 describe('a workflow page', () => {
@@ -162,8 +162,7 @@ describe('a workflow page', () => {
   it('says when it runs, when it runs next, and who says yes', () => {
     const html = render()
     expect(whenOf(html)).toBe('Runs only when you press Run now.')
-    expect(sectionText(html, 'When'), 'a workflow with no schedule has no next run to give').not.toContain('Next run')
-    expect(text(mainOf(html))).toContain('On. Runs only when you press Run now.')
+    expect(mainOf(html), 'a workflow with no schedule has no next run to give').not.toContain('>Next run</h2>')
     expect(sectionText(html, 'Who approves')).toBe('Any Approver but you, in Teams. Nothing is written until an Approver approves it. Who can’t approve Nobody approves their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t approve that run.')
   })
 
@@ -270,20 +269,21 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/_primary_[^>]*>Review and decide/)
   })
 
-  it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, then the buttons, with no Agents section', () => {
-    const html = mainOf(render({ runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] }))
+  it('orders the page as the sketch does: the title row, the sentence, When, Who approves, Next run, the line, then Recent runs, with no banner and no Agents section', () => {
+    const html = mainOf(render({ runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }], useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } } }))
     const at = (needle: string) => html.indexOf(needle)
-    const order = [at('<h1'), at('sentence'), at('data-tone='), at('Check release'), at('>When</h2>'), at('>Who approves</h2>'), at('>Recent runs</h2>'), at('>Pause<')]
+    const order = [at('<h1'), at('>Pause<'), at('sentence'), at('>When</h2>'), at('>Who approves</h2>'), at('>Next run</h2>'), at('Check release'), at('>Recent runs</h2>')]
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
     expect(html).not.toContain('Agents')
+    expect(html).not.toMatch(/class="[^"]*_banner_/)
   })
 
   const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
 
-  it('puts the change beside When, as Change, or Set when there is none', () => {
-    expect(buttons(render({ useCase: SCHEDULED }))).toContain('Change when it runs')
-    expect(buttons(render())).toContain('Set when it runs')
+  it('puts the change beside When, as the quiet link Change, or Set when there is none', () => {
+    expect(buttons(render({ useCase: SCHEDULED }))).toContain('Change')
+    expect(buttons(render())).toContain('Set')
   })
 
   it('says under When who set the schedule', () => {
@@ -294,7 +294,7 @@ describe('a workflow page', () => {
     const inN8n = { ...SCHEDULED, schedule: { ...SCHEDULED.schedule!, owner_name: null } }
     expect(sectionText(render({ useCase: inN8n }), 'When')).toContain('Set in n8n.')
     expect(sectionText(render({ useCase: inN8n }), 'When')).not.toContain('null')
-    expect(buttons(render({ useCase: { ...inN8n, made_in_n8n_by: 'carol' } }))).not.toContain('Change when it runs')
+    expect(buttons(render({ useCase: { ...inN8n, made_in_n8n_by: 'carol' } }))).not.toContain('Change')
   })
 
   it('shows an Approver who is not an Operator neither control', () => {
@@ -324,7 +324,7 @@ describe('a workflow page', () => {
 
   it('lets an Operator take a held schedule over from When: Change opens on it, the save carries the version read, and the saved view names them and its next run', async () => {
     const held: UseCaseView = { ...AGENTS, version: 3, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed', held_words: CAROL_LEFT } }
-    expect(buttons(render({ me: ALICE, useCase: held }))).toContain('Change when it runs')
+    expect(buttons(render({ me: ALICE, useCase: held }))).toContain('Change')
     expect(buttons(render({ me: BOB, useCase: held })).filter((label) => /when it runs/i.test(label)), 'only an Operator can take it over').toEqual([])
     const taken: UseCaseView = { ...held, next_run_at: '2026-11-09T01:00:00Z', schedule: { ...held.schedule!, owner_name: 'Alice', held: null, held_words: null } }
     const sent: unknown[] = []
@@ -367,7 +367,7 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
   })
 
-  it('opens the run from the banner for someone who may not decide a waiting run, and decides for someone who may', () => {
+  it('opens the run from the title row for someone who may not decide a waiting run, and decides for someone who may', () => {
     const waiting = { last: { state: 'awaiting_approval' as const, proposed: 1, tickets: true, you_can_decide: false, reason: null } }
     expect(mainOf(render({ ...waiting }))).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>Open the run<\/a>/)
     expect(mainOf(render({ me: BOB, useCase: AGENTS, last: { ...waiting.last, you_can_decide: true } }))).toMatch(/<a[^>]*>Review and decide<\/a>/)
@@ -380,46 +380,49 @@ describe('a workflow page', () => {
     expect([first?.[1], first?.[2]]).toEqual(['run_01JB9', 'failed'])
   })
 
-  const bannerOfHtml = (html: string) => /<div[^>]*data-tone="bad"[\s\S]*?<\/(?:a|button)><\/div>/.exec(mainOf(html))?.[0] ?? ''
+  const recentOf = (html: string) => text(/<section[^>]*aria-labelledby[^>]*>\s*<h2[^>]*>Recent runs<\/h2>([\s\S]*?)<\/section>/.exec(mainOf(html))?.[0] ?? '')
+  const noBanner = (html: string) => expect(mainOf(html), 'the state is said by the pill, the title row and Recent runs, not a banner as well').not.toMatch(/class="[^"]*_banner_/)
 
-  it('for a stop, retryable or not, the banner’s one action is Open the run, as in the sketch', () => {
+  it('for a stop, retryable or not, the one action is Open the run in the title row, as in the sketch, with no banner', () => {
     for (const retryable of [true, false]) {
       const html = render({ last: { retryable } })
-      expect(text(bannerOfHtml(html))).toBe('Stopped today at 10:14. An agent could not finish its work. Open the run')
-      expect(bannerOfHtml(html)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>Open the run<\/a>/)
+      noBanner(html)
+      expect(mainOf(html)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>Open the run<\/a>/)
       expect(text(mainOf(html))).not.toMatch(/Retry the run|See why it stopped/)
     }
   })
 
-  it('for a run n8n lost, says Lost in the banner and keeps the pill On, as a lost run is not in Needs you', () => {
-    const html = render({ last: { state: 'lost', reason: null } })
+  it('for a run n8n lost, keeps the pill On, says Lost in Recent runs, and opens the run from the title row', () => {
+    const html = render({ last: { state: 'lost', reason: null }, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0', state: 'lost' } as RunView] })
     expect(mainOf(html)).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
     expect(mainOf(html)).not.toMatch(/Needs you<\/span>/)
-    expect(text(bannerOfHtml(html))).toBe('Lost today at 10:14. Approved, but the run stopped before it could make the change. Nothing was written. Open the run')
+    noBanner(html)
+    expect(recentOf(html)).toContain('Lost')
+    expect(mainOf(html)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>Open the run<\/a>/)
     expect(text(mainOf(html))).not.toContain('On. Next run')
   })
 
-  it('says the same words as the Workflows list, whatever the AI troubleshooter says', () => {
+  it('says a stop in the run’s own words in Recent runs, whatever the AI troubleshooter says', () => {
     const advice = { ...(troubleshooting as TroubleshootingOut), answers: { ...(troubleshooting as TroubleshootingOut).answers, what_happened: 'GitHub did not answer three times.' } }
-    const waited = 'The run waited too long for the workflow engine and gave up.'
-    const html = render({ last: { reason: 'TimedOut', stop: { at: '2026-11-04T02:14:00Z', what_happened: waited } }, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }], advice })
-    expect(text(bannerOfHtml(html))).toContain(waited)
+    const html = render({ last: {}, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }], advice })
+    expect(recentOf(html)).toContain("GitHub didn't answer")
     expect(text(mainOf(html))).not.toContain('GitHub did not answer')
     expect(text(mainOf(html))).not.toMatch(/write key/i)
   })
 
-  it('gives an Approver the stop in the same words, and lets them open the run', () => {
+  it('gives an Approver the stop the same way, and lets them open the run', () => {
     const html = render({ me: BOB, last: {}, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }] })
-    expect(text(bannerOfHtml(html))).toBe('Stopped today at 10:14. An agent could not finish its work. Open the run')
+    noBanner(html)
+    expect(mainOf(html)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>Open the run<\/a>/)
     expect(text(mainOf(html))).not.toMatch(/See why it stopped|Retry the run/)
   })
 
-  it('while paused, holds Resume in the banner as the one primary action and has no Pause', () => {
+  it('while paused, holds Resume in the title row as the one primary action and has no Pause', () => {
     const html = render({ useCase: { ...AGENTS, state: 'paused' } })
-    const banner = /<div[^>]*data-tone="off"[\s\S]*?<\/button><\/div>/.exec(mainOf(html))?.[0] ?? ''
-    expect(text(banner)).toBe('Paused. It won’t run until you resume it. Resume')
+    expect(mainOf(html)).toMatch(/_primary_[^>]*>(<svg[\s\S]*?<\/svg>)?Resume<\/button>/)
     expect(buttons(html)).not.toContain('Pause')
     expect(text(mainOf(html)).match(/Resume/g)).toHaveLength(1)
+    expect(text(mainOf(html))).not.toContain('Paused. It won’t run until you resume it.')
   })
 
   it('tells everyone on its Summary who has it open in n8n, and offers no change the platform would refuse', () => {
@@ -428,7 +431,7 @@ describe('a workflow page', () => {
     expect(text(html)).toMatch(/Carol has it open in n8n since (Mon 9 Nov, )?10:02\. Ask Carol, or anyone with n8n access, to take it back\./)
     expect(sectionText(html, 'When')).toContain('Can’t change it while Carol has it open in n8n.')
     const pressable = buttons(html)
-    for (const refused of ['Undo', 'Add the approval step back', 'Change when it runs', 'Set when it runs', 'Resume']) expect(pressable, `${refused} would be refused`).not.toContain(refused)
+    for (const refused of ['Undo', 'Add the approval step back', 'Change', 'Set', 'Resume']) expect(pressable, `${refused} would be refused`).not.toContain(refused)
     expect(pressable, 'Pause still works, so the safety lever never waits').toContain('Pause')
     expect(text(render({ me: BOB, useCase: held }))).toMatch(/Carol has it open in n8n since/)
   })
@@ -464,7 +467,7 @@ describe('a workflow page', () => {
 
 const CHANGED = { useCase: versionedUseCase as UseCaseView, versions: changed.versions as VersionView[] }
 const UNDONE = { useCase: undoneUseCase as UseCaseView, versions: undone.versions as VersionView[] }
-const versionsOf = (html: string) => text(/<h3[^>]*>Versions<\/h3>([\s\S]*?)<\/section>/.exec(mainOf(html))?.[1] ?? '')
+const versionsOf = (html: string) => text(/<h2[^>]*>Versions<\/h2>([\s\S]*?)<\/section>/.exec(mainOf(html))?.[1] ?? '')
 
 describe('the Versions list', () => {
   it('is not shown while the workflow has one version', () => {
@@ -486,14 +489,14 @@ describe('the Versions list', () => {
     for (const me of [ALICE, BOB]) {
       const html = render({ ...UNDONE, me })
       expect(versionsOf(html)).toContain('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00.')
-      expect(/<h3[^>]*>Versions<\/h3>[\s\S]*?<\/section>/.exec(mainOf(html))?.[0]).not.toMatch(/<button/)
+      expect(/<h2[^>]*>Versions<\/h2>[\s\S]*?<\/section>/.exec(mainOf(html))?.[0]).not.toMatch(/<button/)
       expect(buttons(html).filter((label) => label.startsWith('Undo'))).toEqual([])
     }
   })
 
-  it('sits after Recent runs and before the buttons, inside Details', () => {
+  it('sits beside Recent runs, after it, with the buttons already up in the title row', () => {
     const html = mainOf(render(CHANGED))
-    const order = ['Recent runs', '>Details<', '>Versions<', '>Pause<'].map((needle) => html.indexOf(needle))
+    const order = ['>Pause<', 'Recent runs', '>Versions<'].map((needle) => html.indexOf(needle))
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
   })
@@ -503,23 +506,14 @@ describe('the Versions list', () => {
   })
 })
 
-describe('Details on the workflow page', () => {
-  const detailsOf = (html: string) => /<details[^>]*>\s*<summary[^>]*>Details<\/summary>[\s\S]*?<\/details>/.exec(mainOf(html))?.[0] ?? ''
-
-  it('holds Versions, and nothing the person needs in view', () => {
-    const html = render(CHANGED)
-    const details = detailsOf(html)
-    expect(text(details)).toMatch(/^Details Versions Version 2/)
-    expect(details).not.toMatch(/Pause|Run now|Open in n8n|Delete|Explain/)
-    expect(mainOf(html).replace(details, '')).not.toMatch(/>Versions</)
-  })
-
-  it('is closed until opened, and is there for an Approver too', () => {
-    for (const me of [ALICE, BOB]) expect(detailsOf(render({ me, ...CHANGED })), me.id).not.toMatch(/<details[^>]*\bopen/)
-  })
-
-  it('is left out while a first version has nothing to hold', () => {
-    expect(detailsOf(render())).toBe('')
+describe('the rest of the workflow page', () => {
+  it('has no Details fold: Versions is in view for an Operator and an Approver, and nothing is left for it to hold', () => {
+    for (const me of [ALICE, BOB]) {
+      const html = render({ me, ...CHANGED })
+      expect(mainOf(html), me.id).not.toContain('<summary>Details')
+      expect(mainOf(html), me.id).toContain('>Versions</h2>')
+    }
+    expect(mainOf(render())).not.toContain('>Versions<')
   })
 
   it('reads On · last run stopped on the page of an Operator whose work the run is not, as in the list', () => {
@@ -635,12 +629,114 @@ describe('a draft tried on practice systems (ADR 0054)', () => {
     for (const me of [ALICE, BOB]) {
       const words = text(mainOf(render({ me, useCase: DRAFT, simulation: DONE })))
       expect(words).toContain('Tried 5 cases on practice systems: 4 passed.')
-      expect(words).toContain('Turn on still runs the real test, which writes nothing.')
+      if (me === ALICE) expect(words, 'one line says a test run comes first, the draft’s own').not.toContain('Turn on still runs the real test')
+      if (me === ALICE) expect(words).toContain('A draft. It runs only as a test, which writes nothing')
     }
   })
 
   it('shows nothing of practice systems once the workflow is on, or when there is nothing to try', () => {
     expect(text(mainOf(render({ useCase: { ...AGENTS, state: 'on' }, simulation: DONE })))).not.toContain('practice systems')
     expect(text(mainOf(render({ useCase: DRAFT, simulation: null })))).not.toContain('practice systems')
+  })
+})
+
+describe('the page as the sketch lays it out', () => {
+  const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
+  const at = (html: string, needle: string) => html.indexOf(needle)
+  const DRAFT: UseCaseView = { ...AGENTS, state: 'draft' }
+
+  it('puts Change and Pause in the title row, before the sentence, and has no row of buttons at the foot', () => {
+    const html = mainOf(render({ useCase: SCHEDULED }))
+    expect(at(html, 'href="/?change=')).toBeGreaterThan(at(html, '<h1'))
+    for (const needle of ['href="/?change=', '>Pause<', 'More actions']) expect(at(html, needle), needle).toBeLessThan(at(html, 'sentence'))
+    expect(html).not.toMatch(/class="[^"]*_actions_/)
+  })
+
+  it('has one state mark and no banner while the workflow is simply On, and no banner for a stop', () => {
+    const on = mainOf(render({ useCase: SCHEDULED }))
+    expect(on).not.toMatch(/class="[^"]*_banner_/)
+    expect(text(on)).not.toContain('On. Next run')
+    const stopped = render({ useCase: SCHEDULED, last: {} })
+    expect(mainOf(stopped)).not.toMatch(/class="[^"]*_banner_/)
+    expect(mainOf(stopped)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>Open the run<\/a>/)
+    expect(at(mainOf(stopped), 'Open the run')).toBeLessThan(at(mainOf(stopped), 'sentence'))
+  })
+
+  it('keeps the banner for a state the title row cannot say, such as a refused write', () => {
+    const html = mainOf(render({ useCase: { ...SCHEDULED, move_refused: 'Not running. n8n did not take it yet.' } }))
+    expect(html).toMatch(/class="[^"]*_banner_/)
+  })
+
+  it('puts Resume in the title row while paused, with no banner saying Paused twice', () => {
+    const html = mainOf(render({ useCase: { ...AGENTS, state: 'paused' } }))
+    expect(html).not.toMatch(/class="[^"]*_banner_/)
+    expect(at(html, '>Resume<')).toBeLessThan(at(html, 'sentence'))
+  })
+
+  it('shows When, Who approves and Next run in one strip under the sentence, before the steps', () => {
+    const html = mainOf(render({ useCase: SCHEDULED }))
+    const order = ['sentence', '>When</h2>', '>Who approves</h2>', '>Next run</h2>', 'Check release'].map((needle) => at(html, needle))
+    expect(order.every((place) => place >= 0)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(sectionText(render({ useCase: SCHEDULED }), 'Next run')).toBe('Mon 9 Nov, 9:00')
+    expect(sectionText(render({ useCase: SCHEDULED }), 'When')).not.toContain('Next run')
+  })
+
+  it('shows Recent runs and Versions side by side, with no Details fold and no Open button on a run', () => {
+    const html = mainOf(render({ ...CHANGED, runs: [{ ...(done as RunView), use_case_id: CHANGED.useCase.use_case_id }] }))
+    expect(html).not.toContain('<summary>Details')
+    expect(at(html, '>Recent runs</h2>')).toBeLessThan(at(html, '>Versions</h2>'))
+    expect(html).toMatch(/class="[^"]*_duo_[^"]*"[^>]*>\s*<section[\s\S]*>Recent runs<[\s\S]*>Versions</)
+    expect(text(html)).not.toMatch(/Done Open/)
+  })
+
+  it('puts a draft’s Test run first in the title row, before Open the run', () => {
+    const html = mainOf(render({ useCase: DRAFT, last: { test: true } }))
+    expect(at(html, '>Test run<')).toBeLessThan(at(html, '>Open the run<'))
+  })
+
+  it('puts a draft’s Test run in the title row as its one primary button, with Change and More actions beside it', () => {
+    const html = mainOf(render({ useCase: DRAFT }))
+    expect(mainOf(html).match(/_primary_/g)).toHaveLength(1)
+    expect(html).toMatch(/_primary_[^>]*>Test run<\/button>/)
+    for (const needle of ['>Test run<', 'href="/?change=', 'More actions']) expect(at(html, needle), needle).toBeLessThan(at(html, 'sentence'))
+    expect(html).not.toMatch(/class="[^"]*_actions_/)
+  })
+
+  it('shows a draft whose test run stopped as Draft alone, with no Test run mark and no Stopped banner', () => {
+    const html = mainOf(render({ useCase: DRAFT, last: { test: true } }))
+    expect(html).not.toMatch(/class="[^"]*_banner_/)
+    expect(text(/<h1[\s\S]*?<p class="[^"]*sentence/.exec(html)?.[0] ?? '')).not.toContain('Test run Draft')
+    expect(html.match(/data-life=/g)).toHaveLength(1)
+  })
+})
+
+describe('the Change buttons and the Check on a draft', () => {
+  const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
+  const DRAFT: UseCaseView = { ...SCHEDULED, state: 'draft' }
+  const DONE = (simulated as DraftedWorkflowView).simulation as SimulationView
+
+  it('has one Change button, in the title row, and the When row’s is a quiet link named for the schedule', () => {
+    const html = mainOf(render({ useCase: SCHEDULED }))
+    expect(html.match(/>Change<\/a>/g)).toHaveLength(1)
+    expect(buttons(html).filter((label) => label.startsWith('Change'))).toEqual(['Change'])
+    expect(html).toMatch(/<button[^>]*aria-label="Change when it runs"[^>]*>Change<\/button>/)
+    expect(html).not.toMatch(/_secondary_[^>]*>Change<\/button>/)
+  })
+
+  it('folds the cases that passed under the result and keeps a failed one in view', () => {
+    const html = mainOf(render({ useCase: DRAFT, simulation: DONE }))
+    const fold = /<details[^>]*>\s*<summary>Show cases<\/summary>([\s\S]*?)<\/details>/.exec(html)
+    expect(fold).not.toBeNull()
+    expect(text(fold?.[1] ?? '')).toContain('Passed')
+    expect(text(fold?.[1] ?? '')).not.toContain('Failed')
+    expect(text(html.replace(fold?.[0] ?? '', ''))).toContain('Failed')
+  })
+})
+
+describe('what a reader without a test to press sees of a draft’s Check', () => {
+  it('keeps the line that a test run still comes first, since the draft’s own line is not shown to them', () => {
+    const words = text(mainOf(render({ me: BOB, useCase: { ...AGENTS, state: 'draft' }, simulation: (simulated as DraftedWorkflowView).simulation as SimulationView })))
+    expect(words).toContain('Turn on still runs the real test, which writes nothing.')
   })
 })

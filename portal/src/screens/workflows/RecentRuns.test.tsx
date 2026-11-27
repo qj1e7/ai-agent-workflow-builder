@@ -27,8 +27,8 @@ describe('the recent runs of a workflow', () => {
     const html = render([failed as RunView, done as RunView])
     expect(links(html)).toEqual(['/runs/run_01JB9', '/runs/run_01JB8'])
     const said = text(html)
-    expect(said, 'the run says what the troubleshooter says of it, and its GitHub failure is GitHub not answering').toContain("Today, 10:14 GitHub didn't answer Stopped Open")
-    expect(said).toContain('Tue 3 Nov, 10:14 1 ticket created, approved by Bob Done Open')
+    expect(said, 'the run says what the troubleshooter says of it, and its GitHub failure is GitHub not answering').toContain("Today, 10:14 GitHub didn't answer Stopped")
+    expect(said).toContain('Tue 3 Nov, 10:14 1 ticket created, approved by Bob Done')
   })
 
   it('says why a run stopped in the troubleshooter’s sentence from the platform, never a guess from the reason code', () => {
@@ -41,7 +41,7 @@ describe('the recent runs of a workflow', () => {
       what_happened: "The workflow has no Start from the Portal block, so the Portal couldn't start it.",
     } as RunView
     const said = text(render([noStart]))
-    expect(said).toContain("Today, 10:14 The workflow has no Start from the Portal block, so the Portal couldn't start it Stopped Open")
+    expect(said).toContain("Today, 10:14 The workflow has no Start from the Portal block, so the Portal couldn't start it Stopped")
     expect(said).not.toContain('could not be reached')
   })
 

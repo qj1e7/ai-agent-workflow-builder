@@ -96,7 +96,8 @@ function rowOf(html: string, id: string): string {
 }
 
 describe('the Workflows list', () => {
-  const subOf = (html: string, id: string) => text(/<span[^>]*class="[^"]*sub[^"]*"[^>]*>[\s\S]*?<\/span>/.exec(rowOf(html, id))?.[0] ?? '')
+  /** What the row says: its state, name, last run, schedule and next run, in the table's order. */
+  const rowText = (html: string, id: string) => text(rowOf(html, id))
 
   it('shows each workflow as its name, one line and one of four pills: Needs you, On, Paused or Draft', () => {
     const html = render()
@@ -106,7 +107,7 @@ describe('the Workflows list', () => {
     expect(text(bugs)).toContain('Morning bug report check')
     const watchlist = rowOf(html, 'uc_01JB7')
     expect(text(watchlist), 'Alice may not decide, so the row stays On').toContain('On · waiting for approval')
-    expect(watchlist).not.toMatch(/Waiting for approval<\/span>/)
+    expect(watchlist).not.toMatch(/data-life[^>]*>[^<]*Waiting for approval<\/span>/)
     const paused = rowOf(html, 'uc_lang')
     expect(paused).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
   })
@@ -134,33 +135,31 @@ describe('the Workflows list', () => {
 
   it('says each row’s schedule and its last run, as the sketch does', () => {
     const html = render({ useCases: [{ ...BUGS, schedule: { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null }, last_run: lr({ state: 'failed', at: '2026-11-04T00:00:00Z', reason: 'AgentError', stop: AGENT_STOPPED }) }] })
-    expect(subOf(html, 'uc_bugs')).toBe('Daily 8:00 · last run today, an agent could not finish its work')
+    expect(rowText(html, 'uc_bugs')).toContain('Last run Today 10:14 An agent could not finish its work When Daily 8:00')
   })
 
   it('says why a run n8n would not start stopped, and when it last stopped, as the run and Needs you do', () => {
     const noStart = { at: '2026-11-04T04:06:57Z', what_happened: "The workflow has no Start from the Portal block, so the Portal couldn't start it." }
     const html = render({ useCases: [{ ...BUGS, schedule: { day: 'every_day', at: '03:05', time_zone: 'Asia/Singapore', owner_name: null, held: null }, last_run: lr({ state: 'failed', at: '2026-11-02T06:53:05Z', reason: 'DispatchFailed', stop: noStart }) }] })
-    expect(subOf(html, 'uc_bugs')).toBe("Daily 3:05 · last run today, the workflow has no Start from the Portal block, so the Portal couldn't start it")
+    expect(rowText(html, 'uc_bugs')).toContain("Last run Today 12:06 The workflow has no Start from the Portal block, so the Portal couldn't start it When Daily 3:05")
   })
 
   it('says no schedule and no runs yet for a workflow that never ran, with only the On or Paused pill', () => {
     const html = render({ useCases: [BUGS, LANGGRAPH] })
-    expect(subOf(html, 'uc_bugs')).toBe('No schedule · no runs yet')
+    expect(rowText(html, 'uc_bugs')).toContain('Last run No runs yet When No schedule Next run Not scheduled')
     expect(rowOf(html, 'uc_bugs')).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
   })
 
   it('names who declined, writes no ticket claim and gives no pill for it', () => {
     const html = render({ useCases: [DECLINED_WATCHLIST] })
-    expect(subOf(html, 'uc_01JB7')).toMatch(/last run Thu 5 Nov, declined by Bob\. Nothing was written\.$/)
+    expect(rowText(html, 'uc_01JB7')).toMatch(/Last run Thu 5 Nov.* Declined by Bob\. Nothing was written\. When /)
     expect(rowOf(html, 'uc_01JB7')).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
     expect(text(rowOf(html, 'uc_01JB7'))).not.toContain('Test run')
   })
 
-  it('marks a test run beside the status', () => {
+  it('says a test run in the last run, with no mark of its own beside the status', () => {
     const tried = { ...BUGS, last_run: lr({ state: 'awaiting_approval', test: true, proposed: 1, tickets: true }) }
-    const html = render({ useCases: [tried] })
-    expect(subOf(html, 'uc_bugs')).toContain('last run today, waiting for approval')
-    expect(text(rowOf(html, 'uc_bugs'))).toContain('Test run')
+    expect(rowText(render({ useCases: [tried] }), 'uc_bugs')).toContain('Last run Today 10:14 Waiting for approval')
   })
 
   it('shows Paused for a paused workflow, whatever its last run, unless Home has a row for it, and keeps that run in the line', () => {
@@ -168,12 +167,12 @@ describe('the Workflows list', () => {
     const html = render({ me: CAROL, useCases: [paused] })
     expect(rowOf(html, 'uc_bugs')).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
     expect(rowOf(html, 'uc_bugs')).not.toContain('Needs you</span>')
-    expect(subOf(html, 'uc_bugs')).toMatch(/last run .*, an agent could not finish its work$/)
+    expect(rowText(html, 'uc_bugs')).toMatch(/Last run .* An agent could not finish its work When /)
     expect(rowOf(render({ useCases: [paused] }), 'uc_bugs'), 'Alice’s Home lists the stopped run, so the pill says so').toMatch(/Needs you<\/span>/)
   })
 
   it('reads the same for an Approver as for an Operator', () => {
-    expect(subOf(render({ me: BOB, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7')).toBe(subOf(render({ me: ALICE, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7'))
+    expect(rowText(render({ me: BOB, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7')).toBe(rowText(render({ me: ALICE, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7'))
   })
 
   it('is one link for the whole row: the workflow’s page, the watchlist’s too', () => {
@@ -241,6 +240,56 @@ describe('the Workflows list', () => {
     const main = text(mainOf(render({ useCases: new ApiError(503, null) })))
     expect(main).toContain('The workflows could not be loaded.')
     expect(main).toContain('Try again')
+  })
+})
+
+describe('the Workflows table', () => {
+  const SCHEDULED_STOPPED: UseCaseView = { ...BUGS, schedule: { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null }, next_run_at: '2026-11-05T00:00:00Z', last_run: lr({ state: 'failed', at: '2026-11-04T00:00:00Z', reason: 'AgentError', stop: AGENT_STOPPED }) }
+
+  it('heads its columns State, Workflow, Last run, When and Next run, in that order', () => {
+    const html = mainOf(render({ useCases: [SCHEDULED_STOPPED] }))
+    const head = /<div[^>]*data-table-head[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1] ?? ''
+    expect([...head.matchAll(/<span[^>]*>([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(['State', 'Workflow', 'Last run', 'When', 'Next run'])
+  })
+
+  it('gives a row its last run, its schedule and its next run as separate facts', () => {
+    const row = text(rowOf(render({ useCases: [SCHEDULED_STOPPED] }), 'uc_bugs'))
+    expect(row).toContain('Today 10:14')
+    expect(row).toContain('An agent could not finish its work')
+    expect(row).toContain('Daily 8:00')
+    expect(row).toContain('Thu 5 Nov, 8:00')
+  })
+
+  it('marks a stopped last run on the failing fact, with a mark and the red tone, not in the grey prose', () => {
+    const row = rowOf(render({ useCases: [SCHEDULED_STOPPED] }), 'uc_bugs')
+    expect(row).toMatch(/data-tone="bad"[^>]*>[\s\S]*An agent could not finish its work/)
+  })
+
+  it('says a workflow that never ran has no runs yet and no next run', () => {
+    const row = text(rowOf(render({ useCases: [BUGS] }), 'uc_bugs'))
+    expect(row).toContain('Last run No runs yet')
+    expect(row, 'a workflow with no schedule has no next run to give').toContain('Next run Not scheduled')
+    expect(row).not.toMatch(/Next run [A-Z][a-z]{2} \d/)
+  })
+
+  it('names each fact for a screen reader: the row link’s description carries Last run, When and Next run, and no label is hidden from it', () => {
+    const row = rowOf(render({ useCases: [SCHEDULED_STOPPED] }), 'uc_bugs')
+    expect(row).not.toMatch(/cellLabel[^"]*"[^>]*aria-hidden/)
+    const described = /<a[^>]*aria-describedby="([^"]+)"/.exec(row)?.[1] ?? ''
+    const said = described
+      .split(' ')
+      .map((id) => text(new RegExp(`<span id="${id}"[^>]*>([\\s\\S]*?)</span></span>|<span id="${id}"[^>]*>([\\s\\S]*?)</span>`).exec(row)?.[0] ?? ''))
+      .join(' ')
+    expect(said).toContain('Last run')
+    expect(said).toContain('When')
+    expect(said).toContain('Next run')
+  })
+
+  it('gives a workflow with a test run one state mark, not Test run beside it', () => {
+    const tried = { ...BUGS, last_run: lr({ state: 'awaiting_approval', test: true, proposed: 1, tickets: true }) }
+    const row = rowOf(render({ useCases: [tried] }), 'uc_bugs')
+    expect(text(row)).not.toContain('Test run')
+    expect(row.match(/data-life=/g)).toHaveLength(1)
   })
 })
 
@@ -435,7 +484,7 @@ describe('the rest of the page under Needs you', () => {
   it('lists a draft under All workflows as a row like a workflow’s, with the pill Draft, one link that opens it in the chat, where its card has Discard', () => {
     const html = mainOf(render({ home: HOME, drafts: DRAFTS }))
     const draft = /<li[^>]*data-draft="drf-7f3a2c"[\s\S]*?<\/li>/.exec(html)?.[0] ?? ''
-    expect(text(draft)).toBe('Nudge stale tickets Only your words are saved. Last saved Today, 14:24. Draft')
+    expect(text(draft)).toBe('Draft Nudge stale tickets Only your words are saved. Last saved Today, 14:24.')
     expect(draft).toMatch(/<a[^>]*href="\/\?draft=drf-7f3a2c"/)
     expect(draft).not.toContain('<button')
     expect(html.indexOf('data-draft=')).toBeGreaterThan(html.indexOf('aria-label="Workflows"'))

@@ -6,9 +6,9 @@ import { SimulationResult } from '../drafted/SimulationResult'
  * its revision (ADR 0054). It shows nothing before the platform answers, and nothing when the version has nothing to try. Try
  * again names the version it read, so a newer version is never tried by it.
  */
-export function UseCaseSimulation({ useCaseId }: { useCaseId: string }) {
+export function UseCaseSimulation({ useCaseId, onWorkflowPage = false, testLineShown = false }: { useCaseId: string; onWorkflowPage?: boolean; testLineShown?: boolean }) {
   const tried = useUseCaseSimulation(useCaseId).data
   const again = useUseCaseSimulateAgain(useCaseId)
   if (!tried?.simulation) return null
-  return <SimulationResult simulation={tried.simulation} tryAgain={{ pending: again.isPending, press: (outcome) => again.mutate(tried.version, outcome) }} />
+  return <SimulationResult simulation={tried.simulation} onWorkflowPage={onWorkflowPage} testLineShown={testLineShown} tryAgain={{ pending: again.isPending, press: (outcome) => again.mutate(tried.version, outcome) }} />
 }
