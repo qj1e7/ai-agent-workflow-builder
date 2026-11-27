@@ -9,6 +9,7 @@ import { isWatchlist, rowLine, workflowPath } from '../../workflows/workflow'
 import type { NameOf } from '../../run/words'
 import { decisionSub } from '../decided'
 import styles from './Lists.module.css'
+import { Pill } from '../../../ui/Pill'
 
 /** The row is one button. Its name is the workflow or software, and its line and state are read after it as its description. */
 function Row({ item, to, name, line, state, data }: { item: PanelItem; to: string; name: string; line: string; state: ReactNode; data: Record<string, string> }) {
@@ -64,9 +65,7 @@ export function SoftwareRows({ rows, view, label, now }: { rows: readonly Watche
             name={row.name}
             line={softwareLine(row, now, checkedBy)}
             state={
-              <span className={styles['pill']} data-tone={state.tone}>
-                {state.words}
-              </span>
+              <Pill tone={state.tone}>{state.words}</Pill>
             }
             data={{ 'data-software-id': row.id }}
           />
@@ -88,9 +87,7 @@ export function DecisionRows({ decisions, label, now, nameOf }: { decisions: rea
           name={decision.use_case_name}
           line={decisionSub(decision, now, nameOf)}
           state={
-            <span className={styles['pill']} data-tone={decision.verdict === 'approve' ? 'good' : undefined}>
-              {decision.verdict === 'approve' ? 'Approved' : 'Declined'}
-            </span>
+            <Pill tone={decision.verdict === 'approve' ? 'good' : undefined}>{decision.verdict === 'approve' ? 'Approved' : 'Declined'}</Pill>
           }
           data={{ 'data-decision': decision.verdict }}
         />

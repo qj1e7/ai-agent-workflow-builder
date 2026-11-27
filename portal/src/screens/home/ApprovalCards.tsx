@@ -4,6 +4,7 @@ import { useApproval, useRun } from '../../api/queries'
 import type { RunView } from '../../api/types'
 import { Card } from '../../ui/Card'
 import { cx } from '../../ui/cx'
+import { Pill } from '../../ui/Pill'
 import { IconCheck } from '../../ui/icons'
 import { OpenButton } from '../../ui/OpenItem'
 import { ShowMore } from '../../ui/ShowMore'
@@ -15,7 +16,6 @@ import { useShowBesideOnWide } from './autoOpen'
 import { CardMemoryContext, type RequestRef } from './cardMemory'
 import { approvalItem } from './home'
 import { useMainButton } from './primary'
-import pills from '../run/RunPage.module.css'
 import styles from './Planner.module.css'
 
 /** The chat shows this many requests at a time, newest first. */
@@ -71,9 +71,9 @@ function RequestCard({ request, main, nameOf }: { request: RequestRef & { readon
     <Card
       title={approvalTitle(shown.actions)}
       pill={
-        <span className={cx(pills['pill'], pills[pill.tone])} data-approval-pill>
+        <Pill tone={pill.tone} data-approval-pill>
           {pill.label}
-        </span>
+        </Pill>
       }
       status={
         done === null ? undefined : (

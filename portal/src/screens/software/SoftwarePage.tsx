@@ -45,6 +45,7 @@ import {
   watchRank,
 } from './software'
 import styles from './Software.module.css'
+import { Pill } from '../../ui/Pill'
 
 function useFocusOnceRendered(feedback: ChangeFeedback) {
   const focusedFor = useRef<ChangeFeedback | null>(null)
@@ -79,9 +80,7 @@ function Rows({ rows, checkedBy, now, pathOf }: RowsProps) {
                 <b>{row.name}</b>
                 <span className={styles['src']}>{softwareLine(row, now, checkedBy)}</span>
               </span>
-              <span className={styles['pill']} data-tone={state.tone}>
-                {state.words}
-              </span>
+              <Pill tone={state.tone}>{state.words}</Pill>
               <IconChevronRight size={16} />
             </Link>
           </li>

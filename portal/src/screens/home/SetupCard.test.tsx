@@ -118,6 +118,10 @@ function building(test: RunModel | null, world: World = {}, more: Partial<CardPr
 }
 
 describe('the set-up card before Set up', () => {
+  it('draws its pill through the one Pill, so it has the sketch’s tint and icon and not plain text', () => {
+    expect(render(card(SETUP))).toMatch(/<span class="[^"]*pill[^"]*"[^>]*data-draft-pill[^>]*data-tone="quiet"/)
+  })
+
   it('is a Draft that asks every open question in its own row and says Pick 1 more to finish in place of the main button', () => {
     const html = render(card(SETUP))
     expect(pill(html)).toBe('Draft')

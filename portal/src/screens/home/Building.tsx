@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import { useErrorWords } from '../../api/context'
 import { useModelOff, useRun, useUseCase } from '../../api/queries'
 import { useSetUp, useStartTest, useTestRunMarks, useTurnOn, type SetUp } from '../../api/workflowQueries'
@@ -6,7 +6,7 @@ import type { UseCaseView } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
-import { cx } from '../../ui/cx'
+import { Pill } from '../../ui/Pill'
 import { IconCheck } from '../../ui/icons'
 import { motionAllowed } from '../../ui/motion'
 import { OpenButton } from '../../ui/OpenItem'
@@ -15,23 +15,22 @@ import { useLiveRun } from '../run/liveRun'
 import { RunLine } from '../run/RunLine'
 import { emptyModel, stationsOf, type RunModel } from '../run/runModel'
 import { planOf } from '../run/useRunStory'
-import { scheduleShort, type StageTone } from '../run/words'
+import { scheduleShort } from '../run/words'
 import { firstRunWhen } from '../workflows/times'
 import { RUN_NOW_ONLY, runsOnlyByHand } from '../workflows/workflow'
 import { UseCaseSimulation } from '../workflows/UseCaseSimulation'
 import { CAN_TEST_AGAIN } from './home'
-import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, turnOnStep, type BuildStage, type PillTone, type Replay } from './build'
+import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, turnOnStep, type BuildStage, type Replay } from './build'
 import { useShowBesideOnWide } from './autoOpen'
 import { PartsList, type Part } from './PartsList'
-import runStyles from '../run/RunPage.module.css'
 import styles from './SetupCard.module.css'
 
 /** A draft's one pill: Draft, Building, Ready, On or Dropped. */
-export function DraftPill({ label, tone }: { label: string; tone: PillTone | StageTone }) {
+export function DraftPill({ label, tone }: { label: string; tone: ComponentProps<typeof Pill>['tone'] }) {
   return (
-    <span className={cx(runStyles['pill'], runStyles[tone])} data-draft-pill>
+    <Pill tone={tone} data-draft-pill>
       {label}
-    </span>
+    </Pill>
   )
 }
 

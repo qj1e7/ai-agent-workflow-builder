@@ -1,29 +1,19 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { AgentFace } from '../../ui/AgentFace'
 import { cx } from '../../ui/cx'
-import { IconCheck, IconClock, IconGate, IconMessage, IconPlay, IconSearch, IconTicket, IconX, type Icon } from '../../ui/icons'
+import { IconCheck, IconMessage, IconX } from '../../ui/icons'
 import { usePauseUnseen } from '../../ui/loops'
 import { motionAllowed } from '../../ui/motion'
+import { STEP_ICON, STEP_STATE_WORDS, type StepState } from '../../ui/StepLine'
 import { TicketLink } from '../jira/TicketKeys'
-import type { Station, StationState, StepIcon, Under } from './runModel'
+import type { Station, Under } from './runModel'
 import { sentToWords, UNSENT_WORDS, workingWords, type Settled } from './words'
 import styles from './RunLine.module.css'
-
-/** The state in words, for a screen reader: the line shows it by shape and colour. */
-export const STATE_WORDS: Readonly<Record<StationState, string>> = {
-  todo: 'Not reached yet: ',
-  now: 'Now: ',
-  wait: 'Waiting for approval: ',
-  done: 'Done: ',
-  err: 'Stopped here: ',
-  no: 'Declined: ',
-  skip: 'Skipped: ',
-}
 
 /** A link takes the state of the step it leads into. */
 type Link = 'solid' | 'flow' | 'wait' | 'stop' | 'dead' | 'todo'
 
-const LINK_INTO: Readonly<Record<StationState, Link>> = {
+const LINK_INTO: Readonly<Record<StepState, Link>> = {
   todo: 'todo',
   now: 'flow',
   wait: 'wait',
@@ -34,8 +24,6 @@ const LINK_INTO: Readonly<Record<StationState, Link>> = {
 }
 
 const MARCHES: ReadonlySet<Link> = new Set(['flow', 'wait'])
-
-const ICON: Readonly<Record<StepIcon, Icon>> = { schedule: IconClock, person: IconPlay, read: IconSearch, gate: IconGate, write: IconTicket }
 
 /** A stopped run's line first shows the work flowing into the stop for this long, then the stop. */
 const REPLAY_MS = 1000
@@ -124,7 +112,7 @@ export function RunLine({ stations, arrivedLive, settled, small = false, hidden,
             const link = next ? LINK_INTO[next.state] : null
             const grows = link === 'solid' && arrived >= 0 && (index === arrived - 1 || index === arrived - 2)
             const { state } = station
-            const StepPicture = ICON[station.icon]
+            const StepPicture = STEP_ICON[station.icon]
             return (
               <li
                 key={station.key}
@@ -161,7 +149,7 @@ export function RunLine({ stations, arrivedLive, settled, small = false, hidden,
                   </span>
                 </span>
                 <span className={styles['label']}>
-                  <span className="visually-hidden">{STATE_WORDS[state]}</span>
+                  <span className="visually-hidden">{STEP_STATE_WORDS[state]}</span>
                   {station.label}
                 </span>
                 {station.under ? (

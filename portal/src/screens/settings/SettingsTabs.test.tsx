@@ -181,8 +181,8 @@ describe('the Connections tab', () => {
   })
 
   it('gives a card that needs someone the amber pill, so it is never plain', () => {
-    expect(cardOf(html, 'teams')).toMatch(/class="_pill_\w+" data-tone="wait"/)
-    expect(cardOf(html, 'jira')).toMatch(/class="_pill_\w+" data-tone="ok"/)
+    expect(cardOf(html, 'teams')).toMatch(/data-tone="wait"/)
+    expect(cardOf(html, 'jira')).toMatch(/data-tone="ok"/)
   })
 
   it('says a connection that does not answer, when it last worked, and the one fix', () => {

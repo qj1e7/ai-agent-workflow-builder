@@ -79,6 +79,10 @@ const pill = (html: string) => text(/<span[^>]*data-edit-pill[^>]*>([\s\S]*?)<\/
 const status = (html: string) => text(/<span[^>]*data-edit-status[^>]*>([\s\S]*?)<\/span>/.exec(html)?.[1] ?? '')
 
 describe('the edit card while it proposes a change', () => {
+  it('draws its pill through the one Pill, so it has the sketch’s tint and icon and not plain text', () => {
+    expect(draw(EDIT)).toMatch(/<span class="[^"]*pill[^"]*"[^>]*data-edit-pill[^>]*data-tone="wait"/)
+  })
+
   it('shows only what changes, in one When row, the old schedule struck and the new one after it, Not saved, with Never mind and Save change as the one primary', () => {
     const html = draw(EDIT)
     expect(sentence(html), 'the card needs no lead: its head says what changes').toBe('')

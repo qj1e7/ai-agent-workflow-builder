@@ -3,7 +3,8 @@ import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import type { CapabilityView, ConnectionOut, TellSetupOut } from '../../api/types'
 import { Button } from '../../ui/Button'
-import { AlertMark, CheckMark, SystemMark } from './marks'
+import { Pill, type PillTone } from '../../ui/Pill'
+import { AlertMark, SystemMark } from './marks'
 import { cardsOf, CHECK_DOWN_WORDS, type Health, checkResultWords, connectionWords, GITHUB_KEY_NOTE, keyWords, TEAMS_DOES_WORDS, TELL_CHANGED_BY_WORDS, tellWords, usedBy } from './connections'
 import { ONLY_OPERATORS_WORDS } from './settings'
 import styles from './Settings.module.css'
@@ -16,7 +17,7 @@ function CheckNow({ connection, describedBy }: { connection: ConnectionOut; desc
   return (
     <>
       <div className={styles['buttons']}>
-        <Button loading={check.isPending} onClick={press} aria-describedby={describedBy}>
+        <Button small loading={check.isPending} onClick={press} aria-describedby={describedBy}>
           Check now
           <span className="visually-hidden"> for {connection.name}</span>
         </Button>
@@ -63,10 +64,7 @@ function ConnectionCard({ connection, capabilities, canCheck, now }: CardProps) 
         </div>
         <span className={styles['tags']}>
           {connection.practice ? <span className={styles['tag']}>Practice copy</span> : null}
-          <span className={styles['pill']} data-tone={DOT[says.health]}>
-            {says.health === 'ok' ? <CheckMark /> : says.health === 'warn' ? <AlertMark /> : null}
-            {says.label}
-          </span>
+          <Pill tone={DOT[says.health]}>{says.label}</Pill>
         </span>
       </div>
       {sentence ? <p id={textId}>{sentence}</p> : null}
@@ -124,9 +122,7 @@ function TellCard({ tell }: { tell: TellSetupOut }) {
           <h3>Tell flow</h3>
         </div>
         <span className={styles['tags']}>
-          <span className={styles['pill']} data-tone="off">
-            {says.label}
-          </span>
+          <Pill tone="off">{says.label}</Pill>
         </span>
       </div>
       <p>{says.text}</p>
@@ -148,7 +144,7 @@ function TellCard({ tell }: { tell: TellSetupOut }) {
   )
 }
 
-const DOT: Record<Health, string> = { ok: 'ok', warn: 'wait', off: 'off' }
+const DOT: Record<Health, PillTone> = { ok: 'ok', warn: 'wait', off: 'off' }
 
 /** One finding first: how many of the connections work, with a dot for each. Count, dots and card pills all come from connectionWords. */
 function Summary({ connections, now }: { connections: readonly ConnectionOut[]; now: Date }) {

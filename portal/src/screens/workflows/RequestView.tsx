@@ -11,6 +11,7 @@ import { IconChevronLeft } from '../../ui/icons'
 import { lineWhen } from './times'
 import { MAX_REPLY, newestReplyToAsker, replyWords, requestKindWords, requestProblem, requestStatusWords } from './requests'
 import styles from './Workflows.module.css'
+import { Pill } from '../../ui/Pill'
 
 const NOT_POSTED: Record<NonNullable<TeamRequestView['not_posted_because']>, string> = {
   posting: 'The card for Teams is still going out.',
@@ -76,9 +77,9 @@ function Request({ request, now }: { request: TeamRequestView; now: Date }) {
     <article className={styles['request']} aria-labelledby={headingId} data-request={request.request_id} data-status={request.status}>
       <h2 id={headingId}>{support ? `${mine ? 'You' : request.asked_by_name} reported a platform problem` : `${mine ? 'You' : request.asked_by_name} asked the team`}</h2>
       <p className={styles['requestMeta']}>
-        <span className={styles['pill']} data-status={request.status}>
+        <Pill tone={request.status === 'open' ? 'wait' : 'ok'} data-status={request.status}>
           {requestStatusWords(request.status)}
-        </span>
+        </Pill>
         {requestKindWords(request.kind)} · {lineWhen(request.asked_at, now)}
       </p>
       <p className={styles['requestNote']}>{request.note}</p>

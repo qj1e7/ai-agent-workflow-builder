@@ -127,42 +127,6 @@
   font-size: var(--fs-small);
 }
 
-.pill {
-  display: inline-flex;
-  flex: 0 1 auto;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  padding: 1px 10px 1px 8px;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  background: var(--surface);
-  font-size: var(--fs-tiny);
-  font-weight: var(--fw-semi);
-  line-height: 1.6;
-}
-
-.pill > svg {
-  flex: none;
-}
-
-.pill[data-tone='ok'] {
-  border-color: var(--green-line);
-  background: var(--green-soft);
-  color: var(--green-ink);
-}
-
-.pill[data-tone='wait'] {
-  border-color: var(--amber-line);
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-}
-
-.pill[data-tone='off'] {
-  background: var(--sunk);
-  color: var(--muted);
-}
-
 .waiting {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto;
@@ -493,9 +457,9 @@
 .connection {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-4);
   min-width: 0;
-  padding: 20px 22px;
+  padding: var(--space-5);
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--shadow-2);
@@ -512,7 +476,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 14px;
+  gap: var(--space-3) var(--space-4);
 }
 
 .sys {
@@ -540,6 +504,7 @@
 
 .tags {
   display: inline-flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-inline-start: auto;
@@ -552,8 +517,8 @@
 .callout {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--r-md);
   background: var(--amber-soft);
   color: var(--amber-ink);
@@ -567,7 +532,7 @@
 
 .facts {
   display: grid;
-  gap: 14px;
+  gap: var(--space-4);
   margin: 0;
 }
 
@@ -578,13 +543,13 @@
 }
 
 .facts dd {
-  margin: 4px 0 0;
+  margin: var(--space-1) 0 0;
   overflow-wrap: anywhere;
 }
 
 .facts ul {
   display: grid;
-  gap: 2px;
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -608,10 +573,16 @@
 
 .tags .tag {
   margin-left: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-small);
 }
 
 .connectionsPanel {
-  gap: 20px;
+  gap: var(--space-5);
 }
 
 /* The buttons sit at the card's foot, so a row of cards lines up. */

@@ -40,37 +40,6 @@
   font-size: var(--fs-tiny);
 }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 10px;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  background: var(--sunk);
-  color: var(--muted);
-  font-size: var(--fs-tiny);
-  font-weight: var(--fw-semi);
-  white-space: nowrap;
-}
-
-.pill[data-tone='bad'] {
-  border-color: var(--red-line);
-  background: var(--red-soft);
-  color: var(--red-ink);
-}
-
-.pill[data-tone='wait'] {
-  border-color: var(--amber-line);
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-}
-
-.pill[data-tone='good'] {
-  border-color: var(--green-line);
-  background: var(--green-soft);
-  color: var(--green-ink);
-}
-
 @media (hover: hover) and (pointer: fine) {
   .row:hover {
     background: var(--sunk);
@@ -135,7 +104,7 @@
 /* A connection beside the chat, as the sketch's key view: the kind and the pill on one line, the sentence, then the button, with no rule above it. */
 .connStack {
   display: grid;
-  gap: 20px;
+  gap: var(--space-5);
 }
 
 .connHead {
@@ -143,7 +112,7 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px 16px;
+  gap: var(--space-3) var(--space-4);
 }
 
 .connHead .kind {
@@ -154,5 +123,5 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--space-3);
 }

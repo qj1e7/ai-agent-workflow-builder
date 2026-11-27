@@ -1,10 +1,11 @@
 import type { DraftedApprovalView, DraftedSetUpView, DraftedWorkflowView, DraftSettingView, N8nBlockView, UseCaseState } from '../../api/types'
-import type { Station, StepIcon } from '../run/runModel'
+import type { Station } from '../run/runModel'
+import type { StepIcon } from '../../ui/StepLine'
 import type { StageTone } from '../run/words'
 
 export interface PillWords {
   readonly label: string
-  readonly tone: StageTone
+  readonly tone: StageTone | 'on'
 }
 
 /** The title while the drafter has no name for the workflow yet. */
@@ -16,7 +17,7 @@ export const ANY_BLOCK = 'Build it with any n8n block'
 const DRAFTING: PillWords = { label: 'Drafting', tone: 'new' }
 const DRAFT: PillWords = { label: 'Draft', tone: 'quiet' }
 const IN_N8N: PillWords = { label: 'In n8n', tone: 'quiet' }
-const ON: PillWords = { label: 'On', tone: 'new' }
+const ON: PillWords = { label: 'On', tone: 'on' }
 const PAUSED: PillWords = { label: 'Paused', tone: 'quiet' }
 
 /**
