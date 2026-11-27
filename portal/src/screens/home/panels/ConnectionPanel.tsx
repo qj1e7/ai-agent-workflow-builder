@@ -3,6 +3,7 @@ import { ButtonLink } from '../../../ui/Button'
 import { connectionWords } from '../../settings/connections'
 import { onDay } from '../home'
 import styles from './Lists.module.css'
+import { Pill } from '../../../ui/Pill'
 
 export const CONNECTIONS_PATH = '/settings?tab=connections'
 
@@ -32,9 +33,7 @@ export function ConnectionPanel({ id, now }: { id: string; now: Date }) {
     <div className={styles['stack']}>
       <div className={styles['head']}>
         <p className={styles['kind']}>Connection</p>
-        <span className={styles['pill']} data-tone={words.note || words.health === 'warn' ? 'wait' : words.health === 'ok' ? 'good' : undefined}>
-          {pill}
-        </span>
+        <Pill tone={words.note || words.health === 'warn' ? 'wait' : words.health === 'ok' ? 'good' : undefined}>{pill}</Pill>
       </div>
       <p className={styles['sent']}>{words.note ? `${words.text} ${words.note}` : words.text}</p>
       {words.checked ? <p className="muted">{words.checked}</p> : null}

@@ -119,42 +119,6 @@
   font-size: var(--fs-small);
 }
 
-.pill {
-  display: inline-flex;
-  flex: 0 1 auto;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  padding: 1px 10px 1px 8px;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  background: var(--surface);
-  font-size: var(--fs-tiny);
-  font-weight: var(--fw-semi);
-  line-height: 1.6;
-}
-
-.pill > svg {
-  flex: none;
-}
-
-.pill[data-tone='ok'] {
-  border-color: var(--green-line);
-  background: var(--green-soft);
-  color: var(--green-ink);
-}
-
-.pill[data-tone='wait'] {
-  border-color: var(--amber-line);
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-}
-
-.pill[data-tone='off'] {
-  background: var(--sunk);
-  color: var(--muted);
-}
-
 .waiting {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto;

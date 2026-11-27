@@ -32,6 +32,7 @@ import { REQUEST_PARAM } from './requests'
 import { draftItem, FollowingSection } from './Sections'
 import { changeProblem, changeWords, FILTERS, lastRunParts, meansOutOfDate, NO_RUNS, nextRunWords, pressChange, REFRESH_MS, rowsOf, runsOnlyByHand, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
+import { Pill } from '../../ui/Pill'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
 
@@ -205,7 +206,7 @@ function DraftRow({ draft, index, arrive, now }: { draft: DraftView; index: numb
     <li className={arrive ? `${styles['row']} ${styles['arrive']}` : styles['row']} style={{ '--i': index } as CSSProperties} data-draft={draft.draft_id}>
       <Link to={draftPath(draft.draft_id)} className={`${styles['rowLink']} ${styles['tableLink']}`} aria-labelledby={`${ids}-name`} aria-describedby={`${ids}-pill ${ids}-sub`}>
         <span id={`${ids}-pill`} className={`${styles['pills']} ${styles['cState']}`}>
-          <span className={styles['pill']}>Draft</span>
+          <Pill tone="off">Draft</Pill>
         </span>
         <span className={`${styles['cName']} ${styles['cDraft']}`}>
           <b id={`${ids}-name`}>{words.name}</b>

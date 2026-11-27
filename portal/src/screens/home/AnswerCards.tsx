@@ -6,12 +6,12 @@ import { useCapabilities } from '../../api/plannerQueries'
 import { useMoveWorkflow } from '../../api/workflowQueries'
 import { Button, ButtonLink, buttonClassName } from '../../ui/Button'
 import { cx } from '../../ui/cx'
+import { Pill } from '../../ui/Pill'
 import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
 import { useWatchlist } from '../../api/queries'
 import { sentenceFor, softwarePath, stateOf } from '../software/software'
 import { upgradeTicketWords } from '../workflows/workflow'
-import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
@@ -154,9 +154,7 @@ function SoftwareCard({ name, listed, word, covers, ownTime }: { name: string; l
         title={row?.name ?? listed.name}
         pill={
           state ? (
-            <span className={softwareStyles['pill']} data-tone={state.tone}>
-              {state.words}
-            </span>
+            <Pill tone={state.tone}>{state.words}</Pill>
           ) : undefined
         }
         actions={

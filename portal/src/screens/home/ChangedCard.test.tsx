@@ -59,6 +59,10 @@ const primaries = (html: string) => (html.match(/class="[^"]*_primary_[^"]*"/g) 
 const pill = (html: string) => text(/<span[^>]*data-changed-pill[^>]*>([\s\S]*?)<\/span>/.exec(html)?.[1] ?? '')
 
 describe('the Changed in n8n card', () => {
+  it('draws its pill through the one Pill, so it has the sketch’s tint and icon and not plain text', () => {
+    expect(draw(SAFE)).toMatch(/<span class="[^"]*pill[^"]*"[^>]*data-changed-pill[^>]*data-tone="ok"/)
+  })
+
   it('shows a safe version with its changes and only Undo', () => {
     const html = draw(SAFE)
     expect(text(html)).toContain('Changed in n8n')

@@ -7,7 +7,7 @@ import type { ApprovalStepView, Refusal } from '../../api/types'
 import { leadWords, recordWords, turnWords, waitingWords } from './approvalWords'
 import { standingOf, type Standing } from './decision'
 import { decidesLine, statusOf, workingLine } from './happened'
-import { STATE_WORDS } from './RunLine'
+import { STEP_STATE_WORDS } from '../../ui/StepLine'
 import { emptyModel, foldWire, type RunModel } from './runModel'
 import { stageAnswers } from './stageAnswers'
 import { announcementOf, factsOf, fixWords, GATE_STEP, lineOf, lockWords, logRowsOf, runPill, stageWords, type RunState } from './words'
@@ -78,7 +78,7 @@ function everyRunWord(): string[] {
   }
   for (const [requests, yours, waiting] of [[1, true, []], [2, true, []], [1, false, []], [2, false, []], [1, false, ['Bob']], [1, false, ['Bob', 'Carol']]] as const) words.push(leadWords(requests, yours, waiting))
   for (const state of ['proposed', 'handed_back', null] as const) words.push(fixWords({ ended: state, endsBy: 0 } as Parameters<typeof fixWords>[0], 0))
-  words.push(...Object.values(STATE_WORDS), GATE_STEP)
+  words.push(...Object.values(STEP_STATE_WORDS), GATE_STEP)
   return words.filter((word) => word !== '')
 }
 
