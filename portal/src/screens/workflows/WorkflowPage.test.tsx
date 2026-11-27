@@ -644,3 +644,69 @@ describe('a draft tried on practice systems (ADR 0054)', () => {
     expect(text(mainOf(render({ useCase: DRAFT, simulation: null })))).not.toContain('practice systems')
   })
 })
+
+describe('the page as the sketch lays it out', () => {
+  const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
+  const at = (html: string, needle: string) => html.indexOf(needle)
+  const DRAFT: UseCaseView = { ...AGENTS, state: 'draft' }
+
+  it('puts Change and Pause in the title row, before the sentence, and has no row of buttons at the foot', () => {
+    const html = mainOf(render({ useCase: SCHEDULED }))
+    expect(at(html, 'href="/?change=')).toBeGreaterThan(at(html, '<h1'))
+    for (const needle of ['href="/?change=', '>Pause<', 'More actions']) expect(at(html, needle), needle).toBeLessThan(at(html, 'sentence'))
+    expect(html).not.toMatch(/class="[^"]*_actions_/)
+  })
+
+  it('has one state mark and no banner while the workflow is simply On, and no banner for a stop', () => {
+    const on = mainOf(render({ useCase: SCHEDULED }))
+    expect(on).not.toMatch(/class="[^"]*_banner_/)
+    expect(text(on)).not.toContain('On. Next run')
+    const stopped = render({ useCase: SCHEDULED, last: {} })
+    expect(mainOf(stopped)).not.toMatch(/class="[^"]*_banner_/)
+    expect(mainOf(stopped)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>Open the run<\/a>/)
+    expect(at(mainOf(stopped), 'Open the run')).toBeLessThan(at(mainOf(stopped), 'sentence'))
+  })
+
+  it('keeps the banner for a state the title row cannot say, such as a refused write', () => {
+    const html = mainOf(render({ useCase: { ...SCHEDULED, move_refused: 'Not running. n8n did not take it yet.' } }))
+    expect(html).toMatch(/class="[^"]*_banner_/)
+  })
+
+  it('puts Resume in the title row while paused, with no banner saying Paused twice', () => {
+    const html = mainOf(render({ useCase: { ...AGENTS, state: 'paused' } }))
+    expect(html).not.toMatch(/class="[^"]*_banner_/)
+    expect(at(html, '>Resume<')).toBeLessThan(at(html, 'sentence'))
+  })
+
+  it('shows When, Who approves and Next run in one strip under the sentence, before the steps', () => {
+    const html = mainOf(render({ useCase: SCHEDULED }))
+    const order = ['sentence', '>When</h2>', '>Who approves</h2>', '>Next run</h2>', 'Check release'].map((needle) => at(html, needle))
+    expect(order.every((place) => place >= 0)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(sectionText(render({ useCase: SCHEDULED }), 'Next run')).toBe('Mon 9 Nov, 9:00')
+    expect(sectionText(render({ useCase: SCHEDULED }), 'When')).not.toContain('Next run')
+  })
+
+  it('shows Recent runs and Versions side by side, with no Details fold and no Open button on a run', () => {
+    const html = mainOf(render({ ...CHANGED, runs: [{ ...(done as RunView), use_case_id: CHANGED.useCase.use_case_id }] }))
+    expect(html).not.toContain('<summary')
+    expect(at(html, '>Recent runs</h2>')).toBeLessThan(at(html, '>Versions</h2>'))
+    expect(html).toMatch(/class="[^"]*_duo_[^"]*"[^>]*>\s*<section[\s\S]*>Recent runs<[\s\S]*>Versions</)
+    expect(text(html)).not.toMatch(/Done Open/)
+  })
+
+  it('puts a draft’s Test run in the title row as its one primary button, with Change and More actions beside it', () => {
+    const html = mainOf(render({ useCase: DRAFT }))
+    expect(mainOf(html).match(/_primary_/g)).toHaveLength(1)
+    expect(html).toMatch(/_primary_[^>]*>Test run<\/button>/)
+    for (const needle of ['>Test run<', 'href="/?change=', 'More actions']) expect(at(html, needle), needle).toBeLessThan(at(html, 'sentence'))
+    expect(html).not.toMatch(/class="[^"]*_actions_/)
+  })
+
+  it('shows a draft whose test run stopped as Draft alone, with no Test run mark and no Stopped banner', () => {
+    const html = mainOf(render({ useCase: DRAFT, last: { test: true } }))
+    expect(html).not.toMatch(/class="[^"]*_banner_/)
+    expect(text(/<h1[\s\S]*?<p class="[^"]*sentence/.exec(html)?.[0] ?? '')).not.toContain('Test run Draft')
+    expect((/data-life="draft"/g.exec(html) ?? []).length).toBe(1)
+  })
+})

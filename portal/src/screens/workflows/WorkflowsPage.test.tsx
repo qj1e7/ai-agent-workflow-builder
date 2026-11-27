@@ -242,6 +242,41 @@ describe('the Workflows list', () => {
   })
 })
 
+describe('the Workflows table', () => {
+  const SCHEDULED_STOPPED: UseCaseView = { ...BUGS, schedule: { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null }, next_run_at: '2026-11-05T00:00:00Z', last_run: lr({ state: 'failed', at: '2026-11-04T00:00:00Z', reason: 'AgentError', stop: AGENT_STOPPED }) }
+
+  it('heads its columns State, Workflow, Last run, When and Next run, in that order', () => {
+    const html = mainOf(render({ useCases: [SCHEDULED_STOPPED] }))
+    const head = /<div[^>]*data-table-head[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1] ?? ''
+    expect([...head.matchAll(/<span[^>]*>([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(['State', 'Workflow', 'Last run', 'When', 'Next run'])
+  })
+
+  it('gives a row its last run, its schedule and its next run as separate facts', () => {
+    const row = text(rowOf(render({ useCases: [SCHEDULED_STOPPED] }), 'uc_bugs'))
+    expect(row).toContain('Today 8:00')
+    expect(row).toContain('An agent could not finish its work')
+    expect(row).toContain('Daily 8:00')
+    expect(row).toContain('Tomorrow, 8:00')
+  })
+
+  it('marks a stopped last run on the failing fact, with a mark and the red tone, not in the grey prose', () => {
+    const row = rowOf(render({ useCases: [SCHEDULED_STOPPED] }), 'uc_bugs')
+    expect(row).toMatch(/data-tone="bad"[^>]*>[\s\S]*An agent could not finish its work/)
+  })
+
+  it('says a workflow that never ran has no runs yet and no next run', () => {
+    const row = text(rowOf(render({ useCases: [BUGS] }), 'uc_bugs'))
+    expect(row).toContain('No runs yet')
+  })
+
+  it('gives a workflow with a test run one state mark, not Test run beside it', () => {
+    const tried = { ...BUGS, last_run: lr({ state: 'awaiting_approval', test: true, proposed: 1, tickets: true }) }
+    const row = rowOf(render({ useCases: [tried] }), 'uc_bugs')
+    expect(text(row)).not.toContain('Test run')
+    expect(row.match(/data-life=/g)).toHaveLength(1)
+  })
+})
+
 describe('after a delete', () => {
   const deleted = { deleted: { id: 'uc_gone', name: 'Stale ticket nudge' } }
 
