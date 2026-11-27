@@ -7,7 +7,6 @@ import { Button } from '../../ui/Button'
 import { ConfirmLine } from '../../ui/ConfirmLine'
 import { focusIfFocusFell } from '../../ui/focus'
 import { personTone } from '../../ui/personTone'
-import { ClockMark } from './marks'
 import {
   addedWords,
   approverConfirmationsByPerson,
@@ -32,6 +31,7 @@ import {
 } from './settings'
 import { FieldError, History, useFocusOnNextRender, useSettingsWords } from './SettingsParts'
 import styles from './Settings.module.css'
+import { Pill } from '../../ui/Pill'
 
 const NOTICE_ID = 'people-notice'
 const PROBLEM_ID = 'people-problem'
@@ -374,10 +374,7 @@ export function PersonRow({ person, me, operator, confirmation, askedByName, bus
       ) : null}
       {pending ? (
         <div className={styles['rowNote']}>
-          <span className={styles['pill']} data-tone="wait">
-            <ClockMark size={12} />
-            Approver: waiting for another Approver to confirm
-          </span>
+          <Pill tone="wait">Approver: waiting for another Approver to confirm</Pill>
           {can && can.can !== 'decide' ? <span className={styles['small']}>{can.words}</span> : null}
           {confirmation && (can?.can === 'decide' || can?.can === 'not_now_only') ? (
             <span className={styles['buttons']}>

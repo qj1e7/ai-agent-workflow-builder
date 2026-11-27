@@ -309,44 +309,6 @@ a.src {
   overflow-wrap: anywhere;
 }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 10px;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  font-size: var(--fs-small);
-  font-weight: var(--fw-semi);
-}
-
-.pill[data-tone='bad'] {
-  background: var(--red-soft);
-  border-color: var(--red-line);
-  color: var(--red-ink);
-}
-
-.pill[data-tone='wait'] {
-  background: var(--amber-soft);
-  border-color: var(--amber-line);
-  color: var(--amber-ink);
-}
-
-.pill[data-tone='open'] {
-  background: var(--info-bg);
-  color: var(--info-ink);
-}
-
-.pill[data-tone='good'] {
-  background: var(--green-soft);
-  border-color: var(--green-line);
-  color: var(--green-ink);
-}
-
-.pill[data-tone='quiet'] {
-  background: var(--sunk);
-  color: var(--muted);
-}
-
 .acts {
   display: flex;
   flex-wrap: wrap;

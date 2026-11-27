@@ -1,0 +1,134 @@
+/* The small step line, as the sketch draws it: circles joined by a link, coloured by the last run. */
+.line {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dot {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--off-text);
+}
+
+.dot > svg {
+  width: 13px;
+  height: 13px;
+}
+
+.dot + .dot {
+  margin-inline-start: 16px;
+}
+
+.dot + .dot::before {
+  position: absolute;
+  inset-inline-end: calc(100% + 2px);
+  top: 50%;
+  width: 16px;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--line-strong);
+  content: '';
+}
+
+.done {
+  border-color: var(--ok);
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.done::before {
+  background: var(--ok) !important;
+}
+
+.now {
+  border-color: var(--run);
+  background: var(--run-bg);
+  color: var(--run-text);
+}
+
+.err {
+  border-color: var(--stop);
+  background: var(--stop);
+  color: var(--on-status);
+}
+
+.err::before {
+  background: var(--stop) !important;
+}
+
+.wait {
+  border-color: var(--wait-line);
+  background: var(--wait-bg);
+  color: var(--wait-text);
+}
+
+.wait::before {
+  background: var(--wait-line) !important;
+}
+
+/* A step not reached, declined or skipped is dashed, and so is the link into it. */
+.todo,
+.no,
+.skip {
+  border-style: dashed;
+}
+
+.todo::before,
+.no::before,
+.skip::before {
+  background: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 7px) !important;
+}
+
+.line[data-size='sm'] .dot {
+  width: 22px;
+  height: 22px;
+}
+
+.line[data-size='sm'] .dot > svg {
+  width: 11px;
+  height: 11px;
+}
+
+.line[data-size='sm'] .dot + .dot {
+  margin-inline-start: 10px;
+}
+
+.line[data-size='sm'] .dot + .dot::before {
+  width: 10px;
+}
+
+/* The waiting step pulses. The page leaves the attribute off under reduced motion, and the media query holds it still as well. */
+.dot[data-ring]::after {
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--wait);
+  border-radius: 50%;
+  content: '';
+  opacity: 0;
+  animation: ring var(--dur-pulse) ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot[data-ring]::after {
+    animation: none;
+  }
+}
+
+@keyframes ring {
+  0% {
+    opacity: 0.7;
+    scale: 0.9;
+  }
+
+  100% {
+    opacity: 0;
+    scale: 1.4;
+  }
+}

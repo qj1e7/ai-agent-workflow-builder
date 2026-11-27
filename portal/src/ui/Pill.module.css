@@ -1,0 +1,66 @@
+/* One pill: an icon and a word, never colour alone. The sketch's pill, drawn the same way: the icon is a mask in the text's own colour. */
+.pill {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='3.6' fill='none' stroke='black' stroke-width='1.8'/%3E%3C/svg%3E");
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  background: var(--off-bg);
+  color: var(--off-text);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.pill::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  flex: none;
+  background: currentcolor;
+  mask: var(--pi) center / contain no-repeat;
+}
+
+.pill:empty {
+  display: none;
+}
+
+.large {
+  min-height: 28px;
+}
+
+.on,
+.ok {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.ok {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.2 6.4l2.4 2.4 5.2-5.4' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.on,
+.run {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='3.4'/%3E%3C/svg%3E");
+}
+
+.run {
+  background: var(--run-bg);
+  color: var(--run-text);
+}
+
+.wait {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4.6' fill='none' stroke='black' stroke-width='1.6'/%3E%3Cpath d='M6 3.6v2.6l1.7 1' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background: var(--wait-bg);
+  color: var(--wait-text);
+}
+
+.err {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 3l6 6M9 3l-6 6' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background: var(--stop-bg);
+  color: var(--stop-text);
+}

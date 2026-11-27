@@ -23,6 +23,7 @@ import {
 } from './settings'
 import { FieldError, History, useFocusOnNextRender, useSettingsWords } from './SettingsParts'
 import styles from './Settings.module.css'
+import { Pill } from '../../ui/Pill'
 
 const MODEL_IDS = {
   now: 'model-now',
@@ -164,10 +165,7 @@ function CurrentModel({ active, said }: { active: ModelOut | null; said: string 
     <div id={MODEL_IDS.now} tabIndex={-1} className={styles['now']}>
       {active ? (
         <>
-          <span className={styles['pill']} data-tone="ok">
-            <CheckMark size={12} />
-            Connected
-          </span>
+          <Pill tone="ok">Connected</Pill>
           <div>
             <b>
               {active.provider} · {active.model}
@@ -177,9 +175,7 @@ function CurrentModel({ active, said }: { active: ModelOut | null; said: string 
         </>
       ) : (
         <>
-          <span className={styles['pill']} data-tone="off">
-            Not connected
-          </span>
+          <Pill tone="off">Not connected</Pill>
           <div>
             <b>No AI model yet</b>
             <span className={styles['small']}>{NO_MODEL_WORDS}</span>

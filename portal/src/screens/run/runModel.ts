@@ -1,6 +1,7 @@
 import type { ApprovalStepStatus, ApproverRef, BlockKind, FailureReason, FailureStage, RunOutcome, Trigger, Verdict } from '../../api/types'
 import { runId as asRunId, type RunTime } from '../../stream/brand'
 import { parseEvent, type DataOf, type EventOf, type RunEvent } from '../../stream/parse'
+import type { StepIcon, StepState } from '../../ui/StepLine'
 import { GATE_STEP, stepWords, writeLabel } from './words'
 
 export const PLANNER_ID = 'planner'
@@ -578,10 +579,10 @@ export interface PlanBlock {
   readonly kind: BlockKind
 }
 
-export type StationState = 'todo' | 'now' | 'wait' | 'done' | 'err' | 'no' | 'skip'
+export type StationState = StepState
 export type FaceState = 'idle' | 'thinking' | 'working' | 'waiting' | 'success' | 'error' | 'stopped'
 /** The picture in a step's dot: the clock or the person that started the run, an agent reading, the gate, the write. */
-export type StepIcon = 'schedule' | 'person' | 'read' | 'gate' | 'write'
+export type { StepIcon }
 
 /** What a step says under its name. */
 export type Under =

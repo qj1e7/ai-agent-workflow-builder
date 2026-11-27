@@ -5,7 +5,7 @@ import { Link } from '../../ui/Link'
 import { CHECKER, checksOnItsOwn, nextCheckWords, NOT_AUTOMATIC, noScheduleWords, REFRESH_MS, scheduleWords, sentenceFor, stateOf } from './software'
 import { workflowPath } from '../workflows/workflow'
 import workflowStyles from '../workflows/Workflows.module.css'
-import styles from './Software.module.css'
+import { Pill } from '../../ui/Pill'
 
 /**
  * A watched software in the side panel (spec 3.3): its status, the version you run, the newest, the workflow that checks it and when.
@@ -36,9 +36,7 @@ export function SoftwarePanel({ id }: { id: string }) {
   return (
     <>
       <div>
-        <span className={styles['pill']} data-tone={state.tone}>
-          {state.words}
-        </span>
+        <Pill tone={state.tone}>{state.words}</Pill>
       </div>
       <p>{sentenceFor(row)}</p>
       <dl className={workflowStyles['factrows']}>

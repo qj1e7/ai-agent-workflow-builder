@@ -3,10 +3,11 @@ import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import type { CapabilityView, ConnectionOut, TellSetupOut } from '../../api/types'
 import { Button } from '../../ui/Button'
-import { AlertMark, CheckMark } from './marks'
+import { AlertMark } from './marks'
 import { cardsOf, CHECK_DOWN_WORDS, type Health, checkResultWords, connectionWords, GITHUB_KEY_NOTE, keyWords, TEAMS_DOES_WORDS, TELL_CHANGED_BY_WORDS, tellWords, usedBy } from './connections'
 import { ONLY_OPERATORS_WORDS } from './settings'
 import styles from './Settings.module.css'
+import { Pill } from '../../ui/Pill'
 
 function CheckNow({ connection, describedBy }: { connection: ConnectionOut; describedBy: string }) {
   const check = useCheckConnection(connection.id)
@@ -54,10 +55,7 @@ function ConnectionCard({ connection, capabilities, canCheck, now }: CardProps) 
       <div className={styles['connectionTop']}>
         <h3>{connection.name}</h3>
         {connection.practice ? <span className={styles['tag']}>Practice copy</span> : null}
-        <span className={styles['pill']} data-tone={says.health}>
-          {says.health === 'ok' ? <CheckMark /> : says.health === 'warn' ? <AlertMark /> : null}
-          {says.label}
-        </span>
+        <Pill tone={says.health === 'warn' ? 'wait' : says.health}>{says.label}</Pill>
       </div>
       <p id={textId}>
         {says.text}
@@ -96,9 +94,7 @@ function TellCard({ tell }: { tell: TellSetupOut }) {
     <article className={styles['connection']} data-connection="tell">
       <div className={styles['connectionTop']}>
         <h3>Tell flow</h3>
-        <span className={styles['pill']} data-tone="off">
-          {says.label}
-        </span>
+        <Pill tone="off">{says.label}</Pill>
       </div>
       <p>{says.text}</p>
       <dl className={styles['facts']}>

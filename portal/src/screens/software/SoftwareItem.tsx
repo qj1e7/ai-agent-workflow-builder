@@ -11,6 +11,7 @@ import { askWhereWords, cantCheckWords, newestOf, oursOf, rowDomId, sentenceFor,
 import { dateAndClock } from '../workflows/times'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
+import { Pill } from '../../ui/Pill'
 
 export function BackToWatchlist({ to = WATCHLIST_PATH }: { to?: string | undefined }) {
   return (
@@ -68,9 +69,7 @@ export function SoftwareItem(props: ItemProps) {
           <p className={workflowStyles['kind']}>Watchlist</p>
           <h1 tabIndex={-1}>{row.name}</h1>
         </div>
-        <span className={styles['pill']} data-tone={state.tone}>
-          {state.words}
-        </span>
+        <Pill tone={state.tone}>{state.words}</Pill>
       </div>
       {row.not_found || row.moved_to ? null : <p className={workflowStyles['sentence']}>{sentenceFor(row)}</p>}
       {row.not_found || row.moved_to || (row.status === 'cant_check' && !row.not_found) || declined ? (

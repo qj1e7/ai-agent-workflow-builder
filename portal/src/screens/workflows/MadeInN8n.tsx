@@ -8,6 +8,7 @@ import { Button } from '../../ui/Button'
 import { madeInN8nWords } from './n8nMade'
 import local from './MadeInN8n.module.css'
 import styles from './Workflows.module.css'
+import { Pill } from '../../ui/Pill'
 
 interface RowProps {
   readonly workflow: MadeInN8nView
@@ -31,9 +32,7 @@ function MadeRow({ workflow, makerName, busy, onSetUp }: RowProps) {
           </span>
         </span>
         <span className={local['end']}>
-          <span className={styles['pill']} data-tone={words.pill.tone}>
-            {words.pill.label}
-          </span>
+          <Pill tone={words.pill.tone}>{words.pill.label}</Pill>
           {workflow.can_set_up ? (
             <Button loading={busy} onClick={onSetUp} aria-describedby={`${ids}-name ${ids}-sub`}>
               Set up

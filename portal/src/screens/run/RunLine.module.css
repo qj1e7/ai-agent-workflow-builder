@@ -101,20 +101,20 @@
 }
 
 .large .done {
-  border-color: var(--ink);
+  border-color: var(--ok);
 }
 
 .large .now,
 .large .step[data-replay] {
-  border-color: var(--accent);
+  border-color: var(--run);
 }
 
 .large .wait {
-  border-color: var(--amber);
+  border-color: var(--wait-line);
 }
 
 .large .err {
-  border-color: var(--red);
+  border-color: var(--stop);
 }
 
 .large .todo,
@@ -152,7 +152,7 @@
 }
 
 .link[data-link='solid'] {
-  background: var(--ink);
+  background: var(--ok);
 }
 
 .link[data-link='flow'],
@@ -174,15 +174,15 @@
 .link[data-link='wait']::before,
 .link[data-replay]::before {
   left: -14px;
-  background: repeating-linear-gradient(90deg, var(--accent) 0 8px, transparent 8px 14px);
+  background: repeating-linear-gradient(90deg, var(--run) 0 8px, transparent 8px 14px);
 }
 
 .link[data-link='wait']::before {
-  background-image: repeating-linear-gradient(90deg, var(--amber) 0 8px, transparent 8px 14px);
+  background-image: repeating-linear-gradient(90deg, var(--wait) 0 8px, transparent 8px 14px);
 }
 
 .link[data-link='stop']:not([data-replay])::before {
-  background: repeating-linear-gradient(90deg, var(--red) 0 5px, transparent 5px 9px);
+  background: repeating-linear-gradient(90deg, var(--stop) 0 5px, transparent 5px 9px);
 }
 
 .link[data-link='dead']::before {
@@ -255,22 +255,23 @@
 }
 
 .done .dot {
-  background: var(--ink);
-  color: var(--on-ink);
+  border-color: var(--ok);
+  background: var(--ok-bg);
+  color: var(--ok-text);
 }
 
 .now .dot,
 .step[data-replay] .dot {
-  border-color: var(--accent);
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: 0 0 0 4px var(--accent-soft);
+  border-color: var(--run);
+  background: var(--run-bg);
+  color: var(--run-text);
+  box-shadow: 0 0 0 4px var(--run-bg);
 }
 
 .wait .dot {
-  border-color: var(--amber);
-  background: var(--amber-soft);
-  color: var(--amber-ink);
+  border-color: var(--wait-line);
+  background: var(--wait-bg);
+  color: var(--wait-text);
 }
 
 .wait .dot::after {
@@ -282,9 +283,9 @@
 }
 
 .err .dot {
-  border-color: var(--red);
-  background: var(--red-soft);
-  color: var(--red-ink);
+  border-color: var(--stop);
+  background: var(--stop);
+  color: var(--on-status);
 }
 
 .err:not([data-replay]) .dot {

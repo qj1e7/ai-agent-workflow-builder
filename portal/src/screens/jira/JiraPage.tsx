@@ -8,6 +8,7 @@ import { Button } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
 import { createdWords, detailsId, EMPTY_WORDS, LOAD_WORDS, missingWords, newestFirst, pressMarkDone, showMarkDone } from './tickets'
 import styles from './Jira.module.css'
+import { Pill } from '../../ui/Pill'
 
 const STATUS_ID = 'jira-status'
 
@@ -31,9 +32,9 @@ function TicketRow({ ticket, open, operator, marking, onToggle, onMarkDone }: Ro
           {ticket.title}
         </h2>
         <div className={styles['meta']}>
-          <span className={styles['pill']} data-done={done || undefined}>
+          <Pill tone={done ? 'ok' : 'off'} data-done={done || undefined}>
             {ticket.status}
-          </span>
+          </Pill>
           <span>{createdWords(ticket.created_at)}</span>
           {ticket.run_id ? (
             <Link to={`/runs/${ticket.run_id}`}>

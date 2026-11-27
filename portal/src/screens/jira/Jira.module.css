@@ -72,24 +72,6 @@
   color: var(--link);
 }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 10px;
-  border: 1px solid var(--hair);
-  border-radius: 999px;
-  background: var(--sunk);
-  color: var(--muted);
-  font-size: var(--fs-small);
-  font-weight: var(--fw-semi);
-}
-
-.pill[data-done] {
-  border-color: var(--green-line);
-  background: var(--green-soft);
-  color: var(--green-ink);
-}
-
 .acts {
   display: flex;
   flex-wrap: wrap;
