@@ -183,7 +183,7 @@ _Avoid_: Owner (the platform's n8n account), editor
 ### Keeping software up to date
 
 **Watchlist**:
-The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check. The page is called the **Software watchlist**, and the rail shows it as Watchlist.
+The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check. It is one workflow, the **Software watchlist**, reached from Workflows and Home like any other, and its list is drawn on its workflow page. The rail has no tab for it (ADR 0053, #361).
 _Avoid_: Inventory, software list
 
 **Use the new address**:

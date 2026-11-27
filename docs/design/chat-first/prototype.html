@@ -391,6 +391,24 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
 .n8nopen { display: grid; justify-items: start; gap: 4px; min-width: 0; max-width: 100%; }
 .n8nopen p { margin: 0; max-width: 100%; overflow-wrap: anywhere; }
 .pv-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+/* More actions holds Run now and Delete, as the app's menu does. */
+.menu-wrap { position: relative; }
+.menu { position: absolute; inset-inline-end: 0; top: calc(100% + 6px); z-index: 15; min-width: 180px; display: grid; padding: 6px; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-3); }
+.menu[hidden] { display: none; }
+.menu button { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--r-sm); background: none; font: inherit; font-weight: 600; color: var(--ink); text-align: start; cursor: pointer; }
+.menu button:hover, .menu button:focus-visible { background: var(--subtle); }
+.menu button.danger { color: var(--stop-text); }
+.deldlg { width: min(460px, calc(100% - 32px)); padding: 22px 24px; border: 0; border-radius: var(--r-lg); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-3); }
+.deldlg::backdrop { background: rgba(15, 26, 43, .45); }
+.deldlg h2 { font-size: var(--fs-head); margin: 0 0 8px; }
+.deldlg .c-act { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+/* Practice systems (ADR 0054): the result first, then each case. */
+.sim { display: grid; gap: 6px; }
+.sim p { margin: 0; }
+.sim-cases { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-small); }
+.sim-cases li { display: flex; align-items: center; gap: 6px; }
+.sim-cases svg { width: 14px; height: 14px; color: var(--ok); flex: none; }
+.toast .linkbtn { color: inherit; margin-inline-start: 12px; }
 .pv-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; padding-top: 14px; border-top: 1px solid var(--line); }
 .pcard { padding: 20px 22px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-2); display: grid; gap: 12px; min-width: 0; }
 .panel .pcard { padding: 0; box-shadow: none; }
@@ -940,10 +958,10 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
       <ul class="nav">
         <li><button type="button" data-rail="chat" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 9v11.5h13V9"/><path d="M10 20.5v-6h4v6"/></svg><span class="nw">Home</span><span class="cnt alert" data-live="n-needs"></span></button></li>
         <li><button type="button" data-rail="wf" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="6" rx="1.5"/><rect x="15" y="14" width="6" height="6" rx="1.5"/><path d="M9 7h4a3 3 0 0 1 3 3v4"/></svg><span>Workflows</span><span class="cnt" data-live="n-wf"></span></button></li>
-        <li><button type="button" data-rail="watch" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/></svg><span>Watchlist</span><span class="cnt" data-live="n-watch"></span></button></li>
       </ul>
       <div class="rail-foot">
         <button type="button" data-teams aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Teams</span></button>
+        <button type="button" data-rail="jira" aria-pressed="false" aria-label="Jira, practice copy" title="Jira, practice copy"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 0 0 4v0a2 2 0 0 0 0 4v2h16v-2a2 2 0 0 0 0-4v0a2 2 0 0 0 0-4V6H4zM9 6v12"/></svg><span class="nw">Jira</span></button>
         <button type="button" data-rail="settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
         <span class="me" id="me" title="Alice, Operator"><span class="person" id="av" aria-hidden="true">A</span><span class="vh" id="who">Alice, Operator</span></span>
       </div>
@@ -970,6 +988,7 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
     </div>
     <div class="n8n" id="n8n" hidden aria-label="n8n editor"></div>
     <dialog class="tdrawer" id="teams" aria-labelledby="teamsH"></dialog>
+    <dialog class="deldlg" id="delDlg" role="alertdialog" aria-labelledby="delH" aria-describedby="delT"></dialog>
     <div class="toast" id="toast" role="status" hidden></div>
     <div class="dock" id="dock">
       <form class="composer" id="composer"><span class="ask-face" id="askFace"></span><input id="cin" type="text" autocomplete="off" aria-label="Ask, or describe a task" placeholder="Ask, or describe a task"><button class="send" type="submit" aria-label="Send"></button></form>
@@ -977,10 +996,23 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
     </div>
   </div>
 
+  <section class="read" aria-labelledby="h-sync">
+    <h2 id="h-sync">Matched to the app on 27 Nov 2026</h2>
+    <ul>
+      <li>The rail has no Watchlist. The Software watchlist is a workflow, on Home’s board, the slim list and Workflows like any other. Its page has Run now and Pause, its steps, its list, Recent runs and Versions, and In n8n for people with n8n access (#361). Every software on it reads “checked by Software watchlist” while it is on.</li>
+      <li>A workflow page has More actions with Run now and Delete. Run now opens the run it starts. Delete asks first, and Undo puts it back.</li>
+      <li>A software’s page has History and Remove from watchlist. “Open the last check” opens the watchlist’s Monday check.</li>
+      <li>The set-up card, a drafted workflow’s card and a Draft’s page show the result on practice systems (ADR 0054).</li>
+      <li>The Planner answers in the app’s words: “New releases of LangGraph” on the card, “You already have this one.”, “Add Grafana to the watchlist”, “Add Kubernetes to the watchlist and check it every day”, and a change to when the watchlist runs (#353, #354, #356).</li>
+      <li>Jira sits at the rail’s foot beside Teams. It opens the practice Jira, which the sketch doesn’t draw.</li>
+      <li>A workflow shows one of four states: Needs you, On, Paused or Draft. Needs you is only for the person who has something to do. Anyone else reads “On · last run stopped” or “On · waiting for approval” (ADR 0053, #355).</li>
+      <li>A new workflow’s card has one Turn on. It runs the test, which writes nothing, and turns the workflow on if it passes (ADR 0053, #352).</li>
+    </ul>
+  </section>
   <section class="read" aria-labelledby="h-mc">
     <h2 id="h-mc">Redrawn on 22 Nov 2026: Mission control, light (ADR 0052)</h2>
     <ul>
-      <li>A dark rail holds Home, Workflows and the Watchlist, with Settings and the person at its foot. The top bar is gone. Home’s count is the Needs you count.</li>
+      <li>A dark rail holds Home and Workflows, with Teams, Jira, Settings and the person at its foot. The top bar is gone. Home’s count is the Needs you count.</li>
       <li>Home is the Planner’s box, then Needs you, then a board of workflow tiles. Each tile shows its state, its next run, and its last run as a line of steps.</li>
       <li>After a question, Home becomes a chat with the box at the bottom and a slim list docked on the right: the Needs you count, then each workflow’s name with its state mark. “‹ Home” or Home in the rail goes back to the board, and the chat is kept. In a narrower window the board gives way to the pinned line. Something opened from a card still shows beside the chat, in the board’s place.</li>
       <li>Workflows is filter chips, Needs you, then one table with each last run as steps. A workflow page draws its steps as a light diagram with today’s run on it.</li>
@@ -1004,7 +1036,7 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
   <section class="read" aria-labelledby="h-read">
     <h2 id="h-read">What’s new in version 3</h2>
     <ul>
-      <li>Where you came from decides. From the rail, Workflows and the Watchlist open as full pages, and the chat shows only on Home. From a card in the chat, the first click opens beside it, and anything you open from there goes full page, with Back to Home. A flow shows once: while it is open beside the chat, the card doesn’t repeat it. Play “Browse”, then “Morning check”.
+      <li>Where you came from decides. From the rail, Workflows opens as a full page, and the chat shows only on Home. From a card in the chat, the first click opens beside it, and anything you open from there goes full page, with Back to Home. A flow shows once: while it is open beside the chat, the card doesn’t repeat it. Play “Browse”, then “Morning check”.
       <li>The side panel is a summary: what it is, its state, and the next step. More details opens the full page, which adds what helps you understand it, such as a run’s step-by-step log or a release’s notes. An approval always shows everything that will be written.</li>
       <li>Every part of a request gets a tick or a cross, with a reason. Nothing is dropped, and a missing time is asked, never guessed.</li>
       <li>“Make the React check run on Mondays only” changes the workflow you have. You see before and after, and can undo.</li>
@@ -1168,10 +1200,12 @@ const STEP = {
   tell: { id: 'write', short: 'Tell you', kind: 'tell', icon: 'bell' },
 };
 const stepsFor = (then) => (then === 'tell' ? [STEP.when, STEP.read, STEP.compare, STEP.tell] : [STEP.when, STEP.read, STEP.compare, STEP.yes, STEP.write]);
+const WL_STEPS = [STEP.when, { ...STEP.read, short: 'Read versions', tag: 'Reads GitHub, Maven Central and npm' }, STEP.compare, STEP.yes, { ...STEP.write, short: 'Create tickets' }];
+const stepsOf = (id) => (W.wf[id].list ? WL_STEPS : stepsFor(W.wf[id].then));
 /* The Jira projects the platform may write in. The local stack has MOCK. */
 const JIRA_PROJECTS = ['MOCK'];
 const YES_LINE = 'Each ticket needs an Approver’s approval in Teams.';
-const THEN = { jira: 'Create a Jira ticket, after approval', tell: 'Tell me here' };
+const THEN = { jira: 'Create 1 Jira ticket', tell: 'Tell me here' };
 
 /* ---------- Schedules: a time is never guessed ---------- */
 const DAY = { wkd: 'weekday', man: 'by hand', mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
@@ -1199,12 +1233,13 @@ function timeOf(s) {
 const SOFT0 = {
   fastapi: { name: 'FastAPI', repo: 'fastapi/fastapi', run: '0.115.2', latest: '0.121.0', on: '5 Nov', notes: '3 bug fixes. No breaking changes listed.' },
   langgraph: { name: 'LangGraph', repo: 'langchain-ai/langgraph', run: '0.2.60', latest: '0.3.1', on: '4 Nov', notes: '2 new features and 4 fixes. One change may break older code.' },
-  log4j: { name: 'Log4j core', src: 'maven', repo: 'org.apache.logging.log4j:log4j-core', run: '2.24.1', latest: '2.24.3', on: '1 Nov', notes: '2 bug fixes.' },
+  log4j: { name: 'Log4j core', src: 'maven', repo: 'org.apache.logging.log4j:log4j-core', gh: 'apache/logging-log4j2', run: '2.24.1', latest: '2.24.3', on: '1 Nov', notes: '2 bug fixes.' },
   react: { name: 'React', repo: 'facebook/react', run: '19.1.0', latest: '19.1.0' },
   django: { name: 'Django', repo: 'django/django', run: '5.1.4', latest: '5.1.4' },
   langserve: { name: 'LangServe', repo: 'langchain-ai/langserve', run: '0.3.0', missing: true },
 };
-const EXTRA = { express: { name: 'Express', src: 'npm', repo: 'express' }, kubernetes: { name: 'Kubernetes', repo: 'kubernetes/kubernetes' }, grafana: { name: 'Grafana', repo: 'grafana/grafana' }, nginx: { name: 'NGINX', repo: 'nginx/nginx' }, node: { name: 'Node.js', repo: 'nodejs/node' }, python: { name: 'Python', repo: 'python/cpython' } };
+/* `what` is the project's own description, as the software finder reads it. A package keeps its GitHub address in `gh` for a release check, which reads GitHub. */
+const EXTRA = { express: { name: 'Express', src: 'npm', repo: 'express', gh: 'expressjs/express', what: 'Fast, unopinionated web framework for Node.js.' }, kubernetes: { name: 'Kubernetes', repo: 'kubernetes/kubernetes', what: 'Production-grade container scheduling and management.' }, grafana: { name: 'Grafana', repo: 'grafana/grafana', what: 'The open and composable observability platform.' }, nginx: { name: 'NGINX', repo: 'nginx/nginx', what: 'The official NGINX open source repository.' }, node: { name: 'Node.js', repo: 'nodejs/node', what: 'Node.js JavaScript runtime.' }, python: { name: 'Python', repo: 'python/cpython', what: 'The Python programming language.' } };
 const ALIAS = { k8s: 'kubernetes', 'node.js': 'node', nodejs: 'node' };
 const SOFT_RE = /\b(fastapi|langgraph|react|log4j|django|langserve|express|kubernetes|k8s|grafana|nginx|node|python)\b/;
 /* Where each software is published (ADR 0025): GitHub by default, or a Maven Central or npm package. */
@@ -1213,18 +1248,24 @@ const srcOf = (s) => SRC[s.src || 'github'];
 const srcAt = (s) => (s.src === 'maven' ? `central.sonatype.com/artifact/${s.repo.replace(':', '/')}` : s.src === 'npm' ? `npmjs.com/package/${s.repo}` : `github.com/${s.repo}`);
 const d8 = { day: null, time: '8:00' };
 const d9 = { day: null, time: '9:00' };
+const wl9 = { day: 'mon', time: '9:00' };
+/* The Software watchlist's last check, which a package's "Open the last check" opens. */
+const SWL_MON = { wf: 'swl', kind: 'Monday’s run, 9:00', state: 'done', log: [['9:00:00', 'Started on schedule.'], ['9:00:01', 'Version checker asked GitHub, Maven Central and npm for the newest version of 6 software.'], ['9:00:03', 'Couldn’t read LangServe on GitHub: GitHub answered 404 Not Found.', 'bad'], ['9:00:04', 'Log4j core: OSV lists no known vulnerabilities in 2.24.1.'], ['9:00:05', 'Found nothing new, so nothing was written.']] };
 const WORLD = {
   user: 'alice', maint: false, stage: 'stopped', run: { when: 'done', read: 'err', compare: '', yes: '', write: '' },
-  appr: 'none', apprUI: null, fix: 'none', cause: 'quiet', reason: '', asked: '', paused: {}, focus: null, key: true, langserve: true, schedEdit: null, sd: null, pendingEdit: '',
+  appr: 'none', apprUI: null, fix: 'none', cause: 'quiet', reason: '', asked: '', paused: {}, focus: null, key: true, gone: {}, histOpen: {}, runs: { swlMon: SWL_MON }, schedEdit: null, sd: null, pendingEdit: '',
   wf: {
     fastapi: { name: 'FastAPI release check', soft: 'fastapi', sched: d8, then: 'jira', ver: 3, yes: true, by: 'Alice', on: '2 Nov' },
     react: { name: 'React release check', soft: 'react', sched: d8, then: 'jira', ver: 2, yes: true, by: 'Alice', on: '30 Oct' },
+    /* The Software watchlist is a workflow like the rest (ADR 0053, item 4, and #361): one list, checked on one schedule. It has no rail tab. */
+    swl: { name: 'Software watchlist', list: true, sched: wl9, then: 'jira', ver: 1, yes: true, by: 'Alice', on: '20 Oct' },
   },
   hist: {
     fastapi: [{ v: 3, what: 'Moved the run to 8:00', by: 'Alice', on: '2 Nov', sched: d8, yes: true }, { v: 2, what: 'Added a test run on practice Jira', by: 'Alice', on: '28 Oct', sched: d9, yes: true }, { v: 1, what: 'Built by the Planner', by: 'Alice', on: '20 Oct', sched: d9, yes: true }],
     react: [{ v: 2, what: 'Moved the run to 8:00', by: 'Alice', on: '30 Oct', sched: d8, yes: true }, { v: 1, what: 'Built by the Planner', by: 'Alice', on: '22 Oct', sched: d9, yes: true }],
+    swl: [{ v: 1, what: 'Built by the Planner', by: 'Alice', on: '20 Oct', sched: wl9, yes: true }],
   },
-  order: ['fastapi', 'react'], drafts: {}, edits: {}, dw: {}, dwFocus: null,
+  order: ['fastapi', 'react', 'swl'], drafts: {}, edits: {}, dw: {}, dwFocus: null,
 };
 const WAITING = { stage: 'waiting', appr: 'waiting', run: { when: 'done', read: 'done', compare: 'done', yes: 'wait', write: '' } };
 const DONE = { stage: 'done', appr: 'approved', run: { when: 'done', read: 'done', compare: 'done', yes: 'done', write: 'done' } };
@@ -1240,14 +1281,21 @@ const moved = () => W.cause === 'moved';
 const stopWhy = () => (moved() ? 'GitHub answered without the “tag” field' : 'GitHub didn’t answer');
 let FIXPLAN = 'ready';
 const flagged = (id) => W.wf[id].then === 'jira' && !W.wf[id].yes;
+/* A workflow shows one of four states (ADR 0053, item 2): Needs you, On, Paused or Draft, as [words, tone, state]. Needs you is only for
+   the person who has something to do, the same rule as their Needs you list. Anyone else reads On, with what it waits on. */
+const NEEDS = 'Needs you';
 function wfState(id) {
-  if (W.paused[id]) return ['Paused', 'idle'];
-  if (flagged(id)) return ['Needs a fix', 'err'];
-  if (id === 'fastapi' && W.stage === 'stopped') return ['Stopped', 'err'];
-  if (id === 'fastapi' && W.stage === 'waiting') return ['Waiting for approval', 'wait'];
-  return ['On', 'on'];
+  if (W.paused[id]) return ['Paused', 'idle', 'Paused'];
+  if (W.user === 'bob') {
+    if (id === 'fastapi' && (W.appr === 'waiting' || fixNeeds().length)) return [NEEDS, 'wait', NEEDS];
+    if (id === 'fastapi' && W.stage === 'stopped') return ['On · last run stopped', 'on', 'On'];
+    return ['On', 'on', 'On'];
+  }
+  if (flagged(id) || (id === 'fastapi' && W.stage === 'stopped')) return [NEEDS, 'err', NEEDS];
+  if (id === 'fastapi' && W.stage === 'waiting') return ['On · waiting for approval', 'wait', 'On'];
+  return ['On', 'on', 'On'];
 }
-const softIds = () => Object.keys(W.soft).filter((k) => k !== 'langserve' || W.langserve);
+const softIds = () => Object.keys(W.soft).filter((k) => !W.gone[k]);
 function softState(k) {
   const s = W.soft[k];
   if (s.missing) return ['Can’t find', 'err'];
@@ -1259,8 +1307,8 @@ const fixNeeds = () => (W.user === 'bob' && moved() && W.fix === 'ready' ? [{ g:
 function needs() {
   if (W.user === 'bob') return [...fixNeeds(), ...(W.appr === 'waiting' ? [{ g: 'now', t: '<b>FastAPI upgrade ticket</b> needs your approval', s: '<b>FastAPI ticket</b> needs your approval', sub: 'Upgrade FastAPI from 0.115.2 to 0.121.0', go: 'Review and decide', open: 'appr', tone: 'wait' }] : []), ...setupNeeds()];
   const l = W.order.filter(flagged).map((id) => ({ g: 'now', t: `<b>${W.wf[id].name}</b> can’t write without approval`, s: `<b>${W.soft[id].name} check</b> can’t write`, open: `wf:${id}`, tone: 'err' }));
-  if (!flagged('fastapi') && W.stage === 'stopped' && !W.paused.fastapi) l.push({ g: 'now', t: '<b>FastAPI release check</b> stopped at 8:00', s: '<b>FastAPI check</b> stopped', sub: stopWhy(), go: 'Open the run', open: 'run', tone: 'err' });
-  if (W.langserve) l.push({ g: 'set', t: '<b>LangServe</b> can’t be found on GitHub', s: '<b>LangServe</b> not found', open: 'soft:langserve', tone: 'wait' });
+  if (W.order.includes('fastapi') && !flagged('fastapi') && W.stage === 'stopped' && !W.paused.fastapi) l.push({ g: 'now', t: '<b>FastAPI release check</b> stopped at 8:00', s: '<b>FastAPI check</b> stopped', sub: stopWhy(), go: 'Open the run', open: 'run', tone: 'err' });
+  if (!W.gone.langserve) l.push({ g: 'set', t: '<b>LangServe</b> can’t be found on GitHub', s: '<b>LangServe</b> not found', open: 'soft:langserve', tone: 'wait' });
   if (W.key) l.push({ g: 'set', t: '<b>Jira key</b> expires Friday', s: '<b>Jira key</b> expires Friday', open: 'key', tone: 'wait' });
   return l;
 }
@@ -1277,16 +1325,16 @@ const needsHead = () => {
 
 /* ---------- Home's board: Needs you, then a tile per workflow with its last run as a line of steps. The same rows dock beside the chat. ---------- */
 const MINI = { done: 'done', now: 'now', wait: 'wait', err: 'stop', no: 'skip', skip: 'skip', '': 'skip' };
-const lastStates = (id) => (id === 'fastapi' ? W.run : lastRun(id) === 'No runs yet' ? {} : { when: 'done', read: 'done', compare: 'done' });
+const lastStates = (id) => (rnLast(id) ? runStates(rnLast(id)) : id === 'fastapi' ? W.run : lastRun(id) === 'No runs yet' ? {} : { when: 'done', read: 'done', compare: 'done' });
 const mini = (steps, st, label, sm = false) => `<span class="mini${sm ? ' sm' : ''}" role="img" aria-label="${esc(label)}">${steps.map((s) => `<i class="d ${MINI[st[s.id] || '']}">${ICON[s.icon]}</i>`).join('')}</span>`;
-const wfMini = (id, sm) => mini(stepsFor(W.wf[id].then), lastStates(id), `Last run: ${lastRun(id)}`, sm);
+const wfMini = (id, sm) => mini(stepsOf(id), lastStates(id), `Last run: ${lastRun(id)}`, sm);
 const dwMini = (k, sm) => mini(dBlocks(W.dw[k]).filter((b) => !b.side), {}, 'No runs yet', sm);
 const boardIds = () => [...W.order, ...dwListed()];
 const boardTitle = (n) => `${W.user === 'bob' ? 'Workflows' : nw('Your workflows')} <span class="n">${n}</span>`;
 function tileHTML(id) {
   if (W.dw[id]) {
     const [t, s] = dwState(id);
-    return `<li><button class="tile" type="button" data-open="dw:${id}"><span class="tile-top"><span class="tile-name">${dT(W.dw[id]).name}</span><span class="pill" data-s="${s}">${t}</span></span>${dwMini(id)}<span class="tile-meta"><b>Last run</b><span>No runs yet</span></span></button></li>`;
+    return `<li><button class="tile" type="button" data-open="dw:${id}"><span class="tile-top"><span class="tile-name">${dT(W.dw[id]).name}</span><span class="pill" data-s="${s}">${t}</span></span>${dwMini(id)}<span class="tile-meta"><b>Last run</b><span>${dwSub(id)}</span></span></button></li>`;
   }
   const [t, s] = wfState(id);
   return `<li><button class="tile" type="button" data-open="wf:${id}"><span class="tile-top"><span class="tile-name">${W.wf[id].name}</span><span class="pill" data-s="${s}">${t}</span></span>${wfMini(id)}<span class="tile-meta"><b>Next run</b><span>${nextRun(id)}</span><b>Last run</b><span>${lastRun(id)}</span></span></button></li>`;
@@ -1321,8 +1369,8 @@ const softRow = (k) => { const s = W.soft[k]; const [t, c] = softState(k); retur
 const watchRows = () => softIds().map(softRow).join('');
 const behindIds = () => softIds().filter((k) => softState(k)[0] === 'Newer out');
 const listCard = () => '<div class="card"><div class="c-head"><b>Workflows</b><span class="small muted" data-live="n-wf"></span></div><ul class="wl" data-live="list"></ul></div>';
-const watchCard = () => '<div class="card"><div class="c-head"><b>Watchlist</b><span class="small muted" data-live="n-watch"></span></div><ul class="wl" data-live="watch"></ul></div>';
-const behindCard = () => '<div class="card"><div class="c-head"><b data-live="behind-h"></b></div><ul class="wl" data-live="behind"></ul><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="list:watch">See the watchlist</button></span></div></div>';
+const watchCard = () => '<div class="card"><div class="c-head"><b>Software watchlist</b><span class="small muted" data-live="n-watch"></span></div><ul class="wl" data-live="watch"></ul><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="wf:swl">Open it</button></span></div></div>';
+const behindCard = () => '<div class="card"><div class="c-head"><b data-live="behind-h"></b></div><ul class="wl" data-live="behind"></ul><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="wf:swl">See the watchlist</button></span></div></div>';
 const needsCard = () => '<div class="card"><div class="c-head"><b data-live="needs-h"></b></div><div class="needs" data-live="needs"></div></div>';
 const histCard = () => `<div class="card"><div class="c-head"><b>Your recent decisions</b></div><ul class="rows plain">
   <li><span><b>React upgrade ticket</b><span class="s">Tue 4 Nov</span></span><span class="pill" data-s="ok">Approved</span></li>
@@ -1333,7 +1381,7 @@ const capsCard = () => (W.user === 'bob'
 const START_EXAMPLE = 'Keep track of the LangGraph version';
 const startCard = () => (W.user === 'bob'
   ? capsCard()
-  : `<div class="card"><div class="c-head"><b>How to start</b></div><p>This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written until an Approver approves it.</p><ol class="caps"><li>Tell me what should run by itself, in your own words, like “${START_EXAMPLE}”.</li><li>Check the card I make, and change anything I guessed.</li><li>Press Set up. I do a test run, which writes nothing.</li><li>If the test passes, press Turn it on.</li><li>Nothing is written until an Approver approves it in Teams.</li></ol><div class="pick" role="group" aria-label="Try one"><button type="button" data-say="${START_EXAMPLE}">${START_EXAMPLE}</button></div></div>`);
+  : `<div class="card"><div class="c-head"><b>How to start</b></div><p>This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written until an Approver approves it.</p><ol class="caps"><li>Tell me what should run by itself, in your own words, like “${START_EXAMPLE}”.</li><li>Check the card I make, and change anything I guessed.</li><li>Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.</li><li>Nothing is written until an Approver approves it in Teams.</li></ol><div class="pick" role="group" aria-label="Try one"><button type="button" data-say="${START_EXAMPLE}">${START_EXAMPLE}</button></div></div>`);
 const cantCard = (head, alt, ask) => `<div class="card"><div class="c-head"><b>${head}</b></div>${alt ? `<p class="muted">${alt}</p>` : ''}${ask ? '<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-toast="Asked the team. Their answer will show here.">Ask the team</button></span></div>' : ''}</div>`;
 const CANT = [
   [/(teams|channel|slack)/, 'I can’t post in Teams channels yet', 'Run results show here, in the chat.', true],
@@ -1779,7 +1827,7 @@ function apprFoot() {
 }
 
 /* ---------- Workflow, software and key views ---------- */
-const sentFor = (id) => { const f = W.wf[id]; return `${long(f.sched)}, check ${(W.soft[f.soft] || EXTRA[f.soft]).name} on ${srcOf(W.soft[f.soft] || EXTRA[f.soft])} for a new release. ${f.then === 'jira' ? 'If there is one, create an upgrade ticket in Jira project MOCK, after approval.' : 'If there is one, tell me here.'}`; };
+const sentFor = (id) => { const f = W.wf[id]; if (f.list) return `${long(f.sched)}, check each software on the list for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after approval.`; return `${long(f.sched)}, check ${(W.soft[f.soft] || EXTRA[f.soft]).name} on ${srcOf(W.soft[f.soft] || EXTRA[f.soft])} for a new release. ${f.then === 'jira' ? 'If there is one, create an upgrade ticket in Jira project MOCK, after approval.' : 'If there is one, tell me here.'}`; };
 const TIMES = ['7:30', '8:00', '9:00', '13:00', '17:00'];
 const dayOpts = (v) => [['', 'Every day'], ...['mon', 'tue', 'wed', 'thu', 'fri'].map((d) => [d, `Every ${DAY[d]}`])].map(([k, l]) => `<option value="${k}"${(v || '') === k ? ' selected' : ''}>${l}</option>`).join('');
 const timeOpts = (v) => [...new Set([...TIMES, v])].map((t) => `<option${t === v ? ' selected' : ''}>${t}</option>`).join('');
@@ -1789,7 +1837,7 @@ function whenHTML(id) {
   return `<div class="when-row"><span>${long(f.sched)}</span>${canEdit() ? `<button class="linkbtn" type="button" data-sched-edit="${id}">Change</button>` : ''}</div>`;
 }
 const versRows = (id) => W.hist[id].map((h, i) => `<li><span><b>Version ${h.v}${i === 0 ? ', in use' : ''}</b><span class="s">${h.what}. ${h.by}, ${h.on}.</span></span>${i === 0 || !canEdit() ? '<span></span>' : `<button class="btn ghost sm" type="button" data-rollback="${id}:${h.v}">Roll back</button>`}</li>`).join('');
-const lastRun = (id) => (id === 'fastapi' ? `Today 8:00: ${lower(TODAY[W.stage])}` : W.hist[id].length === 1 && W.hist[id][0].on === 'just now' ? 'No runs yet' : 'Today 8:00: nothing new');
+const lastRun = (id) => (rnLast(id) ? `Today: ${lower(runFound(rnLast(id)).replace(/\.$/, ''))}` : id === 'fastapi' ? `Today 8:00: ${lower(TODAY[W.stage])}` : W.hist[id].length === 1 && W.hist[id][0].on === 'just now' ? 'No runs yet' : id === 'swl' ? 'Mon 9:00: nothing new' : 'Today 8:00: nothing new');
 const nextRun = (id) => (W.paused[id] ? 'Paused' : cap(firstRun(W.wf[id].sched)));
 function wfView(id, full = false) {
   const f = W.wf[id];
@@ -1798,7 +1846,9 @@ function wfView(id, full = false) {
     <p class="pv-sent" data-live="wf-sent"></p>
     <div class="banner" data-live="wf-banner"></div>
     <dl class="dl2"><div><dt>Last run</dt><dd data-live="wf-last"></dd></div><div><dt>Next run</dt><dd data-live="wf-next"></dd></div></dl>
+    ${f.list ? '<ul class="wl" data-live="watch"></ul>' : ''}
   </div>`;
+  if (f.list) return wlPage();
   const runs = id === 'fastapi'
     ? '<li data-live="wf-today"></li><li><span><b>Yesterday, 8:00</b><span class="s">No new release</span></span><span class="pill">Nothing new</span><span></span></li><li><span><b>Tue, 8:00</b><span class="s">1 ticket, approved by Bob</span></span><span class="pill" data-s="ok">Done</span><span></span></li>'
     : W.hist[id].length === 1 && W.hist[id][0].on === 'just now'
@@ -1813,7 +1863,7 @@ function wfView(id, full = false) {
       <div class="banner" data-live="wf-banner"></div>
       <section class="pcard flow-card"><div class="flow-head"><h4 class="sec-title" data-live="wf-steps-h"></h4><span class="fkey" data-live="wf-key"></span></div><div data-live="wf-flow"></div></section>
       <div class="two">
-        <section class="pcard"><h4 class="sec-title">Recent runs</h4><ul class="rows">${runs}</ul></section>
+        <section class="pcard"><h4 class="sec-title">Recent runs</h4><ul class="rows">${rnRows(id)}${runs}</ul></section>
         <section class="pcard"><h4 class="sec-title">Versions</h4><ul class="rows" data-live="wf-vers"></ul></section>
       </div>
       ${W.maint && canEdit() ? `<div class="pv-actions">${openInN8n(id, true)}</div>` : ''}
@@ -1825,29 +1875,147 @@ function wfView(id, full = false) {
     </div>` : ''}
   </div>`;
 }
+/* The Software watchlist's page (#361): a workflow page with the list drawn inside it. Pause and the When row's Change are its own, and it has no Change button or Delete. */
+const wlPage = () => `<div class="pv" data-live="wl">
+    <div class="pg-head"><div><p class="pv-kind">Workflow</p><div class="title-row"><h3 class="page-title">${nw('Software watchlist')}</h3><span class="pill lg" data-live="wl-pill"></span></div></div><div class="pv-actions" data-live="wl-acts"></div></div>
+    <p class="pv-sent" data-live="wl-sent"></p>
+    <dl class="meta-strip"><div><dt>When</dt><dd data-live="wl-when"></dd></div><div><dt>Who approves</dt><dd>Any Approver but you, in Teams.</dd></div><div><dt>Next run</dt><dd data-live="wl-next"></dd></div></dl>
+    ${W.maint ? n8nTabs('Summary') : ''}
+    <div class="pv-pane" data-pane="sum">
+      <div class="banner" data-live="wl-banner"></div>
+      <section class="pcard flow-card"><div class="flow-head"><h4 class="sec-title">Steps <span class="n">${nw('with the last run')}</span></h4><span class="fkey" data-live="wl-key"></span></div><div data-live="wl-flow"></div></section>
+      <section class="pv-sec" aria-labelledby="wl-list-h"><div class="pg-head"><h4 class="sec-title" id="wl-list-h">${nw('The list')} <span class="n" data-live="n-watch"></span></h4>${canEdit() ? `<form class="add" data-addf><label for="addIn">${nw('Add software')}</label><span class="add-row"><input id="addIn" type="text" autocomplete="off" placeholder="Grafana" data-nw="Grafana"><button class="btn" type="submit">${nw('Find it')}</button></span></form>` : ''}</div>
+        <div class="filters" role="group" aria-label="Show" data-live="watch-filters"></div>
+        <ul class="sw-list" data-live="watch-full"></ul></section>
+      <div class="two">
+        <section class="pcard"><h4 class="sec-title">Recent runs</h4><ul class="rows" data-live="wl-runs"></ul></section>
+        <section class="pcard"><h4 class="sec-title">Versions</h4><ul class="rows" data-live="wl-vers"></ul></section>
+      </div>
+      ${W.maint && canEdit() ? `<div class="pv-actions">${openInN8n('swl', true)}</div>` : ''}
+    </div>
+    ${W.maint ? `<div class="pv-pane" data-pane="n8n" hidden>
+      <div class="cv-meta"><b data-live="wl-n8n-ver"></b><span class="small muted">Only our blocks are on, so every write waits for approval.</span></div>
+      <div data-live="wl-canvas"></div>
+      <div class="pv-actions">${openInN8n('swl')}</div>
+    </div>` : ''}
+  </div>`;
+/* Run now leads the watchlist's page while there is software to check, as the app has it (it checks the list by hand). Paused, only Resume shows. */
+function patchWl(el) {
+  const f = W.wf.swl;
+  const [t, s] = wfState('swl');
+  const p = $('[data-live="wl-pill"]', el);
+  p.textContent = t;
+  p.dataset.s = s;
+  $('[data-live="wl-acts"]', el).innerHTML = !canEdit() ? '' : W.paused.swl ? '<button class="btn ghost" type="button" data-pause="swl">Resume</button>'
+    : `${softIds().length ? '<button class="btn ghost" type="button" data-runnow="swl">Run now</button>' : ''}<button class="btn ghost" type="button" data-pause="swl">Pause</button>`;
+  $('[data-live="wl-sent"]', el).textContent = sentFor('swl');
+  if (W.schedEdit !== 'swl' || !$('#sdDay', el)) $('[data-live="wl-when"]', el).innerHTML = whenHTML('swl');
+  $('[data-live="wl-next"]', el).textContent = nextRun('swl');
+  $('[data-live="wl-banner"]', el).innerHTML = W.paused.swl ? '<span>Paused. It won’t run until you resume it.</span>' : '';
+  const st = lastStates('swl');
+  $('[data-live="wl-key"]', el).innerHTML = flowKey(st, WL_STEPS);
+  $('[data-live="wl-flow"]', el).innerHTML = flowHTML(WL_STEPS, st, { first: short(f.sched), run: true });
+  $('[data-live="wl-runs"]', el).innerHTML = `${rnRows('swl')}<li><span><b>Mon, 9:00</b><span class="s">No new release</span></span><span class="pill">Nothing new</span><button class="btn ghost sm" type="button" data-open="lrun:swlMon">Open</button></li><li><span><b>Last Mon, 9:00</b><span class="s">1 ticket, approved by Bob</span></span><span class="pill" data-s="ok">Done</span><span></span></li>`;
+  $('[data-live="wl-vers"]', el).innerHTML = versRows('swl');
+  const ver = $('[data-live="wl-n8n-ver"]', el);
+  if (ver) { ver.textContent = `Version ${f.ver}, published by ${f.by}, ${f.on}`; $('[data-live="wl-canvas"]', el).innerHTML = canvasSVG('swl'); }
+}
+/* ---------- A run that isn't today's FastAPI run: the watchlist's checks, and any run started with Run now ----------
+   It leads with what was found, then the steps and the folded history, as a run's page does. */
+const RUN_PILL = { running: ['Running', 'run'], done: ['Nothing new', 'idle'], stopped: ['Stopped', 'err'] };
+const runFound = (r) => (r.state === 'running' ? 'Running now.' : r.state === 'stopped' ? `${stopWhy()}.` : 'Nothing new since the last check.');
+const runStates = (r) => (r.state === 'running' ? { when: 'done', read: 'now' } : r.state === 'stopped' ? { when: 'done', read: 'err' } : { when: 'done', read: 'done', compare: 'done' });
+const rnLast = (id) => Object.values(W.runs).filter((r) => r.rn && r.wf === id).pop();
+const rnRows = (id) => Object.entries(W.runs).filter(([, r]) => r.rn && r.wf === id).reverse().map(([k, r]) => { const [t, s] = RUN_PILL[r.state]; return `<li><span><b>Today, just now</b><span class="s">${runFound(r)}</span></span><span class="pill" data-s="${s}">${t}</span><button class="btn ghost sm" type="button" data-open="lrun:${k}">Open</button></li>`; }).join('');
+const lrunView = (k) => `<div class="pv" data-live="lrun" data-k="${k}"><div class="pg-head"><div><p class="pv-kind">${W.runs[k].kind}</p><div class="title-row"><h3 class="page-title">${wfName(W.runs[k].wf)}</h3><span class="pill lg" data-live="lrun-pill"></span></div></div></div>
+    <p class="d-found" data-live="lrun-found"></p>
+    <section class="pcard flow-card"><div data-live="lrun-flow"></div></section>
+    <details class="d-fold"><summary data-live="lrun-sum"></summary><ol class="log" aria-label="Run history" data-live="lrun-log"></ol></details></div>`;
+function patchLrun(el) {
+  const r = W.runs[el.dataset.k];
+  const [t, s] = RUN_PILL[r.state];
+  const p = $('[data-live="lrun-pill"]', el);
+  p.textContent = t;
+  p.dataset.s = s;
+  $('[data-live="lrun-found"]', el).textContent = runFound(r);
+  $('[data-live="lrun-flow"]', el).innerHTML = flowHTML(stepsOf(r.wf), runStates(r), { first: short(W.wf[r.wf].sched), run: true, note: r.state === 'stopped' ? { id: 'read', tone: 'err', text: `Stopped. ${stopWhy()}` } : null });
+  $('[data-live="lrun-sum"]', el).textContent = `Run history (${r.log.length} steps)`;
+  $('[data-live="lrun-log"]', el).innerHTML = r.log.map(([x, y, c]) => `<li${c ? ` class="${c}"` : ''}><span class="t">${x}</span><span>${y}</span></li>`).join('');
+}
+let RN = 0;
+/* Run now opens the run it starts, as the app does. A FastAPI run stops the same way while GitHub still doesn't answer. */
+async function runNow(id) {
+  const k = `rn${(RN += 1)}`;
+  W.runs[k] = { wf: id, rn: true, kind: 'Today’s run, just now', state: 'running', log: [['Now', 'Started by Alice with Run now.']] };
+  await showPage(`lrun:${k}`, true);
+  await wait(1400);
+  const r = W.runs[k];
+  if (!r) return;
+  r.state = id === 'fastapi' && W.stage === 'stopped' ? 'stopped' : 'done';
+  r.log.push(r.state === 'stopped' ? ['Now', STOP_LOG(), 'bad'] : ['Now', 'Found nothing new, so nothing was written.']);
+  refresh();
+}
+/* More actions, as the app's menu: Run now while it is on, and Delete, last. The watchlist has neither, since Run now leads its page and Delete would delete its list. */
+const moreMenu = (id) => `<span class="menu-wrap"><button class="btn ghost" type="button" data-menu aria-haspopup="menu" aria-expanded="false">More actions</button><div class="menu" role="menu" aria-label="More actions" hidden>${W.paused[id] ? '' : `<button type="button" role="menuitem" data-runnow="${id}">Run now</button>`}<button type="button" role="menuitem" class="danger" data-del="${id}">Delete</button></div></span>`;
+function closeMenus(except) { $$('.menu:not([hidden])').forEach((m) => { if (except && m.parentElement.contains(except)) return; m.hidden = true; m.previousElementSibling.setAttribute('aria-expanded', 'false'); }); }
+const pastRuns = (id) => (id === 'fastapi' ? 3 : 2) + Object.values(W.runs).filter((r) => r.rn && r.wf === id).length;
+function askDelete(id) {
+  const d = $('#delDlg');
+  const n = W.wf[id].name;
+  d.innerHTML = `<h2 id="delH">Delete ${n}?</h2><p id="delT">${n} leaves Workflows, and its schedule stops, so no more runs start. Its ${pastRuns(id)} past runs stay in the record, with who approved what. Undo stays in the message that follows.</p><div class="c-act"><button class="btn ghost" type="button" data-del-cancel>Cancel</button><button class="btn danger" type="button" data-del-ok="${id}">Delete workflow</button></div>`;
+  d.showModal();
+  $('[data-del-cancel]', d).focus();
+}
+function doDelete(id) {
+  $('#delDlg').close();
+  const at = W.order.indexOf(id);
+  if (at < 0) return;
+  W.order.splice(at, 1);
+  quiet(showPage('list:wf').then(() => toast(`Deleted ${W.wf[id].name}.`, () => { if (!W.order.includes(id)) W.order.splice(at, 0, id); refresh(); toast('Put back.'); })));
+}
+
 /* Under every Open in n8n editor button: the Portal and n8n sign in separately, so the line names the n8n account the workflow moves to. Nothing shows while the login is unknown. */
 const N8N_LOGIN = 'alice.n8ntest@example.test';
 const openInN8n = (id, ghost = false) => `<div class="n8nopen"><button class="btn${ghost ? ' ghost' : ''}" type="button" data-editor="${id}">Open in n8n editor</button>${N8N_LOGIN ? `<p class="small muted">Opens in n8n as ${N8N_LOGIN}.</p>` : ''}</div>`;
 const TICKET = { stopped: 'None yet. Today’s check stopped before it could tell.', retrying: 'None yet', waiting: '1 waiting for Bob to approve', writing: 'Being created', done: 'MOCK-22, created today', declined: 'Declined by Bob. None created.' };
-const ticketFor = (k) => { const s = W.soft[k]; if (k === 'fastapi') return TICKET[W.stage]; if (s.run && s.run === s.latest) return 'Not needed'; return W.wf[k] ? 'None yet' : 'None. Nothing checks it, so no ticket is made.'; };
-const checkedFor = (k) => { if (!W.wf[k]) return ''; if (k === 'fastapi') return W.stage === 'stopped' ? 'Today 8:00, didn’t finish' : 'Today 9:01'; return lastRun(k) === 'No runs yet' ? 'Not yet' : 'Today 8:00'; };
+/* The Software watchlist checks every software on its list while it is on, and nothing does while it is paused, as the app's list says (#361). */
+const listOn = () => !W.paused.swl;
+const ticketFor = (k) => { const s = W.soft[k]; if (k === 'fastapi') return TICKET[W.stage]; return s.run && s.run === s.latest ? 'Not needed' : 'None yet'; };
+const checkedOf = (k) => (W.soft[k].run || W.soft[k].missing ? 'last checked Mon 9:00' : 'Not checked yet');
+/* A software's page, as the app's: its facts, Checked by, and History, Remove from watchlist and, for one GitHub can't find, Ask the team. */
+function softActs(k) {
+  const s = W.soft[k];
+  if (W.gone[k]) return `<span class="okline">${ICON.check}Removed from the watchlist.</span><button class="btn ghost sm" type="button" data-restore="${k}">Undo</button>`;
+  const ask = s.missing ? `<button class="btn ghost" type="button" data-toast="Asked the team where ${s.name} went. Their answer will show here.">Ask the team</button>` : '';
+  const hist = `<button class="btn ghost" type="button" data-hist="${k}" aria-expanded="${W.histOpen[k] ? 'true' : 'false'}">${W.histOpen[k] ? 'Hide history' : 'History'}<span class="vh"> of ${s.name}</span></button>`;
+  return `${ask}${hist}${canEdit() ? `<button class="btn ghost" type="button" data-remove="${k}">Remove from watchlist<span class="vh"> ${s.name}</span></button>` : ''}`;
+}
+function softHist(k) {
+  const s = W.soft[k];
+  const l = [];
+  if (s.missing) l.push(['Mon 9:00', `Couldn’t check. GitHub can’t find ${s.repo}.`]);
+  else if (s.run) l.push(['Mon 9:00', `Checked. The newest version is ${s.latest}.`]);
+  else l.push(['Not yet', 'Not checked yet.']);
+  l.push([s.added || '20 Oct', 'Added by Alice.']);
+  return l.map(([t, x]) => `<li><span class="t">${t}</span><span>${x}</span></li>`).join('');
+}
 function softView(k, full = false) {
   const s = W.soft[k];
   const [t, c] = softState(k);
   const head = `<div class="pv-head"><div><p class="pv-kind">Watchlist</p><h3>${s.name}</h3></div><span class="pill lg" data-s="${c}">${t}</span></div>`;
-  if (s.missing) return `<div class="pv" data-live="soft">${head}<div class="banner" data-tone="err"><span>GitHub can’t find ${s.repo}, and doesn’t say where it moved.</span></div><div class="pv-actions" data-live="soft-act"></div></div>`;
-  const by = W.wf[k] ? `<button class="linkbtn" type="button" data-open="wf:${k}">${W.wf[k].name}</button>` : isPkg(k) ? 'The Software watchlist' : '<span class="muted">Nothing checks it yet</span>';
+  const acts = `<div class="pv-actions" data-live="soft-act" data-soft="${k}"></div><ol class="log" aria-label="History of ${s.name}" data-live="soft-hist" data-soft="${k}" hidden></ol>`;
+  if (s.missing) return `<div class="pv" data-live="soft">${head}<div class="banner" data-tone="err"><span>GitHub can’t find ${s.repo}, and doesn’t say where it moved.</span></div>${full ? acts : ''}</div>`;
+  const by = listOn() ? '<button class="linkbtn" type="button" data-open="wf:swl">Software watchlist</button>' : 'Not checked automatically';
   const now = !s.run ? 'Added today. The first check finds the version you run.' : s.run === s.latest ? `You run ${s.run}, the newest.` : `You run ${s.run}. Newest is ${s.latest}, out ${s.on}.`;
-  const act = !W.wf[k] && canEdit() ? `<div class="pv-actions"><button class="btn" type="button" data-say="Watch ${s.name} releases">Watch for new releases</button></div>` : '';
-  if (!full) return `<div class="pv">${head}<p class="pv-sent">${now}</p><dl class="dl2"><div><dt>Checked by</dt><dd>${by}</dd></div></dl>${act}</div>`;
+  if (!full) return `<div class="pv">${head}<p class="pv-sent">${now}</p><dl class="dl2"><div><dt>Checked by</dt><dd>${by}</dd></div></dl></div>`;
   return `<div class="pv">${head}<dl class="dl2">
     <div><dt>You run</dt><dd>${s.run || 'Not known yet'}</dd></div>
     ${s.latest ? `<div><dt>Newest</dt><dd>${s.latest}${s.on ? ` <span class="muted small">out ${s.on}</span>` : ''}</dd></div>` : ''}
     ${s.notes ? `<div><dt>What changed</dt><dd>${s.notes} <span class="muted small">From the release notes</span></dd></div>` : ''}
     <div><dt>Upgrade ticket</dt><dd data-live="soft-ticket" data-soft="${k}"></dd></div>
     ${isPkg(k) ? `<div><dt>Known vulnerabilities</dt><dd>${vulnFact(s)}</dd></div>` : ''}
-    <div><dt>Checked by</dt><dd>${by}${checkedFor(k) ? ` <span class="muted small">last checked ${lower(checkedFor(k))}</span>` : ''}</dd></div>
-    <div><dt>Source</dt><dd>${srcAt(s)} <span class="muted small">${srcOf(s)}</span></dd></div></dl>${act}</div>`;
+    <div><dt>Checked by</dt><dd>${by} <span class="muted small">${checkedOf(k)}</span></dd></div>
+    <div><dt>Source</dt><dd>${srcAt(s)} <span class="muted small">${srcOf(s)}</span></dd></div></dl>${acts}</div>`;
 }
 const keyView = () => `<div class="pv" data-live="key"><div class="pv-head"><div><p class="pv-kind">Connection</p><h3>Jira key</h3></div><span class="pill lg" data-s="wait">Expires Friday</span></div>
   <p class="pv-sent">After Friday 14 Nov, nothing can be written to Jira until the key is renewed. Only an admin can renew it.</p>
@@ -1855,8 +2023,10 @@ const keyView = () => `<div class="pv" data-live="key"><div class="pv-head"><div
 const listView = (k) => ({
   needs: '<div class="pv"><div class="pv-head"><h3>Needs you</h3></div><div class="needs" data-live="needs"></div></div>',
   wf: '<div class="pv"><div class="pv-head"><h3>Workflows</h3><span class="muted" data-live="n-wf"></span></div><ul class="wl" data-live="list"></ul></div>',
-  watch: '<div class="pv"><div class="pv-head"><h3>Watchlist</h3><span class="muted" data-live="n-watch"></span></div><ul class="wl" data-live="watch"></ul></div>',
 }[k]);
+/* The practice Jira, at the rail's foot beside Teams. It shows only while no real Jira is set up, as the app has it. The sketch draws no page for it. */
+const jiraView = () => `<div class="pv"><div class="pg-head"><div><h3 class="page-title">${nw('Practice Jira')}</h3><p class="muted">${nw('Practice copy. Nothing reaches a real Jira.')}</p></div></div>
+  <p class="muted">${nw('In the app, this page stays as it is today.')}</p></div>`;
 
 /* ---------- n8n: the same steps, drawn as n8n blocks ---------- */
 const CV = {
@@ -2102,7 +2272,7 @@ function patchWf(el) {
   $('[data-live="wf-flow"]', el).innerHTML = flowHTML(steps, ran ? st : {}, { first: short(f.sched), note, run: ran });
   $('[data-live="wf-vers"]', el).innerHTML = versRows(id);
   const open = id === 'fastapi' && ['stopped', 'waiting'].includes(W.stage) ? '<button class="btn" type="button" data-open="run">Open the run</button>' : '';
-  $('[data-live="wf-acts"]', el).innerHTML = `${open}${canEdit() ? `<button class="btn ghost" type="button" data-change="${id}">Change</button><button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>` : ''}`;
+  $('[data-live="wf-acts"]', el).innerHTML = `${open}${canEdit() ? `<button class="btn ghost" type="button" data-change="${id}">Change</button><button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>${moreMenu(id)}` : ''}`;
   const ver = $('[data-live="n8n-ver"]', el);
   if (ver) { ver.textContent = `Version ${f.ver}, published by ${f.by}, ${f.on}`; $('[data-live="n8n-canvas"]', el).innerHTML = canvasSVG(id); }
 }
@@ -2126,14 +2296,15 @@ function refresh() {
   set('n-watch', String(softIds().length));
   set('n-needs', needs().length ? String(needs().length) : '');
   set('conns', connHTML());
-  set('soft-act', W.langserve
-    ? '<button class="btn ghost" type="button" data-toast="Asked the team where LangServe went. Their answer will show here.">Ask the team</button><button class="btn ghost" type="button" data-remove>Remove from watchlist</button>'
-    : `<span class="okline">${ICON.check}Removed from the watchlist.</span><button class="btn ghost sm" type="button" data-restore>Undo</button>`);
+  $$('[data-live="soft-act"]').forEach((el) => { el.innerHTML = softActs(el.dataset.soft); });
+  $$('[data-live="soft-hist"]').forEach((el) => { el.hidden = !W.histOpen[el.dataset.soft]; el.innerHTML = W.histOpen[el.dataset.soft] ? softHist(el.dataset.soft) : ''; });
   set('key-act', W.key ? '<button class="btn" type="button" data-keyask>Ask the admin to renew it</button>' : `<span class="okline">${ICON.check}Asked the admin in Teams.</span>`);
   $$('[data-live="run"]').forEach(patchRun);
   $$('[data-live="fixappr"]').forEach(patchFixAppr);
   $$('[data-live="appr"]').forEach(patchAppr);
   $$('[data-live="wf"]').forEach(patchWf);
+  $$('[data-live="wl"]').forEach(patchWl);
+  $$('[data-live="lrun"]').forEach(patchLrun);
   refreshDrafts();
   /* A flow shows once: while a card's item is open beside the chat, the card drops its own copy. */
   $$('#msgs [data-spec]').forEach((c) => c.classList.toggle('beside', c.dataset.spec === P.stack.at(-1)));
@@ -2200,7 +2371,8 @@ function pushAsk(t, chips) {
 async function think(who = 'lead') { const t = push(`<div class="m">${fw(who, 30, 'thinking')}<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>`); await wait(650); t.remove(); }
 async function tap(el) { if (!el) return; el.classList.add('tap'); await wait(420); el.classList.remove('tap'); }
 let toastT;
-function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2600); }
+let toastUndo = null;
+function toast(t, undo = null) { const el = $('#toast'); toastUndo = undo; el.innerHTML = `<span>${esc(t)}</span>${undo ? '<button class="linkbtn" type="button" data-toast-undo>Undo</button>' : ''}`; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, undo ? 8000 : 2600); }
 
 function fold() {
   if (!app.classList.contains('fresh')) return Promise.resolve();
@@ -2259,8 +2431,10 @@ function scene(over, fresh) {
 /* ---------- The side panel keeps a short history, so Back works ---------- */
 function titleOf(spec) {
   const [v, id] = spec.split(':');
-  if (v === 'list') return id === 'wf' ? 'Workflows' : 'Watchlist';
+  if (v === 'list') return 'Workflows';
   if (v === 'settings') return 'Settings';
+  if (v === 'jira') return 'Practice Jira';
+  if (v === 'lrun') return 'The run';
   if (v === 'wf') return W.wf[id].name;
   if (v === 'soft') return W.soft[id].name;
   if (v === 'dw') return dT(W.dw[id]).name;
@@ -2270,14 +2444,15 @@ function titleOf(spec) {
 const rowState = (id) => (W.dw[id] ? dwState(id) : wfState(id));
 const listRowsFull = () => boardIds().map((id) => {
   const d = W.dw[id];
-  const [t, s] = rowState(id);
+  const [t, s, f] = rowState(id);
   const last = d ? `${dwMini(id, true)}<span>${dwSub(id)}</span>` : `${wfMini(id, true)}<span>${lastRun(id)}</span>`;
   const when = d ? dT(d).whenShort(dVal(d, dT(d).settings[0]).value) : short(W.wf[id].sched);
-  return `<tr${W.wfFilter && W.wfFilter !== t ? ' hidden' : ''}><td class="c-state"><span class="pill" data-s="${s}">${t}</span></td><td><button class="wf-name" type="button" data-open="${d ? 'dw' : 'wf'}:${id}">${d ? dT(d).name : W.wf[id].name}</button></td><td><div class="wf-last">${last}</div></td><td class="c-when">${when}</td><td class="c-next">${d ? '' : nextRun(id)}</td></tr>`;
+  return `<tr${W.wfFilter && W.wfFilter !== f ? ' hidden' : ''}><td class="c-state"><span class="pill" data-s="${s}">${t}</span></td><td><button class="wf-name" type="button" data-open="${d ? 'dw' : 'wf'}:${id}">${d ? dT(d).name : W.wf[id].name}</button></td><td><div class="wf-last">${last}</div></td><td class="c-when">${when}</td><td class="c-next">${d ? '' : nextRun(id)}</td></tr>`;
 }).join('');
 function filtersHTML(ids, stateOf, key) {
   const counts = new Map();
-  ids.forEach((id) => { const [t, s] = stateOf(id); counts.set(t, [(counts.get(t)?.[0] || 0) + 1, s]); });
+  /* A workflow's chip is its state, so "On · waiting for approval" counts under On. Software has no third part and keeps its words. */
+  ids.forEach((id) => { const [t, s, f = t] = stateOf(id); counts.set(f, [(counts.get(f)?.[0] || 0) + 1, f === 'On' ? 'on' : counts.get(f)?.[1] || s]); });
   const btn = (v, label, n, s) => `<button type="button" data-filter="${key}|${v}" aria-pressed="${(W[key] || '') === v}">${s ? `<span class="sdot ${s}" aria-hidden="true"></span>` : ''}${label} <span class="n">${n}</span></button>`;
   return btn('', nw('All'), ids.length) + [...counts].map(([t, [n, s]]) => btn(t, t, n, s)).join('');
 }
@@ -2286,15 +2461,12 @@ const watchRowsFull = () => [...softIds()].sort((a, b) => RANK[softState(a)[0]] 
   const s = W.soft[k];
   const [t, c] = softState(k);
   const ver = s.missing ? 'GitHub can’t find it' : !s.run ? 'Added today' : s.run === s.latest ? `<b>${s.run}</b>, the newest` : `${s.run} → <b>${s.latest}</b>, out ${s.on}`;
-  return `<li${W.swFilter && W.swFilter !== t ? ' hidden' : ''}><button class="sw-row" type="button" data-open="soft:${k}"><span class="nm">${s.name}<span class="src">${W.wf[k] ? `checked by ${W.wf[k].name}` : isPkg(k) ? 'checked by the Software watchlist' : 'not checked automatically'}</span></span><span class="vers">${ver}</span><span class="pill" data-s="${c}">${t}</span></button></li>`;
+  return `<li${W.swFilter && W.swFilter !== t ? ' hidden' : ''}><button class="sw-row" type="button" data-open="soft:${k}"><span class="nm">${s.name}<span class="src">${listOn() ? 'checked by Software watchlist' : 'not checked automatically'}</span></span><span class="vers">${ver}</span><span class="pill" data-s="${c}">${t}</span></button></li>`;
 }).join('');
-const pageList = (k) => (k === 'wf'
-  ? `<div class="pv"><div class="pg-head"><h3 class="page-title">Workflows</h3><div class="filters" role="group" aria-label="Show" data-live="wf-filters"></div></div>
+/* Workflows from the rail. The Software watchlist is one of its rows (#361), so it has no page of its own. */
+const pageList = () => `<div class="pv"><div class="pg-head"><h3 class="page-title">Workflows</h3><div class="filters" role="group" aria-label="Show" data-live="wf-filters"></div></div>
     ${needs().length ? '<section class="pv-sec"><h4 class="sec-title">Needs you</h4><div class="needs" data-live="needs"></div></section>' : ''}
-    <section class="pv-sec"><h4 class="sec-title">All workflows <span class="n" data-live="n-wf"></span></h4><div class="tbl-wrap"><table class="wf-table"><thead><tr><th scope="col">${nw('State')}</th><th scope="col">Workflow</th><th scope="col">Last run</th><th scope="col" class="c-when">When</th><th scope="col">Next run</th></tr></thead><tbody data-live="list-full"></tbody></table></div></section></div>`
-  : `<div class="pv"><div class="pg-head"><h3 class="page-title">${nw('Software watchlist')}</h3>${canEdit() ? `<form class="add" data-addf><label for="addIn">${nw('Add software')}</label><span class="add-row"><input id="addIn" type="text" autocomplete="off" placeholder="Grafana" data-nw="Grafana"><button class="btn" type="submit">${nw('Find it')}</button></span></form>` : ''}</div>
-    <div class="filters" role="group" aria-label="Show" data-live="watch-filters"></div>
-    <ul class="sw-list" data-live="watch-full"></ul></div>`);
+    <section class="pv-sec"><h4 class="sec-title">All workflows <span class="n" data-live="n-wf"></span></h4><div class="tbl-wrap"><table class="wf-table"><thead><tr><th scope="col">${nw('State')}</th><th scope="col">Workflow</th><th scope="col">Last run</th><th scope="col" class="c-when">When</th><th scope="col">Next run</th></tr></thead><tbody data-live="list-full"></tbody></table></div></section></div>`;
 /* Settings carries the Portal's own words (ConnectionsTab), all new to this sketch. The sketch draws the Connections tab and ties the Jira key to Needs you. */
 const STABS = () => ['Connections', 'People and permissions', 'AI model', ...(canEdit() ? ['How it works'] : [])];
 function connHTML() {
@@ -2316,11 +2488,11 @@ function settingsView() {
   <div class="tabs" role="tablist" aria-label="Settings">${STABS().map((t, i) => `<button type="button" role="tab" id="stab${i}" aria-selected="${tab === i}" aria-controls="stabp" tabindex="${tab === i ? 0 : -1}" data-stab="${i}">${nw(t)}</button>`).join('')}</div>
   <div role="tabpanel" id="stabp" aria-labelledby="stab${tab}" class="pv"${tab === 0 ? ' data-live="conns"' : ''}>${tab === 0 ? '' : `<p class="muted">${nw('In the app, this tab stays as it is today.')}</p>`}</div></div>`;
 }
-const RAIL_PAGES = { wf: 'list:wf', watch: 'list:watch', settings: 'settings' };
+const RAIL_PAGES = { wf: 'list:wf', jira: 'jira', settings: 'settings' };
 function viewHTML(spec, full = false) {
   const [v, id] = spec.split(':');
   if (v === 'needs') return listView('needs');
-  if (v === 'list') return full ? pageList(id) : listView(id);
+  if (v === 'list') return full ? pageList() : listView(id);
   if (v === 'wf') return wfView(id, full);
   if (v === 'run') return runView(full);
   if (v === 'appr') return apprView(full);
@@ -2331,6 +2503,8 @@ function viewHTML(spec, full = false) {
   if (v === 'dw') return dwView(id, full);
   if (v === 'slog') return slogView(id);
   if (v === 'settings') return settingsView();
+  if (v === 'jira') return jiraView();
+  if (v === 'lrun') return lrunView(id);
   return keyView();
 }
 /* The side panel shows one thing from the chat. Anything opened from inside it goes full page. */
@@ -2476,7 +2650,7 @@ function saveSched(id) {
 let DN = 0;
 let EN = 0;
 const STOPW = new Set('a an the for me my our any and please can you could would also new one it its to of in on at with when there is if i want need just all that this be out comes us let know some'.split(' '));
-const KNOWN = [/\b(watch|track|monitor|keep an eye|check|follow)\b/, /\b(release|releases|version|versions|newer|update|updates)\b/, /\b(jira|ticket|tickets)\b/, SCHED_RE, SOFT_RE, /\b(tell me|let me know|notify|alert)\b/];
+const KNOWN = [/\badd\b.*\bwatch\s*list\b/, /\b(watch|track|monitor|keep an eye|check|follow)\b/, /\b(release|releases|version|versions|newer|update|updates)\b/, /\b(jira|ticket|tickets)\b/, SCHED_RE, SOFT_RE, /\b(tell me|let me know|notify|alert)\b/];
 const UNSUP = [
   [/(secur|vulnerab|\bcve|advisor)/, 'Flag security issues', 'I look up known vulnerabilities only in the Maven Central and npm packages on the watchlist, at each check.', true],
   [/(teams|channel|slack)/, 'Post in Teams', 'Not yet. I’ll tell you here instead.', true],
@@ -2493,7 +2667,7 @@ function findWf(s) {
   if (id) return id;
   return /\b(it|that one|this one|that)\b/.test(s) ? W.focus : null;
 }
-const nameOf = (d) => (d.soft ? `${(W.soft[d.soft] || EXTRA[d.soft]).name} release check` : 'New release check');
+const nameOf = (d) => (d.soft ? `${(W.soft[d.soft] || EXTRA[d.soft]).name} release check${d.second ? ' 2' : ''}` : 'New release check');
 function parseReq(t) {
   const s = t.toLowerCase();
   const d = { key: `d${(DN += 1)}`, status: 'asking', then: /\b(jira|ticket)/.test(s) ? 'jira' : 'tell', cant: [], weekly: WEEKLY_RE.test(s), sched: { day: undefined, time: timeOf(s) } };
@@ -2559,10 +2733,10 @@ function partsRows(d) {
   const S = d.soft && (W.soft[d.soft] || EXTRA[d.soft]);
   const whenDone = d.sched.day !== undefined && (d.sched.time || d.sched.day === 'man');
   const chosen = d.sched.day !== undefined ? `<span class="s">${d.sched.day === 'man' ? 'Only when I run it' : `Every ${d.sched.day ? DAY[d.sched.day] : 'day'}`}</span>` : '';
-  const then = (o) => `${asking ? thenSelect(d) : THEN[d.then]}${o}`;
+  const then = (o) => `${THEN[d.then]}${o}`;
   const yes = d.then === 'jira' ? `<span class="s">${YES_LINE}</span>` : '';
   return [
-    of('Watch').length ? askRow('Watch', of('Watch'), d) : d.soft ? okRow('Watch', `${S.name} on ${srcOf(S)}${d.repo ? `, ${d.repo}` : ''}`, `Found on GitHub. ${W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.'}`, asking ? 'soft' : '') : '',
+    of('Watch').length ? askRow('Watch', of('Watch'), d) : d.soft ? watchRow(d, S, asking) : '',
     whenDone ? okRow('When', long(d.sched), '', asking ? 'when' : '') : of('When').length ? askRow('When', of('When'), d, chosen) : '',
     d.then === 'jira' && of('Then').length
       ? askRow('Then', of('Then'), d, `<span>${then('')}</span>`, yes)
@@ -2577,8 +2751,14 @@ const partsCard = (d) => `<div class="card" data-parts="${d.key}" data-spec="bui
   <ul class="parts" data-p-rows></ul>
   <div data-p-line></div>
   <p class="c-note" data-p-note hidden></p>
+  <div data-p-sim></div>
   <div class="c-foot"><span class="c-left" data-p-left></span><span class="c-act" data-p-act></span></div>
 </div>`;
+/* The Watch row in the app's words (#353): what it looks for, then the repository with where it was found and Change, then the version you run. */
+const watchRow = (d, S, asking) => {
+  const run = W.soft[d.soft] && W.soft[d.soft].run;
+  return `<li class="pt" data-s="ok"><span class="ic">${ICON.check}</span><span class="k">Watch</span><span class="v"><span>New releases of ${S.name}</span><span class="s">${d.repo || S.gh || S.repo}${d.repo ? '' : ' · Found on GitHub'}${asking ? ' <button class="linkbtn" type="button" data-pchg="soft" aria-label="Change the repository">Change</button>' : ''}</span>${run ? `<span class="s">You run ${run}</span>` : ''}</span></li>`;
+};
 const leadFor = (d) => { const n = openParts(d); return `Here’s what I understood.${n === 0 ? '' : n === 1 ? ' Pick the missing part.' : ` Pick the ${n} missing parts.`}`; };
 function patchParts(c) {
   const d = W.drafts[c.dataset.parts];
@@ -2590,7 +2770,7 @@ function patchParts(c) {
   const left = $('[data-p-left]', c);
   left.className = 'c-left';
   left.textContent = '';
-  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button>${n ? `<span class="waiting dwait">Pick ${n} more to finish</span>` : `<button class="btn" type="button" data-setup>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`}`;
+  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button>${n ? `<span class="waiting dwait">Pick ${n} more to finish</span>` : '<button class="btn" type="button" data-setup>Turn on</button>'}`;
 }
 function pickPart(btn) {
   const c = btn.closest('[data-parts]');
@@ -2658,7 +2838,7 @@ function dropDraft(c) {
   $('[data-p-left]', c).textContent = 'Nothing was set up.';
   $('[data-p-act]', c).innerHTML = '';
 }
-/* A package is checked by the Software watchlist, never by a release check of its own, which reads GitHub only (ADR 0025). */
+/* A Maven Central or npm package. Known vulnerabilities are looked up only for these, on the watchlist (ADR 0025). */
 function isPkg(k) { const S = W.soft[k] || EXTRA[k]; return Boolean(S && S.src && S.src !== 'github'); }
 /* Where a package's known vulnerabilities show. The run gives how many and the worst ones; the ticket lists each (ADR 0025). */
 const VULN_WHERE = 'The last check’s run says how many there are and names the worst. An upgrade ticket lists each one, linked to NVD or OSV.';
@@ -2666,27 +2846,53 @@ function vulnFact(s) {
   if (!s.run || s.firstCheck) return '<span class="muted small">Not looked up. They’re looked up only in a version someone gave, or one an upgrade ticket set when marked Done.</span>';
   /* No check has looked this version up yet, so there is no run to open (25 Nov). */
   if (s.fresh) return '<span class="muted small">Not looked up yet. The next check looks them up in this version.</span>';
-  return `<button class="linkbtn" type="button" data-open="run">Open the last check</button> <span class="muted small">${VULN_WHERE}</span>`;
+  return `<button class="linkbtn" type="button" data-open="lrun:swlMon">Open the last check</button> <span class="muted small">${VULN_WHERE}</span>`;
 }
-function packageCard(k) {
+/* "Add X to the watchlist", in the app's words. Listed software gets its row and Open it. Software not on it yet gets where it is
+   published and Add, or, with a time of its own while the watchlist checks on its own, the choice of how to add it (#356). */
+const WDAYS = { mon: 'Mondays', tue: 'Tuesdays', wed: 'Wednesdays', thu: 'Thursdays', fri: 'Fridays' };
+const addPart = (k) => {
   const S = W.soft[k] || EXTRA[k];
-  const why = `${S.name} is a package on ${SRC[S.src]}. The Software watchlist checks it on its own schedule. A release check of its own reads GitHub only.`;
-  if (W.soft[k]) return pushCard(`<div class="card"><div class="c-head"><b>${S.name}</b></div><p>It’s on the watchlist already. ${why}</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="soft:${k}">Open it</button></span></div></div>`, 'lead', 'The watchlist checks this one.');
-  /* Known vulnerabilities are looked up only in a version someone gave, so the card asks for it here, once. */
-  const ver = `<label class="field">Version we run <span class="muted small">Optional</span><input type="text" autocomplete="off" placeholder="Like 4.21.2" data-pkgver="${k}"></label><p class="muted small">Give it, and each check also looks up known vulnerabilities in it. Without it, they aren’t looked up.</p>`;
-  return pushCard(`<div class="card"><div class="c-head"><b>${S.name}</b></div><p>${why}</p>${ver}<div class="c-foot"><span class="c-act"><button class="btn sm" type="button" data-addsoft="${k}">Add to the watchlist</button></span></div></div>`, 'lead', 'The watchlist checks packages.');
+  const pkg = isPkg(k);
+  const ver = pkg ? `<label class="field">Version we run <span class="muted small">Optional</span><input type="text" autocomplete="off" placeholder="1.2.14" data-pkgver="${k}"></label><p class="muted small">Give it, and each check also looks up known vulnerabilities in it. Without it, they aren’t looked up.</p>` : '';
+  return `<p><b>${pkg ? S.repo : S.gh || S.repo}</b> on ${SRC[S.src || 'github']}. ${S.what || ''} On the reviewed list.</p>${ver}<div class="c-foot"><span class="c-act"><button class="btn sm" type="button" data-addsoft="${k}">Add ${S.name}</button><button class="btn ghost sm" type="button" data-wnever>Never mind</button></span></div>`;
+};
+function watchlistAsk(t) {
+  const s = t.toLowerCase();
+  const k = findSoft(s);
+  if (!k) return pushCard(`<div class="card"><p>That belongs on the Software watchlist, which checks the software on it for new releases.</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="wf:swl">Open the Software watchlist</button></span></div></div>`);
+  const S = W.soft[k] || EXTRA[k];
+  const said = SCHED_RE.test(s.replace(/\bwatch\s*list\b/g, ''));
+  if (W.soft[k] && !W.gone[k]) {
+    /* Watched software with a time of its own gets its own release check (ADR 0053, item 4). */
+    if (said) return buildAsk(t);
+    const [st, sc] = softState(k);
+    const line = S.missing ? `GitHub can’t find ${S.repo}, and doesn’t say where it moved.` : !S.run ? 'Not checked yet. The first check reads the newest release.' : S.run === S.latest ? `You run ${S.run}, the newest.` : `You run ${S.run}. Newest is ${S.latest}.`;
+    return pushCard(`<div class="card"><div class="c-head"><b>${S.name}</b><span class="pill" data-s="${sc}">${st}</span></div><p>${line}</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="soft:${k}">Open it</button></span></div></div>`, 'lead', `${S.name} is already on the Software watchlist.`);
+  }
+  const f = W.wf.swl;
+  if (said && listOn()) {
+    const day = DAILY_RE.test(s) ? '' : dayOf(s);
+    const time = timeOf(s);
+    const asked = [day === '' ? 'every day' : day ? `every ${DAY[day]}` : '', time].filter(Boolean).join(' at ');
+    const moveDay = day === '' || day ? day : f.sched.day || '';
+    const move = [moveDay ? `every ${DAY[moveDay]}` : 'every day', time].filter(Boolean).join(' at ');
+    const n = softIds().length;
+    return pushCard(`<div class="card" data-wcard="${k}"><p><b>How should I add ${S.name}?</b></p><div data-wbody><div class="pick" role="group" aria-label="How should I add ${S.name}?"><button type="button" data-wchoose="${moveDay}|${time || ''}">Add it, and check all ${n + 1} ${move}</button><button type="button" data-wchoose="keep">Add it, keep ${WDAYS[f.sched.day] || 'the same days'}</button></div></div></div>`, 'lead', `${S.name} isn’t on your Software watchlist yet. The watchlist is a workflow that checks ${n} software, ${lower(long(f.sched))}, and you asked for ${asked}.`);
+  }
+  return pushCard(`<div class="card" data-wcard="${k}"><div data-wbody>${addPart(k)}</div></div>`, 'lead', `${S.name} is software, so it belongs on the Software watchlist, which checks the software on it for new releases.`);
 }
 function buildAsk(t) {
   const d = parseReq(t);
-  if (d.soft && isPkg(d.soft)) return packageCard(d.soft);
   if (d.soft && W.wf[d.soft]) {
+    /* The app's already-have card: what the workflow watches while it is on, with Set up another and Open it. */
     const f = W.wf[d.soft];
     const [st, ss] = wfState(d.soft);
     W.focus = d.soft;
-    const said = d.sched.day !== undefined || d.sched.time ? { day: d.sched.day === undefined ? f.sched.day : d.sched.day, time: d.sched.time || f.sched.time } : null;
-    const move = said && long(said) !== long(f.sched) && canEdit() ? `Make the ${f.name} run ${lower(long(said))}` : '';
-    const offer = move ? `<button class="btn ghost sm offer" type="button" data-say="${move}">${move}</button>` : '';
-    return pushCard(`<div class="card"><div class="c-head"><b>${f.name}</b><span class="pill" data-s="${ss}">${st}</span></div><p>It already watches ${W.soft[d.soft].name}, ${lower(long(f.sched))}.</p><div class="c-foot"><span class="c-act">${offer}<button class="btn ghost sm" type="button" data-open="wf:${d.soft}">Open it</button></span></div></div>`, 'lead', 'You already have this one.');
+    W.drafts[d.key] = { ...d, second: true };
+    const S = W.soft[d.soft];
+    const runs = !W.paused[d.soft] ? `<p>It already watches ${S.gh || S.repo}, ${lower(long(f.sched))}.</p>` : '';
+    return pushCard(`<div class="card" data-another-of="${d.key}"><div class="c-head"><b>${f.name}</b><span class="pill" data-s="${ss}">${st}</span></div>${runs}<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-another="${d.key}">Set up another</button><button class="btn sm" type="button" data-open="wf:${d.soft}">Open it</button></span></div></div>`, 'lead', 'You already have this one.');
   }
   W.drafts[d.key] = d;
   const m = pushCard(partsCard(d), 'lead', leadFor(d));
@@ -2721,6 +2927,7 @@ async function setupDraft(c) {
     await wait(450);
     setFace(note, 'safety', 'success');
   }
+  $('[data-p-sim]', c).innerHTML = `<p class="small muted" role="status">${SIM_RUNNING}</p>`;
   const left = $('[data-p-left]', c);
   left.innerHTML = `${fw('tester', 20, 'working')}<span>Test run…</span>`;
   bstat(d.then === 'jira' ? 'Test run on practice Jira…' : 'Test run…');
@@ -2739,20 +2946,19 @@ async function setupDraft(c) {
     cvOk(li.dataset.id);
   }
   bcheck(d.then === 'jira' ? 'Test run passed on practice Jira.' : 'Test run passed.');
-  bstat('Saved as a draft in n8n.');
   left.className = 'c-left okline';
   left.innerHTML = `${ICON.check}Test run passed`;
-  pill.textContent = 'Ready';
-  pill.dataset.s = 'ready';
+  /* One Turn on (ADR 0053, item 1): a passed test turns the workflow on, with no second button. */
   d.status = 'ready';
-  $('[data-p-act]', c).innerHTML = '<button class="btn turnon" type="button">Turn it on</button>';
+  await wait(450);
+  turnOn(c);
   scroll();
 }
 function turnOn(c) {
   const d = W.drafts[c.dataset.parts];
   if (!d || d.status !== 'ready') return;
   d.status = 'on';
-  const id = d.soft;
+  const id = d.second ? `${d.soft}2` : d.soft;
   if (!W.soft[id]) W.soft[id] = { name: EXTRA[id].name, src: EXTRA[id].src, repo: EXTRA[id].repo, run: null };
   W.wf[id] = { name: d.name, soft: id, sched: { ...d.sched }, then: d.then, ver: 1, yes: d.then === 'jira', by: 'Alice', on: 'just now' };
   W.hist[id] = [{ v: 1, what: 'Built by the Planner', by: 'Alice', on: 'just now', sched: { ...d.sched }, yes: d.then === 'jira' }];
@@ -2764,6 +2970,8 @@ function turnOn(c) {
   $('.nd[data-id="yes"]', c)?.classList.remove('added');
   $('[data-p-left]', c).innerHTML = '';
   $('[data-p-act]', c).innerHTML = `<span class="okline">${ICON.check}On. First run ${firstRun(d.sched)}.</span>`;
+  const sim = $('[data-p-sim]', c);
+  if (sim) sim.innerHTML = simDone();
   const v = bview();
   if (v) { $('[data-bkind]', v).textContent = 'Set up. Version 1.'; bstat('On. Version 1, published in n8n.'); const bp = $('[data-bpill]', v); bp.textContent = 'On'; bp.dataset.s = 'on'; }
   refresh();
@@ -2807,6 +3015,7 @@ function editAsk(s, forced, open) {
   const m = pushCard(`<div class="card" data-edit="${e.key}">
     <div class="c-head"><b>Change ${f.name}</b><span class="pill" data-e-pill></span></div>
     <ul class="parts" data-e-rows></ul>
+    <p class="small muted" data-e-note hidden></p>
     <div class="c-foot"><span class="c-left" data-e-left></span><span class="c-act" data-e-act></span></div>
   </div>`);
   patchEdit($('[data-edit]', m));
@@ -2826,7 +3035,14 @@ function patchEdit(c) {
   pill.textContent = st[0];
   pill.dataset.s = st[1];
   left.className = e.status === 'saved' ? 'c-left okline' : 'c-left';
-  left.innerHTML = e.status === 'saved' ? `${ICON.check}Saved as version ${e.ver}.` : e.status === 'undone' ? `Back to ${short(e.from)}.` : '';
+  const wl = W.wf[e.wf].list;
+  left.innerHTML = e.status === 'saved' ? `${ICON.check}${wl ? `Saved. Next run ${nextRun(e.wf)}. You now own this schedule, so you can’t approve its checks.` : `Saved as version ${e.ver}.`}` : e.status === 'undone' ? `Back to ${short(e.from)}.` : '';
+  /* The watchlist's schedule is everyone's: saving it makes the person its owner, so they can't approve its checks (the app's edit card). */
+  const note = $('[data-e-note]', c);
+  if (note) {
+    note.hidden = !wl || !['asking', 'saved'].includes(e.status);
+    note.textContent = e.status === 'saved' ? `This changed when all ${softIds().length} software on the watchlist are checked, and made you the owner of this schedule. Its checks count as your work now, so you can’t approve them.` : `This changes when all ${softIds().length} software on the watchlist are checked. Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.`;
+  }
   act.innerHTML = e.status === 'asking'
     ? `<button class="btn ghost" type="button" data-keep>Never mind</button>${ask ? '<span class="waiting dwait">Answer 1 question first</span>' : '<button class="btn" type="button" data-save>Save change</button>'}`
     : e.status === 'saved' ? `<button class="btn ghost sm" type="button" data-open="wf:${e.wf}">Open</button><button class="btn ghost sm" type="button" data-undo>Undo</button>` : '';
@@ -2918,6 +3134,8 @@ async function respond(t) {
   if (canEdit() && /\b(pause|turn off|stop running)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), true);
   if (canEdit() && /\b(resume|unpause|turn (it )?back on)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), false);
   if (canEdit() && EDIT_RE.test(s) && SCHED_RE.test(s) && !/\b(watch|track|monitor|new release)\b/.test(s)) return editAsk(s);
+  if (/\badd\b.*\b(?:to|on)\s+(?:the\s+|my\s+|our\s+)?(?:software\s+)?watch\s*list\b/.test(s)) return canEdit() ? watchlistAsk(t) : pushText('Operators set up workflows. Ask Alice, or another Operator.');
+  if (/\bcheck (?:if|whether)\b/.test(s) || /\b(?:latest|newest|most recent|current)\b/.test(s)) return softAsk(s);
   if (WATCH_RE.test(s)) return canEdit() ? buildAsk(t) : pushText('Operators set up workflows. Ask Alice, or another Operator.');
   if (/(approv|sign off|decid|decision|my yes)/.test(s)) return W.user === 'bob' && /\b(did i|past|last|history)\b/.test(s) ? pushCard(histCard()) : apprWaiting();
   if (/(stop|fail|broke|error|why|wrong|retry|didn.?t run)/.test(s)) return W.stage === 'stopped' ? runFlow() : pushText('Nothing has stopped. FastAPI release check ran again after the retry.');
@@ -3064,6 +3282,11 @@ const DT = {
   },
 };
 const REQ_DRAFT = DT.stale.ask;
+/* Practice systems (ADR 0054), in the app's words: the result first, then each case. A pass never stands in for the real test run. */
+const SIM_KINDS = ['Happy path', 'Nothing new', 'Source not found', 'Timeout', 'Approver says no', 'Odd data'];
+const SIM_RUNNING = 'Trying it on practice systems. Each case can take up to 2 minutes.';
+const SIM_WAITING = 'It will be tried on practice systems once every setting is filled.';
+const simDone = () => `<section class="sim" aria-label="Practice systems"><p><b>Tried 6 cases on practice systems: 6 passed.</b></p><ul class="sim-cases">${SIM_KINDS.map((k) => `<li>${ICON.check}<b>Passed</b> ${k}</li>`).join('')}</ul><p class="small muted">Turn on still runs the real test, which writes nothing.</p></section>`;
 const DSTEPS = ['Reading what you asked', 'Choosing n8n blocks', 'Checking each block is in our n8n', 'Laying it out', 'Safety checker is checking it', 'Writing the report'];
 const RESTEPS = ['Checking each block is in our n8n', 'Laying it out', 'Safety checker is checking it', 'Writing the report'];
 const SREASONS = ['Too risky without approval', 'Wrong project or channel', 'Not needed'];
@@ -3104,7 +3327,8 @@ function dPill(d) {
   return ['Draft', 'idle'];
 }
 const dwListed = () => Object.keys(W.dw).filter((k) => ['sent', 'half', 'approved'].includes(W.dw[k].status));
-const dwState = (k) => (W.dw[k].status === 'approved' ? ['Draft', 'idle'] : ['Waiting for approval', 'wait']);
+/* A drafted workflow is a Draft until it is turned on, and Needs you for an Approver who may decide its set-up (ADR 0053, item 2). Its line says where it stands. */
+const dwState = (k) => (canDecide(W.dw[k]) ? [NEEDS, 'wait', NEEDS] : ['Draft', 'idle', 'Draft']);
 function dwSub(k) {
   const d = W.dw[k];
   if (d.status === 'approved') return `${dAcceptLine(d)} · no runs yet`;
@@ -3227,6 +3451,7 @@ function dCardInner(d) {
   return `<div class="c-head"><b>${T.name}</b><span class="c-hr"><span class="small muted">Revision ${d.rev}</span><span class="pill" data-s="${ps}">${pt}</span></span></div>
   <div class="dl-scroll">${dLine(d)}</div>
   <p class="c-sent">${dFacts(d).short}</p>
+  ${d.status === 'drafting' ? '' : dNeeded(d).length ? `<p class="small muted">${SIM_WAITING}</p>` : simDone()}
   ${editing ? `<p class="c-note">${fw('safety', 20, 'success')}<span>${dNote(d)}</span></p>` : ''}
   ${rows ? `<ul class="parts">${rows}</ul>` : ''}
   <div class="c-foot"><span class="c-left${ok ? ' okline' : ''}">${ok ? left.slice(3) : left}</span><span class="c-act">${act}</span></div>`;
@@ -3448,6 +3673,7 @@ function dwView(k, full) {
     ${d.status === 'approved' ? `<p><button class="linkbtn okl" type="button" data-open="slog:${k}">${ICON.check}${dAcceptLine(d)}</button></p>` : `<p class="muted">${dwSub(k)}.</p>`}
     <dl class="meta-strip"><div><dt>When</dt><dd>${T.whenLong(dVal(d, T.settings[0]).value)}</dd></div></dl>
     <section class="pcard flow-card"><div class="flow-head"><h4 class="sec-title">Steps</h4></div>${flowHTML(dBlocks(d), {}, { first: T.whenShort(dVal(d, T.settings[0]).value) })}</section>
+    ${d.status === 'approved' ? `<section class="pcard">${simDone()}</section>` : ''}
     <div class="two">
       <section class="pcard"><h4 class="sec-title">Who approves</h4>${F.who.map(([n, x]) => `<p><b>${qn(n)}</b> <span class="muted">${x}</span></p>`).join('')}</section>
       <section class="pcard"><h4 class="sec-title">Recent runs</h4><ul class="rows"><li><span><b>No runs yet</b><span class="s">${d.status === 'approved' ? 'A test run comes next. It changes and sends nothing.' : 'It runs only after it is approved and turned on.'}</span></span><span></span><span></span></li></ul></section>
@@ -3532,9 +3758,6 @@ const TASKS = {
       await wait(800);
       await tap($('[data-setup]', c));
       await setupDraft(c);
-      await wait(600);
-      await tap($('.turnon', c));
-      turnOn(c);
     },
   },
   edit: {
@@ -3735,6 +3958,13 @@ app.addEventListener('click', (e) => {
   const pick = (sel) => t.closest(sel);
   const inP = !!pick('#panel');
   const inPage = !!pick('#page');
+  closeMenus(pick('.menu-wrap'));
+  if (pick('[data-menu]')) { const b = pick('[data-menu]'); const m = b.nextElementSibling; const open = m.hidden; m.hidden = !open; b.setAttribute('aria-expanded', String(open)); if (open) $('button', m)?.focus(); return; }
+  if (pick('[data-runnow]')) { quiet(runNow(pick('[data-runnow]').dataset.runnow)); return; }
+  if (pick('[data-del]')) { askDelete(pick('[data-del]').dataset.del); return; }
+  if (pick('[data-del-cancel]')) { $('#delDlg').close(); return; }
+  if (pick('[data-del-ok]')) { doDelete(pick('[data-del-ok]').dataset.delOk); return; }
+  if (pick('[data-toast-undo]')) { const u = toastUndo; toastUndo = null; $('#toast').hidden = true; if (u) u(); return; }
   if (pick('[data-chip]')) { quiet(chip(pick('[data-chip]').dataset.chip)); return; }
   if (pick('[data-rail]')) { quiet(railGo(pick('[data-rail]').dataset.rail)); return; }
   if (pick('.g-home')) { quiet(goHome()); return; }
@@ -3760,7 +3990,6 @@ app.addEventListener('click', (e) => {
   if (pick('[data-pchg]')) { changePart(pick('[data-pchg]')); return; }
   if (pick('[data-setup]')) { quiet(setupDraft(pick('[data-parts]'))); return; }
   if (pick('[data-drop]')) { dropDraft(pick('[data-parts]')); return; }
-  if (pick('.turnon')) { turnOn(pick('[data-parts]')); return; }
   if (pick('[data-dq]')) { dAnswer(pick('[data-dq]')); return; }
   if (pick('[data-dtype]')) { const d = W.dw[pick('[data-dtype]').dataset.dtype]; d.typing = true; refresh(); vis(`[data-dtf="${d.key}"] input`)?.focus(); return; }
   if (pick('[data-dop]')) { W.dw[pick('[data-dop]').dataset.dop].opAsked = true; refresh(); toast('Asked the Operators. Their answer will show here.'); return; }
@@ -3810,22 +4039,34 @@ app.addEventListener('click', (e) => {
   if (pick('[data-sched-edit]')) { const id = pick('[data-sched-edit]').dataset.schedEdit; W.schedEdit = id; W.sd = { ...W.wf[id].sched }; refresh(); return; }
   if (pick('[data-sched-save]')) { saveSched(pick('[data-sched-save]').dataset.schedSave); return; }
   if (pick('[data-sched-cancel]')) { W.schedEdit = null; refresh(); return; }
-  if (pick('[data-remove]')) { W.langserve = false; refresh(); return; }
-  if (pick('[data-restore]')) { W.langserve = true; refresh(); return; }
+  if (pick('[data-remove]')) { W.gone[pick('[data-remove]').dataset.remove] = true; refresh(); return; }
+  if (pick('[data-restore]')) { W.gone[pick('[data-restore]').dataset.restore] = false; refresh(); return; }
+  if (pick('[data-hist]')) { const k = pick('[data-hist]').dataset.hist; W.histOpen[k] = !W.histOpen[k]; refresh(); return; }
   if (pick('[data-keyask]')) { W.key = false; refresh(); return; }
   if (pick('[data-change]')) { const id = pick('[data-change]').dataset.change; quiet(goHome().then(() => editAsk('', id, true))); return; }
   if (pick('[data-pause]')) { const id = pick('[data-pause]').dataset.pause; W.paused[id] = !W.paused[id]; refresh(); toast(W.paused[id] ? 'Paused. It won’t run until you resume it.' : 'On again.'); return; }
   if (pick('[data-addsoft]')) {
-    const b = pick('[data-addsoft]'); const k = b.dataset.addsoft; const card = b.closest('.card');
+    const b = pick('[data-addsoft]'); const k = b.dataset.addsoft; const card = b.closest('[data-wcard]');
     const v = (card.querySelector('[data-pkgver]')?.value || '').trim();
     if (v && !/^\d+\.\d+\.\d+(?:\.Final|\.RELEASE|\.GA|-jre|-android)?$/.test(v)) { toast('Type the version as three numbers, such as 4.21.2.'); return; }
-    if (!W.soft[k]) W.soft[k] = { name: EXTRA[k].name, src: EXTRA[k].src, repo: EXTRA[k].repo, run: v || null, fresh: Boolean(v) };
-    card.querySelector('label.field')?.remove(); card.querySelector('label.field + p, p.muted.small')?.remove();
-    b.closest('.c-act').innerHTML = `<button class="btn ghost sm" type="button" data-open="soft:${k}">Open it</button>`;
+    const S = W.soft[k] || EXTRA[k];
+    W.gone[k] = false;
+    if (!W.soft[k]) W.soft[k] = { name: S.name, src: S.src, repo: S.repo, gh: S.gh, run: v || null, fresh: Boolean(v), added: 'Today' };
+    const vuln = isPkg(k) ? (v ? ` Each check also looks up known vulnerabilities in ${v}.` : ' Without your version, known vulnerabilities aren’t looked up.') : '';
+    let moved = '';
+    if (card.dataset.wmove !== undefined) {
+      const [day, time] = card.dataset.wmove.split('|');
+      const sched = { day: day || null, time: time || W.wf.swl.sched.time };
+      newVersion('swl', { sched, yes: true }, `Moved to ${short(sched)}`);
+      moved = `<p>Saved as version ${W.wf.swl.ver}. The Software watchlist checks ${softIds().length} software, ${lower(long(sched))}.</p>`;
+    }
+    card.querySelector('[data-wbody]').innerHTML = `<p class="okline">${ICON.check}<span><b>${S.name} is on the Software watchlist.</b> Its versions are read from ${SRC[S.src || 'github']}, from ${S.src && S.src !== 'github' ? S.repo : S.gh || S.repo}.${vuln} <button class="linkbtn" type="button" data-open="wf:swl">Open the Software watchlist</button></span></p>${moved}`;
     refresh();
-    toast(v ? `${W.soft[k].name} is on the watchlist. Each check looks up known vulnerabilities in ${v}.` : `${W.soft[k].name} is on the watchlist. Without your version, known vulnerabilities aren’t looked up.`);
     return;
   }
+  if (pick('[data-wchoose]')) { const b = pick('[data-wchoose]'); const card = b.closest('[data-wcard]'); if (b.dataset.wchoose !== 'keep') card.dataset.wmove = b.dataset.wchoose; card.querySelector('[data-wbody]').innerHTML = addPart(card.dataset.wcard); return; }
+  if (pick('[data-wnever]')) { pick('[data-wnever]').closest('[data-wbody]').innerHTML = '<p class="muted">Not added. Nothing changed.</p>'; return; }
+  if (pick('[data-another]')) { const c = pick('[data-another-of]'); const d = W.drafts[pick('[data-another]').dataset.another]; c.outerHTML = partsCard(d); patchParts($(`[data-parts="${d.key}"]`)); return; }
   if (pick('[data-toast]')) toast(pick('[data-toast]').dataset.toast);
 });
 app.addEventListener('change', (e) => {
@@ -3838,6 +4079,7 @@ app.addEventListener('change', (e) => {
   if (t.dataset.then) { W.drafts[t.dataset.then].then = t.value; patchParts(t.closest('[data-parts]')); $(`[data-then="${t.dataset.then}"]`)?.focus(); }
 });
 app.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('.menu:not([hidden])')) { const m = $('.menu:not([hidden])'); closeMenus(); m.previousElementSibling.focus(); return; }
   const g = e.target.closest && e.target.closest('.cv.edit [data-node]');
   if (g && !playing && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); selectNode(g.dataset.node); }
   const tab = e.target.closest && e.target.closest('[data-stab]');
@@ -3853,7 +4095,7 @@ app.addEventListener('keydown', (e) => {
 function addSoft(form) {
   const v = $('input', form).value.trim();
   if (!v) { $('input', form).focus(); return; }
-  quiet(showChat().then(() => send(`Watch ${v} releases`)));
+  quiet(showChat().then(() => send(`Add ${v} to the watchlist`)));
 }
 function setNewWords(on) {
   app.classList.toggle('shownew', on);
