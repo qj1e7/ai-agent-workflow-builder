@@ -108,6 +108,29 @@ function TellCard({ tell }: { tell: TellSetupOut }) {
   )
 }
 
+const dotTone = (connection: ConnectionOut) =>
+  connection.state === 'working' ? (connection.expires_at ? 'wait' : 'ok') : connection.state === 'not_checked' || connection.state === 'not_set_up' ? 'off' : 'wait'
+
+/** One finding first: how many of the connections work, with a dot for each. A key that runs out soon still works, so it counts as working but shows amber. */
+function Summary({ connections }: { connections: readonly ConnectionOut[] }) {
+  const working = connections.filter((connection) => connection.state === 'working').length
+  return (
+    <p className={styles['health']}>
+      <span className={styles['hdots']} aria-hidden="true">
+        {connections.map((connection) => (
+          <i key={connection.id} data-tone={dotTone(connection)} />
+        ))}
+      </span>
+      <span>
+        <b>
+          {working} of {connections.length} working.
+        </b>{' '}
+        A check only reads, so it never changes anything.
+      </span>
+    </p>
+  )
+}
+
 export function ConnectionsTab({ now }: { now: Date }) {
   const connections = useConnections()
   const capabilities = useCapabilities()
@@ -121,8 +144,10 @@ export function ConnectionsTab({ now }: { now: Date }) {
   }
   if (connections.isError) {
     return (
-      <section className={styles['panel']}>
-        <h2>Connections</h2>
+      <section className={styles['panel']} aria-labelledby="connections-heading">
+        <h2 id="connections-heading" className="visually-hidden">
+          Connections
+        </h2>
         <p role="alert">Connections are not available right now. {words(connections.error)}</p>
         <div className={styles['buttons']}>
           <Button onClick={() => void connections.refetch()}>Try again</Button>
@@ -132,9 +157,11 @@ export function ConnectionsTab({ now }: { now: Date }) {
   }
   const { you_can_check: canCheck } = connections.data
   return (
-    <section className={styles['panel']}>
-      <h2>Connections</h2>
-      <p className={styles['note']}>The systems the platform signs in to. Practice copies never reach the real systems. A check only reads, so it never changes anything.</p>
+    <section className={styles['panel']} aria-labelledby="connections-heading">
+      <h2 id="connections-heading" className="visually-hidden">
+        Connections
+      </h2>
+      <Summary connections={cardsOf(connections.data.connections)} />
       <div className={styles['connections']}>
         {cardsOf(connections.data.connections).map((connection) => (
           <ConnectionCard key={connection.id} connection={connection} capabilities={capabilities.data?.capabilities} canCheck={canCheck} now={now} />

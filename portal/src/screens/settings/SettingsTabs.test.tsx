@@ -145,7 +145,7 @@ describe('the Settings tabs', () => {
       </QueryClientProvider>,
     )
     expect(html).toMatch(/<h1 tabindex="-1">Settings<\/h1>/)
-    expect(text(html)).toContain('Every change here is recorded with who made it.')
+    expect(text(html)).not.toContain('Every change here is recorded')
   })
 })
 

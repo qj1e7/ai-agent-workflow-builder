@@ -136,8 +136,9 @@ function ModelPanel({ view }: { view: ModelSettingsView }) {
 
   return (
     <section className={styles['panel']} aria-labelledby="model-heading">
-      <h2 id="model-heading">AI model</h2>
-      <p className={styles['note']}>The model the agents use to plan, write and explain.</p>
+      <h2 id="model-heading" className="visually-hidden">
+        AI model
+      </h2>
       {!view.available ? <p className={styles['note']}>{SETTINGS_OFF_WORDS}</p> : !view.you_can_change ? <p className={styles['note']}>{MODEL_READ_ONLY_WORDS}</p> : null}
       <p className="visually-hidden" role="status">
         {announced}

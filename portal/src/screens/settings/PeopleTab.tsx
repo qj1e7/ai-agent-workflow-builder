@@ -7,7 +7,7 @@ import { Button } from '../../ui/Button'
 import { ConfirmLine } from '../../ui/ConfirmLine'
 import { focusIfFocusFell } from '../../ui/focus'
 import { personTone } from '../../ui/personTone'
-import { ClockMark, ShieldMark } from './marks'
+import { ClockMark } from './marks'
 import {
   addedWords,
   approverConfirmationsByPerson,
@@ -218,7 +218,9 @@ export function PeoplePanel({ people, confirmations, me }: PanelProps) {
 
   return (
     <section className={styles['panel']} aria-labelledby="people-heading">
-      <h2 id="people-heading">People and permissions</h2>
+      <h2 id="people-heading" className="visually-hidden">
+        People and permissions
+      </h2>
       <p className={styles['note']}>{PEOPLE_LEAD}</p>
       {operator ? null : <p className={styles['note']}>{ONLY_OPERATORS_WORDS}</p>}
       <p className="visually-hidden" role="status">
@@ -263,10 +265,7 @@ export function PeoplePanel({ people, confirmations, me }: PanelProps) {
       </ul>
       <ul className={styles['rules']} aria-label="The rules">
         {ROLE_RULES.map((rule) => (
-          <li key={rule}>
-            <ShieldMark />
-            <span>{rule}</span>
-          </li>
+          <li key={rule}>{rule}</li>
         ))}
       </ul>
       {operator ? <AddPerson onAdded={onAdded} /> : null}
@@ -320,7 +319,7 @@ export function PersonRow({ person, me, operator, confirmation, askedByName, bus
       </div>
       {operator ? (
         <div className={styles['roles']}>
-          <label className={styles['check']}>
+          <label className={`${styles['check']} ${styles['roleSlot']}`}>
             <input
               type="checkbox"
               id={operatorBoxId(person.id)}
@@ -330,7 +329,7 @@ export function PersonRow({ person, me, operator, confirmation, askedByName, bus
             />
             Operator<span className="visually-hidden"> for {person.display}</span>
           </label>
-          <label className={styles['check']}>
+          <label className={`${styles['check']} ${styles['roleSlot']}`}>
             <input
               type="checkbox"
               id={approverBoxId(person.id)}
@@ -342,7 +341,7 @@ export function PersonRow({ person, me, operator, confirmation, askedByName, bus
             Approver<span className="visually-hidden"> for {person.display}</span>
           </label>
           {n8nAllowed ? (
-            <label className={styles['check']}>
+            <label className={`${styles['check']} ${styles['roleSlot']}`}>
               <input
                 type="checkbox"
                 id={n8nBoxId(person.id)}
@@ -352,7 +351,9 @@ export function PersonRow({ person, me, operator, confirmation, askedByName, bus
               />
               n8n access<span className="visually-hidden"> for {person.display}</span>
             </label>
-          ) : null}
+          ) : (
+            <span className={styles['roleSlot']} aria-hidden="true" />
+          )}
         </div>
       ) : (
         <p className={styles['rolesText']}>{rolesWords(person)}</p>
