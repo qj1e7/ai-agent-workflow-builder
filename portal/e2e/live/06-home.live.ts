@@ -46,6 +46,24 @@ test('bob sees the run alice started at the top of Home, and its row opens the r
   await context.close()
 })
 
+test('Home’s board lists the workflows as tiles under Needs you, each one link with its one pill, and a workflow that needs Bob says why only in Needs you', async ({ browser, backend }, info) => {
+  const { approvalId } = await backend.waitingRun('alice')
+  const context = await devContext(browser, 'bob')
+  const page = await context.newPage()
+  await page.goto('/')
+  await expect(itemOf(page, approvalId)).toBeVisible()
+  const board = page.getByRole('list', { name: 'Workflows', exact: true })
+  const tile = board.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
+  await expect(tile.getByRole('link')).toHaveAttribute('href', /^\/workflows\/.+/)
+  await expect(tile, 'its one pill is Needs you').toContainText('Needs you')
+  await expect(tile, 'the reason is in Needs you, not on the tile').not.toContainText('needs your approval')
+  await expect(page.getByRole('main').getByText('needs your approval'), 'said once on the page').toHaveCount(1)
+  const edges = await page.evaluate(() => ['form', 'ul[aria-label="Needs you"]', 'ul[aria-label="Workflows"]'].map((query) => document.querySelector(query)?.getBoundingClientRect().left ?? -1))
+  expect(Math.max(...edges) - Math.min(...edges), 'the box, Needs you and the board start at one left edge').toBeLessThanOrEqual(1)
+  await shot(page, info, 'mc-board-bob-home')
+  await context.close()
+})
+
 test('alice sees no Waiting on others on Home or Workflows, and the run she started reads On, waiting for an Approver’s yes, on its workflow’s row', async ({ browser, backend }, info) => {
   const { runId, approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'alice')

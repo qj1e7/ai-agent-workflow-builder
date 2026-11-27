@@ -78,7 +78,7 @@ const primaries = (html: string) => (html.match(/class="[^"]*_primary_[^"]*"/g) 
 const chipsOf = (html: string, name = 'Suggestions') => buttonsIn(new RegExp(`<div[^>]*role="group"[^>]*aria-label="${name}"[^>]*>([\\s\\S]*?)</div>`).exec(html)?.[1] ?? '')
 const keysOf = (html: string) => [...html.matchAll(/data-home-item="([^"]+)"/g)].map((m) => m[1])
 const groupsOf = (html: string) =>
-  [...html.matchAll(/<h2 id="[^"]*">(Do now|Set up)<\/h2><ul[^>]*>([\s\S]*?)<\/ul><\/li>/g)].map((m) => [m[1], [...(m[2] ?? '').matchAll(/data-home-item="([^"]+)"/g)].map((k) => k[1])] as const)
+  [...html.matchAll(/<h3 id="[^"]*">(Do now|Set up)<\/h3><ul[^>]*>([\s\S]*?)<\/ul><\/li>/g)].map((m) => [m[1], [...(m[2] ?? '').matchAll(/data-home-item="([^"]+)"/g)].map((k) => k[1])] as const)
 
 describe('Home for an Operator in a normal week (A1 to A7)', () => {
   const html = mainOf(render(ALICE, ALICE_HOME, { watching: 2 }))
@@ -89,10 +89,12 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
     expect(html.indexOf('Good afternoon, Alice')).toBeLessThan(html.indexOf('What can I help you with today?'))
   })
 
-  it('has the Planner’s face at 96 px above the greeting', () => {
+  it('has the Planner’s face at 32 px inside the box, at its left, as the sketch draws it', () => {
     const face = /<svg[^>]*width="(\d+)"/.exec(html)
-    expect(face?.[1]).toBe('96')
-    expect(html.indexOf(face?.[0] ?? '-')).toBeLessThan(html.indexOf('Good afternoon, Alice'))
+    expect(face?.[1]).toBe('32')
+    expect(html.indexOf(face?.[0] ?? '-')).toBeGreaterThan(html.indexOf('<form'))
+    expect(html.indexOf(face?.[0] ?? '-')).toBeLessThan(html.indexOf('<textarea'))
+    expect(html.indexOf('Good afternoon, Alice')).toBeLessThan(html.indexOf('<form'))
   })
 
   it('has one box with the sketch’s words for everyone, and a send button named Send', () => {
@@ -108,7 +110,7 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
     expect(html).not.toMatch(/I can Check software/)
   })
 
-  it('lists what needs them as plain rows under Do now and Set up, the most urgent five, each one link with the subject in bold, and no buttons', () => {
+  it('lists what needs them as tiles under Do now and Set up, the most urgent five, each one link with the subject in bold, and no buttons', () => {
     const [doNow, setUp] = groupsOf(html)
     expect(doNow).toEqual(['Do now', ['stopped:run_01JB9', 'connection:jira', 'reply:trq_01JD5RP']])
     expect(setUp?.[0]).toBe('Set up')
@@ -125,9 +127,8 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
     expect(linksIn(html), 'the sixth is one more, on Workflows').toContainEqual(['1 more that need you', '/workflows'])
   })
 
-  it('has no Needs you heading, no count and no AI troubleshooter box on Home', () => {
-    expect(sectionOf(html, 'Needs you')).toBe('')
-    expect(text(html)).not.toContain('Needs you')
+  it('heads Needs you with its count, as the sketch does, and has no AI troubleshooter box on Home', () => {
+    expect(text(sectionOf(html, 'Needs you'))).toMatch(/^Needs you 6 Do now/)
     expect(text(html)).not.toContain('AI troubleshooter')
   })
 

@@ -724,7 +724,7 @@ test.describe('with the AI model on', () => {
     await expect(chips).toHaveCount(3)
     await expect(chips).toHaveText(['What needs me?', 'Which software is behind?', 'What can you do?'])
     const needsYou = main(page).getByRole('list', { name: 'Needs you' })
-    await expect(needsYou.locator('li[data-home-item]').first(), 'Needs you is plain rows under the chips').toBeVisible()
+    await expect(needsYou.locator('li[data-home-item]').first(), 'Needs you is tiles under the chips').toBeVisible()
     const total = await platformNeeds(backend, 'alice')
 
     await ask(page, 'Check my workflows')
