@@ -127,7 +127,7 @@ export function When({ useCase, now, mayChange, held, onSaved }: WhenProps) {
                 open()
               }}
             >
-              {useCase.schedule ? 'Change time' : 'Set time'}
+              {useCase.schedule ? 'Change' : 'Set'}
             </button>
           ) : null}
         </div>
