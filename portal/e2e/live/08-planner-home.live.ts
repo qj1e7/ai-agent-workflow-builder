@@ -346,7 +346,7 @@ test.describe('with the AI model on', () => {
     const [workflow] = await made()
     expect([workflow?.state, workflow?.schedule, workflow?.next_run_at]).toEqual(['on', null, null])
     await page.goto(`/workflows/${workflow?.use_case_id ?? ''}`)
-    await expect(main(page)).toContainText('On. Runs only when you press Run now.')
+    await expect(main(page)).toContainText('Runs only when you press Run now.')
     await expect(page.getByRole('button', { name: 'Run now' })).toBeVisible()
     await shot(page, info, 'only-when-i-run-it')
     assertClean(watch)

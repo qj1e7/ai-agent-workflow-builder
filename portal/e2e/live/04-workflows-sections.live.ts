@@ -379,7 +379,7 @@ for (const user of ['alice', 'bob']) {
           const id = (await row.getAttribute('data-workflow-id')) ?? ''
           await expect(row.locator('b').first(), `the check card names the workflow as the Workflows row of ${id} does`).toHaveText(pageFacts.get(id) ?? 'a row on the Workflows page')
         }
-        const fit = await lineFits(card.locator('li[data-workflow-id] > a'))
+        const fit = await lineFits(card.locator('li[data-workflow-id]'))
         expect(fit.rows, 'the card has a link for each workflow').toBe(shown)
         expect(fit.broken, `each row in the check card is whole at ${width} px`).toEqual([])
         await shot(page, info, `r9-check-card-alice-${width}`)

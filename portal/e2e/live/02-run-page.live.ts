@@ -461,7 +461,7 @@ async function expectDeclinedEverywhere(page: Page, runId: string, info: TestInf
   await shot(page, info, `r12-run-page-${who}-${width}`)
   await page.goto('/workflows')
   const workflow = page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
-  await expect(workflow.getByText(/last run .+, declined by Bob\. Nothing was written\./), 'the Workflows row names who declined, the short form for its one line').toBeVisible()
+  await expect(workflow.getByText(/Declined by Bob\. Nothing was written\./), 'the Workflows row names who declined, in its Last run').toBeVisible()
   await expect(workflow).not.toContainText(/created|Sent/)
   await workflow.scrollIntoViewIfNeeded()
   await shot(page, info, `r12-workflows-${who}-${width}`)
