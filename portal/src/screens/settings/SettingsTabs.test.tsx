@@ -515,3 +515,34 @@ describe('n8n access on People and permissions', () => {
     expect(html).not.toContain('example-not-a-real-token')
   })
 })
+
+describe('the Settings tabs, in the taste pass', () => {
+  it('lead with one finding on Connections, counted from the cards, and carry no intro lines', () => {
+    const some = text(render({ tab: 'connections', connections: ALL }))
+    expect(some).toContain('2 of 4 working. A check only reads, so it never changes anything.')
+    expect(text(render({ tab: 'connections' }))).toContain('4 of 4 working.')
+    expect(some).not.toContain('The systems the platform signs in to')
+    expect(text(render({ tab: 'model' }))).not.toContain('The model the agents use to plan')
+  })
+
+  it('keep each tab name as a hidden heading, not a visible repeat, and put the tiles straight on the page', () => {
+    for (const [tab, name] of [['connections', 'Connections'], ['people', 'People and permissions'], ['model', 'AI model']] as const) {
+      const html = render({ tab })
+      expect(html).toMatch(new RegExp(`<h2[^>]*class="[^"]*visually-hidden[^"]*"[^>]*>${name}</h2>`))
+      expect(html).not.toMatch(/class="[^"]*\bpanel\b/)
+    }
+  })
+
+  it('list the role rules as plain text, with no decorative icon', () => {
+    const rules = /<ul[^>]*aria-label="The rules"[^>]*>([\s\S]*?)<\/ul>/.exec(render({ tab: 'people' }))?.[1] ?? ''
+    expect(rules).toContain('<li')
+    expect(rules).not.toContain('<svg')
+  })
+
+  it('give every row the same three role slots, so the boxes line up', () => {
+    const html = render({ tab: 'people' })
+    for (const name of ['Alice', 'Carol']) expect(rowOf(html, name)).toMatch(/class="[^"]*roles[^"]*"/)
+    expect(rowOf(html, 'Carol').match(/class="[^"]*roleSlot[^"]*"/g)).toHaveLength(3)
+    expect(rowOf(html, 'Alice').match(/class="[^"]*roleSlot[^"]*"/g)).toHaveLength(3)
+  })
+})
