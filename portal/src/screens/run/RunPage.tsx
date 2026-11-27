@@ -28,8 +28,10 @@ import { RunDecision } from './RunDecision'
 import { RunLine } from './RunLine'
 import { RunPill } from './RunPill'
 import { RunPlaceContext, type RunPlace } from './place'
-import { isFinished, type RunModel } from './runModel'
+import { isFinished } from './runModel'
 import { troubleFaceOf } from './troubleFace'
+import { IconChevronLeft } from '../../ui/icons'
+import { historyOpen, WORKING } from './historyOpen'
 import { landingOf, scrollsToDecision } from './landing'
 import { useRunStory } from './useRunStory'
 import { testAgainOf } from './testAgain'
@@ -162,13 +164,6 @@ interface RunViewProps {
   readonly detail: { readonly choice: boolean | null; readonly choose: (open: boolean) => void }
 }
 
-const WORKING = new Set<RunModel['phase']['state']>(['pending', 'working', 'proposed', 'acting'])
-
-/** The history is open while the agents work and where a run stopped, so the line shows the work or the break. It folds once the run needs the person or is over. */
-function historyOpen(choice: boolean | null, model: RunModel): boolean {
-  return choice ?? (WORKING.has(model.phase.state) || model.phase.state === 'failed')
-}
-
 /** The troubleshooter's face beside its words, as the sketch's `tr big`. Its mood follows the run, and a fix while one runs. */
 function TroubleshooterBlock({ face, children }: { face: FaceState; children: ReactNode }) {
   return (
@@ -257,6 +252,11 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
     <DecisionArea label="Why it stopped">
       <TroubleshooterBlock face={troubleFace}>
         <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
+        <RunPlaceContext.Provider value={place}>
+          <div className={styles['stopActions']}>
+            <StopNext runId={run.run_id} failure={failure} {...story.stopped} quiet={fixLeading} safeId={safeId} />
+          </div>
+        </RunPlaceContext.Provider>
         <FixSection {...fixAsk} fix={shown.fix} loadedUpTo={loadedUpTo} />
       </TroubleshooterBlock>
     </DecisionArea>
@@ -296,7 +296,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
     <div className={styles['page']}>
       {fromChat ? null : (
         <Link to={backTo(useCase)} className={styles['back']}>
-          <span aria-hidden="true">‹</span>
+          <IconChevronLeft size={16} />
           {run.use_case_name}
         </Link>
       )}
@@ -317,6 +317,11 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         </div>
       ) : null}
       {main}
+      {failure && shownView !== 'n8n' ? (
+        <div className={styles['stoppedLine']}>
+          <RunLine stations={stations} arrivedLive={arrivedLive} settled={null} />
+        </div>
+      ) : null}
       <History
         rows={rows}
         messages={messages}
@@ -324,15 +329,8 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         open={open}
         onToggle={detail.choose}
         listRef={logList}
-        line={shownView === 'n8n' ? null : <RunLine stations={stations} arrivedLive={arrivedLive} settled={null} />}
+        line={shownView === 'n8n' || failure ? null : <RunLine stations={stations} arrivedLive={arrivedLive} settled={null} />}
       />
-      {failure ? (
-        <RunPlaceContext.Provider value={place}>
-          <div className={styles['foot']}>
-            <StopNext runId={run.run_id} failure={failure} {...story.stopped} quiet={fixLeading} safeId={safeId} />
-          </div>
-        </RunPlaceContext.Provider>
-      ) : null}
       <div className="visually-hidden" aria-live="polite">
         {announce ?? ''}
       </div>

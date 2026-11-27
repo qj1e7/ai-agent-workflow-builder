@@ -39,6 +39,14 @@ describe('a run page whose live feed has not brought the first events', () => {
   })
 })
 
+describe('a stop in the run\'s chat', () => {
+  const stopped = (stage: 'working' | 'acting'): ChatItem => ({ kind: 'stopped', seq: 1, at: 0 as ChatItem['at'], stage })
+  it('is plain before anything is written and red while writing', () => {
+    expect(lineOf(stopped('working'), (id) => id, null).tone).toBe('plain')
+    expect(lineOf(stopped('acting'), (id) => id, null).tone).toBe('bad')
+  })
+})
+
 describe('a Tell in the run\'s chat', () => {
   const nameOf = (id: string) => id
   const told = (line: string, bad: boolean): ChatItem => ({ kind: 'told', seq: 1, at: 0 as ChatItem['at'], line, bad })

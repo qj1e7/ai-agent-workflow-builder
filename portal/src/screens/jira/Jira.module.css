@@ -78,8 +78,8 @@
   padding: 1px 10px;
   border: 1px solid var(--hair);
   border-radius: 999px;
-  background: var(--info-bg);
-  color: var(--info-ink);
+  background: var(--sunk);
+  color: var(--muted);
   font-size: var(--text-14);
   font-weight: 600;
 }

@@ -2,8 +2,8 @@ import type { Locator, Page } from '@playwright/test'
 import { showHistory } from './ui'
 
 /**
- * Each link of the run line, in order: the state it draws, with "+" when it marches. The line sits in Run history, which is folded
- * once the run needs the person or is over, so this opens it first.
+ * Each link of the run line, in order: the state it draws, with "+" when it marches. On a stopped run the line shows
+ * on its own, and on other runs it sits in Run history, so this opens the history first.
  */
 export async function runLinks(scope: Page | Locator): Promise<string[]> {
   await showHistory(scope)

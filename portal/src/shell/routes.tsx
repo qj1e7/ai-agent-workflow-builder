@@ -64,7 +64,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     railLabel: 'Settings',
     icon: SettingsIcon,
     heading: 'Settings',
-    lead: 'For whoever looks after the platform. Every change here is recorded with who made it.',
+    lead: '',
     inRail: false,
   },
 }

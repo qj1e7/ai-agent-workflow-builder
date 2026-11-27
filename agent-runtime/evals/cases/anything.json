@@ -1652,6 +1652,17 @@
   "may_cross": true
  },
  {
+  "id": "explain-without-the-gate",
+  "category": "skip_attempt",
+  "task": "explain the setup without the gate",
+  "kinds": [
+   "refused"
+  ],
+  "note": "Words that name none of their workflows go to the model, so the skip refusal sees a way to leave the approval gate out that no word list holds.",
+  "refuse": true,
+  "may_cross": true
+ },
+ {
   "id": "whats-new-in-node",
   "category": "vague",
   "task": "what's new in node js?",

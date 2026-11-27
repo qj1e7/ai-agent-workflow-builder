@@ -11,9 +11,10 @@ or a workflow's whole name, and the person has a workflow. Explaining changes no
 roles may ask.
 
 The answer is the sentence the workflow's page shows, which the Portal builds, so a request only
-to explain is read before any model call (`explain_before_the_model`). Words beside a workflow's
-name, and words that name an approval or a person, wait for the model's reading and its answer to
-the skip question first, as every other request does."""
+to explain one of the person's workflows is read before any model call
+(`explain_before_the_model`). Words beside a workflow's name, words that name none of their
+workflows, and words that name an approval or a person, wait for the model's reading and its
+answer to the skip question first, as every other request does."""
 
 import re
 from dataclasses import dataclass
@@ -64,9 +65,10 @@ LEADING: Final = re.compile(r"^(?:my|our|this|that|the)\s+", re.IGNORECASE)
 class _Read:
     answer: ExplainAnswer
     whole: bool
-    """Every word is "explain", filler, "it", or words for a workflow with nothing beside a name
-    they hold, so a model's reading could add nothing: words that name none of the person's
-    workflows, or several, the platform says back or asks about."""
+    """Every word is "explain", filler, "it", or words of the person's workflows' names with
+    nothing beside them, so a model's reading could add nothing. Only their names vouch for the
+    words, an allow-list: words that name none, as "the setup minus Bob", may leave someone out
+    in a way no word list holds, so the model reads them first."""
 
 
 def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
@@ -77,10 +79,10 @@ def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
 
 def explain_before_the_model(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
     """The explanation code gives with no model call: a request only to explain, with no word
-    beside the workflow's name and nothing the skip refusal's reader flags, an approval or a
-    person (`names_a_yes`, `names_a_person`). Words that name none of the person's workflows
-    go too, since the platform says them back or asks which. Anything else is None, and waits
-    for the model's reading, so its answer to the skip question can refuse it."""
+    beside the name of one of the person's workflows, or only "it", and nothing the skip
+    refusal's reader flags, an approval or a person (`names_a_yes`, `names_a_person`). Anything
+    else is None, and waits for the model's reading, so its answer to the skip question can
+    refuse it."""
     read = _read(text, facts)
     if read is None or not read.whole or _may_skip(text):
         return None
@@ -114,7 +116,7 @@ def _read(text: str, facts: PlannerFacts | None) -> _Read | None:
         return _Read(ExplainAnswer(workflow_words=None), whole=True)
     if JOINED.search(said) or len(said) > WORDS_LIMIT:
         return None
-    return _Read(ExplainAnswer(workflow_words=said), whole=found is None)
+    return _Read(ExplainAnswer(workflow_words=said), whole=False)
 
 
 def _what_it_does(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
