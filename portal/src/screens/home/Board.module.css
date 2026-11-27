@@ -1,0 +1,152 @@
+/* Home's board, as the sketch draws it: Needs you, then a tile per workflow. Every block fills the hero's one column, so they share an edge. */
+.board {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.head h2 {
+  font-size: var(--fs-head);
+  font-weight: var(--fw-semi);
+  line-height: 1.3;
+}
+
+.count {
+  margin-inline-start: var(--space-1);
+  color: var(--text-2);
+  font-weight: var(--fw-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.head a {
+  color: var(--ink);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cell {
+  display: grid;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    box-shadow var(--dur-press) ease,
+    scale var(--dur-press) var(--ease-out);
+}
+
+.tile:active {
+  scale: 0.99;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover {
+    box-shadow: var(--shadow-3);
+  }
+}
+
+.top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.name {
+  min-width: 0;
+  font-size: var(--fs-head);
+  font-weight: var(--fw-semi);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin-top: auto;
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta b {
+  color: var(--ink);
+  font-weight: var(--fw-semi);
+}
+
+/* Nothing needs the person: one line, with the next run on the right. */
+.pulse {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--ok-text);
+  color: var(--on-status);
+}
+
+.mark svg {
+  width: 20px;
+  height: 20px;
+}
+
+.pulseTitle {
+  font-size: var(--fs-head);
+  font-weight: var(--fw-semi);
+  line-height: 1.3;
+}
+
+.pulseNext {
+  margin-inline-start: auto;
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  text-align: end;
+}
+
+.pulseNext b {
+  display: block;
+  color: var(--ink);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semi);
+  font-variant-numeric: tabular-nums;
+}

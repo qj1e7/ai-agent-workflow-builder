@@ -48,25 +48,29 @@
   zoom: var(--scale);
 }
 
-/* The sketch's hero: the face, a small greeting, the one question, then the box and chips, and Needs you under them. */
-/* The hero fills what is left of the page under the top bar (the shell stretches Home to it), so it is centred and never makes the page scroll. */
+/* The sketch's hero: a small greeting, the one question, the box with the Visor bot in it and its chips, then Needs you and the board. They
+   all fill one column, so the box, Needs you and the board share a left and a right edge. The page scrolls when the board is long. */
 .hero {
   display: grid;
   flex: 1;
-  align-content: center;
-  justify-items: center;
-  gap: 14px;
+  align-content: start;
+  gap: var(--space-6);
   width: 100%;
-  max-width: 720px;
+  max-width: 58rem;
   margin: 0 auto;
-  padding: 0 24px;
-  text-align: center;
+  padding: var(--space-6) var(--space-5) var(--space-7);
 }
 
 @media (max-width: 900px) {
   .hero {
-    padding-inline: 0;
+    padding-inline: var(--space-4);
   }
+}
+
+.intro {
+  display: grid;
+  gap: var(--space-3);
+  text-align: center;
 }
 
 .hi {
@@ -114,6 +118,15 @@
 .composer.fresh {
   min-height: 60px;
   border-radius: 14px;
+}
+
+/* The Visor bot at the left of the box. It is for the eye only. */
+.inBox {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
 }
 
 .composer:focus-within {

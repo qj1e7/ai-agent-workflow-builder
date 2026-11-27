@@ -730,7 +730,7 @@ details.rule > p {
 
 /* The Workflows table: State, Workflow, Last run, When, Next run, in one bordered block. */
 .table {
-  --cols: 168px minmax(0, 1.2fr) minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1.1fr);
+  --cols: 15rem minmax(0, 1.2fr) minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1.1fr);
   border: 1px solid var(--hair);
   border-radius: var(--r-card);
   background: var(--surface);
