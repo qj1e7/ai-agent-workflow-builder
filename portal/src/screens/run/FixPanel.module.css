@@ -15,11 +15,11 @@
 .hint {
   max-width: 75ch;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .head {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .buttons {
@@ -42,8 +42,8 @@
 
 .said dt {
   color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .said dd {
@@ -91,7 +91,7 @@
 
 .problem {
   color: var(--red-ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 @media (max-width: 30rem) {

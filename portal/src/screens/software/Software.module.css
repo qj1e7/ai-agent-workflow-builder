@@ -19,7 +19,7 @@
 
 .stopped a {
   color: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .schedule {
@@ -47,7 +47,7 @@
 .ownerNote {
   flex-basis: 100%;
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .actions {
@@ -86,7 +86,7 @@
 
 .find label,
 .field label {
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .find input,
@@ -98,7 +98,7 @@
   border-radius: var(--r-ctl);
   background: var(--surface);
   color: var(--ink);
-  font-size: var(--text-16);
+  font-size: var(--fs-body);
 }
 
 .field {
@@ -114,13 +114,13 @@
 
 .help {
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .error {
   color: var(--fail);
-  font-size: var(--text-14);
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .section {
@@ -136,8 +136,8 @@
 
 .count {
   color: var(--muted);
-  font-size: var(--text-16);
-  font-weight: 600;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semi);
 }
 
 .list {
@@ -204,7 +204,7 @@
   border: 1px solid var(--hair);
   border-radius: var(--r-card);
   background: var(--sunk);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .banner[data-tone='bad'] {
@@ -235,8 +235,8 @@
 
 .facts dt {
   color: var(--muted);
-  font-size: var(--text-14);
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .facts dd a {
@@ -253,7 +253,7 @@
 
 .facts dd {
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   overflow-wrap: anywhere;
 }
 
@@ -278,7 +278,7 @@
 .src {
   display: block;
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
   overflow-wrap: anywhere;
 }
 
@@ -300,12 +300,12 @@ a.src {
 
 .versions dt {
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .versions dd {
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   overflow-wrap: anywhere;
 }
 
@@ -315,8 +315,8 @@ a.src {
   padding: 1px 10px;
   border: 1px solid var(--hair);
   border-radius: 999px;
-  font-size: var(--text-14);
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .pill[data-tone='bad'] {
@@ -446,7 +446,7 @@ a.src {
   margin: 0;
   padding-left: var(--space-4);
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .noMatch {
@@ -464,7 +464,7 @@ a.src {
 
 .pick legend {
   margin-bottom: var(--space-2);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .pickRow {
@@ -499,7 +499,7 @@ a.src {
 }
 
 .decision span {
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .waitingFor {
@@ -524,7 +524,7 @@ a.src {
 }
 
 .question {
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   overflow-wrap: anywhere;
 }
 

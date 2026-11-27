@@ -173,13 +173,13 @@ test('the edit card keeps the design rules in each of its states', async ({ brow
 
 const rail = (page: Page) => page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
 
-/** The total a rail item's accessible name carries, such as "Watchlist, 6 in all". No count is 0. */
+/** The count a rail item's accessible name carries, such as "Workflows, 6 in all" or "Home, 2 things need you". No count is 0. */
 async function railCount(page: Page, label: string): Promise<number> {
   const name = (await rail(page).getByRole('link', { name: new RegExp(`^${label}`) }).getAttribute('aria-label')) ?? ''
-  return Number(/, (\d+) in all/.exec(name)?.[1] ?? 0)
+  return Number(/, (\d+) (?:in all|thing needs you|things need you)$/.exec(name)?.[1] ?? 0)
 }
 
-test('the Needs you rows on Workflows are the number the Planner’s answer and the strip say, the rail shows totals, and the count line is its rows', async ({ browser, backend }) => {
+test('the Needs you rows on Workflows are the number the Planner’s answer, the strip and Home on the rail say, the rail shows totals, and the count line is its rows', async ({ browser, backend }) => {
   await backend.waitingRun('alice')
   const repair = await jiraDown(backend)
   const context = await devContext(browser, 'alice')
@@ -188,9 +188,9 @@ test('the Needs you rows on Workflows are the number the Planner’s answer and 
   const total = await needsOnWorkflows(page)
   const { workflows } = await backend.get<{ workflows: number }>('alice', '/api/v1/home')
   expect(await railCount(page, 'Workflows'), 'Principle 7 (one source per fact): the rail’s Workflows count is how many workflows the team has').toBe(workflows)
-  expect(await railCount(page, 'Chat'), 'Principle 7: the rail never repeats what needs her').toBe(0)
+  expect(await railCount(page, 'Home'), 'Principle 7: Home’s count on the rail is the Needs you count').toBe(total)
 
-  await rail(page).getByRole('link', { name: /^Chat/ }).click()
+  await rail(page).getByRole('link', { name: /^Home/ }).click()
   await ask(page, 'What needs me?')
   await expect(main(page), 'Principle 7: the Planner’s answer').toContainText(`${String(total)} ${total === 1 ? 'thing needs' : 'things need'} you`)
   const strip = main(page).getByRole('region', { name: 'Needs you', exact: true })
@@ -215,14 +215,14 @@ test('the Needs you rows on Workflows are the number the Planner’s answer and 
   await context.close()
 })
 
-test('an Approver who is not an Operator has his Needs you count in his heading, and the rail’s totals with no needs count', async ({ browser, backend }) => {
+test('an Approver who is not an Operator has his Needs you count in his heading and on Home in the rail, beside the rail’s totals', async ({ browser, backend }) => {
   await backend.waitingRun('alice')
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
   await page.goto('/')
   const onHome = Number((await main(page).getByRole('heading', { level: 1 }).innerText()).replace(/\D/g, ''))
   expect(onHome, 'his heading counts what needs him').toBeGreaterThan(0)
-  expect(await railCount(page, 'Chat'), 'Principle 7: Chat carries no count').toBe(0)
+  expect(await railCount(page, 'Home'), 'Principle 7: Home’s count on the rail is the number in his heading').toBe(onHome)
   expect(await railCount(page, 'Workflows'), 'Principle 7: the rail shows the team’s workflows').toBeGreaterThan(0)
   await rail(page).getByRole('link', { name: /^Workflows/ }).click()
   expect(await needsOnWorkflows(page), 'Principle 7: his heading and the Needs you rows on Workflows, with the rest its note counts, agree').toBe(onHome)
@@ -322,5 +322,21 @@ test('Workflows, a workflow, the Watchlist and a software page keep the design r
     expect((await main(page).locator('div[class*="head"] span[data-life]').innerText()).trim(), 'Principle 7: a workflow reads the same on Workflows and on its page').toBe(rowPill)
   }
   expect(onList, 'the waiting check reads On, with who it waits for').toBe('On · waiting for approval')
+  await context.close()
+})
+
+test('Principle 11: Home’s box shows where focus is, with an ink edge and a halo', async ({ browser }) => {
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto('/')
+  const composer = box(page).locator('xpath=ancestor::*[contains(@class, "composer")][1]')
+  const look = () => composer.evaluate((element) => ({ border: getComputedStyle(element).borderTopColor, shadow: getComputedStyle(element).boxShadow }))
+  const rest = await look()
+  await box(page).focus()
+  await expect(composer).toHaveCSS('box-shadow', /rgba?\(15, 26, 43, 0\.14\)/)
+  const focused = await look()
+  expect(focused.border, 'the edge turns ink').toBe('rgb(15, 26, 43)')
+  expect(focused.border).not.toBe(rest.border)
+  expect(focused.shadow).not.toBe(rest.shadow)
   await context.close()
 })

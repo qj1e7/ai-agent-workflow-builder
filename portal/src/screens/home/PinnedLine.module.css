@@ -7,7 +7,7 @@
   padding: 6px 10px 6px 18px;
   border-bottom: 1px solid var(--hair);
   background: var(--surface);
-  font-size: 0.9rem;
+  font-size: var(--fs-small);
   transition: background-color var(--dur-panel) ease;
 }
 
@@ -52,7 +52,7 @@
   min-height: 32px;
   padding: 0 4px;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   white-space: nowrap;
   text-decoration: underline;
   text-decoration-color: var(--rail);
@@ -64,7 +64,7 @@ button.more {
   border: 0;
   background: none;
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   cursor: pointer;
 }
 
@@ -78,5 +78,5 @@ button.more {
 .strip > :is(a, button):not(.more) {
   min-height: 32px;
   padding: 0 11px;
-  font-size: 0.84rem;
+  font-size: var(--fs-tiny);
 }

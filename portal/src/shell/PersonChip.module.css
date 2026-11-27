@@ -2,30 +2,32 @@
   position: relative;
 }
 
+/* The sketch's person at the rail's foot: their initial, with "Name, Role" read out and shown on hover. */
 .chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 4px;
-  padding: 3px 10px 3px 3px;
-  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border-radius: 50%;
 }
 
 .trigger {
   border: 0;
   background: transparent;
-  color: var(--ink);
-  text-align: left;
+  color: inherit;
   cursor: pointer;
 }
 
+.trigger:focus-visible {
+  outline-color: var(--focus-on-rail);
+}
+
 .trigger[aria-expanded='true'] {
-  background: var(--active);
+  background: var(--rail-active);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .trigger:hover {
-    background: var(--active);
+    background: var(--rail-hover);
   }
 }
 
@@ -33,53 +35,56 @@
   display: inline-grid;
   flex: none;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  font-size: 0.85rem;
-  font-weight: 800;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .who {
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.2;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
   white-space: nowrap;
 }
 
-/* At 900 px and narrower only the initial shows, as in the sketch; the name and role stay for a screen reader. */
-@media (max-width: 900px) {
-  .chip {
-    padding-right: 3px;
-  }
-
-  .who {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-}
-
+/* Sign out opens beside the rail, or under the bar in a narrow window. Fixed, so a scrolling rail never clips it. */
 .panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
   z-index: var(--z-overlay);
+  bottom: var(--space-4);
+  left: calc(92px + var(--space-2));
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: var(--float);
+  color: var(--ink);
+  box-shadow: var(--shadow-3);
+}
+
+@media (max-width: 860px) {
+  .panel {
+    top: 56px;
+    right: max(10px, env(safe-area-inset-right, 0px));
+    bottom: auto;
+    left: auto;
+  }
+}
+
+.signedIn {
+  margin: 0;
+  max-width: 260px;
+  font-weight: var(--fw-semi);
 }
 
 .failed {
   max-width: 220px;
   margin: 0;
-  color: var(--red-ink);
-  font-size: var(--text-14);
+  color: var(--stop-text);
+  font-size: var(--fs-small);
 }

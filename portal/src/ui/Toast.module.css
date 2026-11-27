@@ -29,7 +29,7 @@
   background: var(--primary);
   box-shadow: var(--float);
   color: var(--on-ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   pointer-events: auto;
   animation: toast-in var(--dur-small) var(--ease-out);
 }
@@ -52,7 +52,7 @@
   border-radius: var(--r-ctl);
   color: var(--on-ink);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
   transition: background-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out);
 }

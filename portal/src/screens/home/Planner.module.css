@@ -13,19 +13,19 @@
 
 .welcome h1 {
   max-width: 22ch;
-  font-size: 2rem;
+  font-size: var(--fs-display);
   text-wrap: balance;
 }
 
 .lead {
   max-width: 52ch;
   color: var(--muted);
-  font-size: 1.05rem;
+  font-size: var(--fs-body);
 }
 
 .offline h1 {
   max-width: 30ch;
-  font-size: 1.5rem;
+  font-size: var(--fs-title);
 }
 
 .offline .buttons {
@@ -34,7 +34,7 @@
 
 @media (max-width: 600px) {
   .welcome h1 {
-    font-size: 1.5rem;
+    font-size: var(--fs-title);
   }
 }
 
@@ -71,12 +71,12 @@
 
 .hi {
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .hero h1 {
-  font-size: clamp(1.6rem, 1.3rem + 1.2vw, 2.3rem);
-  font-weight: 800;
+  font-size: var(--fs-display);
+  font-weight: var(--fw-bold);
   letter-spacing: -0.01em;
   line-height: 1.15;
   text-wrap: balance;
@@ -118,6 +118,7 @@
 
 .composer:focus-within {
   border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--focus-halo);
 }
 
 .composer textarea {
@@ -130,7 +131,7 @@
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--fs-body);
   line-height: 1.45;
   text-align: left;
   resize: none;
@@ -185,7 +186,7 @@
 
 .problem {
   color: var(--red);
-  font-size: 0.9375rem;
+  font-size: var(--fs-small);
   text-align: left;
 }
 
@@ -203,8 +204,8 @@
   background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
   text-align: left;
   overflow-wrap: anywhere;
   cursor: pointer;
@@ -282,8 +283,8 @@
   display: block;
   margin-bottom: -6px;
   color: var(--lead);
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-bold);
 }
 
 .cards {
@@ -296,7 +297,7 @@
 
 /* The sentence an answer leads its cards with: the sketch's lead line. */
 .cards > p:first-of-type {
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .dots {
@@ -345,7 +346,7 @@
 .waiting {
   margin: 0;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .waiting:empty {
@@ -364,7 +365,7 @@
   gap: 2px;
   margin: 0;
   padding-left: 18px;
-  font-size: 0.92rem;
+  font-size: var(--fs-small);
   list-style: disc;
 }
 
@@ -374,7 +375,7 @@
   gap: 4px;
   margin: 0;
   padding-left: 20px;
-  font-size: 0.92rem;
+  font-size: var(--fs-small);
   list-style: decimal;
 }
 
@@ -384,14 +385,14 @@
   align-items: center;
   min-height: 44px;
   margin-block: -4px;
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .note {
   display: block;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .buttons {
@@ -412,7 +413,7 @@
   background: none;
   color: var(--ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -464,11 +465,11 @@
   padding: 10px 16px 14px;
   border-top: 1px solid var(--rule);
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .abilities h3 {
-  font-size: 0.9375rem;
+  font-size: var(--fs-small);
 }
 
 .abilities ul {
@@ -478,13 +479,13 @@
 }
 
 .abilities li {
-  font-size: 0.9375rem;
+  font-size: var(--fs-small);
 }
 
 .abilities .why {
   display: block;
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--fs-tiny);
 }
 
 .abilities details {
@@ -496,7 +497,7 @@
 
 .abilities summary {
   min-height: 44px;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 
@@ -554,7 +555,7 @@
 
 .more {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-small);
 }
 
 /* Marks one approval card for Show more, with no box of its own. */
@@ -575,7 +576,7 @@
 }
 
 .altHeading {
-  font-size: 1.05rem;
+  font-size: var(--fs-body);
 }
 
 .lookedAt {
@@ -585,7 +586,7 @@
   gap: 4px 14px;
   margin: 0;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 /* A 44 px target that takes the line's own height. */
@@ -700,7 +701,7 @@
   margin: -6px 0 -6px auto;
   padding: 0 4px;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
 }
 
 @media (max-width: 900px) {
@@ -732,6 +733,6 @@
   gap: 4px 12px;
   margin: 0 0 6px;
   color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }

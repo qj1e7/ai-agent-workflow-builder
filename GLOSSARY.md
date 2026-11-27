@@ -105,7 +105,7 @@ The one line at the top of a conversation that names the most urgent item in Nee
 _Avoid_: Banner, alert
 
 **Rail**:
-The slim column on the left of the app with Chat, Workflows and Watchlist, each with a count. Workflows and Watchlist open as full pages, and the chat shows only on Chat. In a narrow window it is a bar across the top (ADR 0043).
+The dark column on the left of the app, with Home and Workflows at the top, and Teams, Jira, Settings and the signed-in person at its foot. There is no top bar. Home's count is how many things need the person, and it turns red while any do. Workflows shows its total. Workflows opens as a full page, and the chat shows only on Home. In a window 860 px wide or narrower it is a bar across the top (ADR 0043, ADR 0052).
 _Avoid_: Tabs, menu, sidebar
 
 **Side panel**:

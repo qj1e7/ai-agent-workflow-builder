@@ -8,8 +8,8 @@
   padding: 0 var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-button);
-  font-size: var(--text-16);
-  font-weight: 600;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semi);
   line-height: 1.2;
   text-align: center;
   text-decoration: none;
@@ -66,12 +66,12 @@
 }
 
 .approve {
-  background: var(--green);
+  background: var(--ok-text);
   color: var(--on-status);
 }
 
 .approve:hover:not([aria-disabled='true']) {
-  background: var(--green-ink);
+  background: color-mix(in srgb, var(--ok-text) 82%, black);
 }
 
 .spinner {

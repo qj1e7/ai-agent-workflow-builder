@@ -13,7 +13,7 @@
 .note {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-small);
 }
 
 /* What came back from n8n that didn't count, each in its own words. */
@@ -27,20 +27,20 @@
 
 .ok {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .problem {
   margin: 0;
   color: var(--ink);
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .revision {
   color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .linkButton {
@@ -50,7 +50,7 @@
   background: none;
   color: var(--link);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--fs-small);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -63,8 +63,8 @@
 
 .stand {
   color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .reasons {
@@ -92,16 +92,16 @@
 
 .pageHead h1 {
   margin: 0;
-  font-size: 1.45rem;
-  font-weight: 800;
+  font-size: var(--fs-title);
+  font-weight: var(--fw-bold);
   line-height: 1.2;
 }
 
 .kind {
   margin: 0;
   color: var(--muted);
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .foot {
@@ -132,7 +132,7 @@
 
 .see {
   color: var(--link);
-  font-size: 0.9rem;
+  font-size: var(--fs-small);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -163,14 +163,14 @@
   height: 22px;
   border: 1px solid var(--rule);
   border-radius: 50%;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-bold);
 }
 
 .key {
   color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
   line-height: 22px;
 }
 
@@ -214,7 +214,7 @@
   padding: 1px 8px;
   border: 1px solid var(--rule);
   border-radius: 999px;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 /* The revision tried on practice systems (ADR 0054): the result, then each case with a mark and a word. */
@@ -258,7 +258,7 @@
   width: 16px;
   color: var(--muted);
   text-align: center;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* Cases that passed, folded under the result on a workflow's page. */
@@ -268,7 +268,7 @@ details.foldedCases > summary {
   width: fit-content;
   min-height: 44px;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;

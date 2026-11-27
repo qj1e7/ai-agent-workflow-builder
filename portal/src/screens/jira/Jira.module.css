@@ -1,12 +1,12 @@
 .note {
   margin-top: var(--space-3);
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .status:not(:empty) {
   margin-top: var(--space-3);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .status:focus {
@@ -16,8 +16,8 @@
 .error {
   margin-top: var(--space-3);
   color: var(--fail);
-  font-size: var(--text-14);
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .list {
@@ -49,14 +49,14 @@
 }
 
 .main h2 {
-  font-size: 1.05rem;
+  font-size: var(--fs-body);
   overflow-wrap: anywhere;
 }
 
 .key {
   margin-right: var(--space-2);
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .meta {
@@ -65,7 +65,7 @@
   align-items: center;
   gap: var(--space-2) var(--space-3);
   color: var(--muted);
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }
 
 .meta a {
@@ -80,8 +80,8 @@
   border-radius: 999px;
   background: var(--sunk);
   color: var(--muted);
-  font-size: var(--text-14);
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .pill[data-done] {
