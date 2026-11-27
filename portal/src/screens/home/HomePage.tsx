@@ -136,7 +136,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   const arrival = useArrival(needs.shown.map((need) => need.key))
   const watchlist = useWatchlist({ enabled: operator })
   // The platform answers null until the first software is added, which is none watched, not still loading.
-  const watching = watchlist.isSuccess ? (watchlist.data?.software.length ?? 0) : undefined
+  const watching = watchlist.data === undefined ? undefined : (watchlist.data?.software.length ?? 0)
   const watched = !operator || (watching !== undefined && watching > 0)
   const suggestions = useMemo(() => (operator ? suggestionsOf(watching, capabilities.data) : APPROVER_SUGGESTIONS), [operator, watching, capabilities.data])
   const { resume, type, setProblem, arrive } = chat

@@ -32,6 +32,8 @@ interface Seed {
   readonly watching?: number
   /** No software was ever added, so the platform answers null for the watchlist. */
   readonly neverAdded?: boolean
+  /** A later read of the watchlist failed, and the earlier answer is kept. */
+  readonly refetchFailed?: boolean
 }
 
 function render(me: Me, home: HomeOut | Error | 'loading' | { readonly stale: HomeOut }, seed: Seed = {}): string {
@@ -43,6 +45,7 @@ function render(me: Me, home: HomeOut | Error | 'loading' | { readonly stale: Ho
   queryClient.setQueryData(['capabilities', scope], CAPABILITIES)
   queryClient.setQueryData(['watchlist', scope], seed.neverAdded ? null : { software: Array.from({ length: seed.watching ?? 0 }, () => ({})) })
   if (seed.model) queryClient.setQueryData(['model-settings', scope], seed.model === 'none' ? NO_MODEL : MODEL)
+  if (seed.refetchFailed) queryClient.getQueryCache().build(queryClient, { queryKey: ['watchlist', scope] }).setState({ status: 'error', data: { software: [{}, {}] }, error: new ApiError(503, null), fetchStatus: 'idle' })
   const homeQuery = () => queryClient.getQueryCache().build(queryClient, { queryKey: ['home', scope] })
   if (home instanceof Error) homeQuery().setState({ status: 'error', error: home, fetchStatus: 'idle' })
   else if (home !== 'loading' && 'stale' in home) homeQuery().setState({ status: 'error', data: home.stale, error: new ApiError(503, null), fetchStatus: 'idle' })
@@ -141,6 +144,11 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
   it('shows the day-one pair when no software was ever added and the platform answers null for the watchlist', () => {
     const fresh = mainOf(render(ALICE, ALICE_HOME, { neverAdded: true }))
     expect(chipsOf(fresh, 'Starting points')).toEqual(['Keep track of the LangGraph version', 'What can you do?'])
+  })
+
+  it('keeps the three chips of an Operator who watches software when a later read of the watchlist fails', () => {
+    const html = mainOf(render(ALICE, ALICE_HOME, { refetchFailed: true }))
+    expect(chipsOf(html)).toEqual(['What needs me?', 'Which software is behind?', 'What can you do?'])
   })
 
   it('sets up no general workflow from a chip', () => {

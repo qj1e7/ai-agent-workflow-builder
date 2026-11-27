@@ -16,6 +16,10 @@ describe('softwareLinkTarget', () => {
     expect(softwareLinkTarget('/software', null)).toBe('/workflows')
   })
 
+  it('leaves an address with a bad percent sign as it is, instead of throwing', () => {
+    expect(softwareLinkTarget('/software/100%', 'uc_wl')).toBe('/software/100%')
+  })
+
   it('leaves every other address, and an address before the watchlist is known, as it is', () => {
     expect(softwareLinkTarget('/workflows/uc_1', 'uc_wl')).toBe('/workflows/uc_1')
     expect(softwareLinkTarget('/softwares', 'uc_wl')).toBe('/softwares')

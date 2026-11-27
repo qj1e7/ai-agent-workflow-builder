@@ -53,6 +53,8 @@ interface QueryOptions {
   /** true polls every POLL_MS; a number polls that often. */
   poll?: boolean | number
   enabled?: boolean
+  /** How long a read stays fresh, so a window focus does not read it again. */
+  staleTime?: number
 }
 
 function pollEvery(options: QueryOptions | undefined): number | false {
@@ -456,6 +458,7 @@ export function useWatchlist(options?: QueryOptions) {
     queryFn: async () => unwrap(await client.GET('/api/v1/watchlist')).watchlist,
     refetchInterval: pollEvery(options),
     enabled: options?.enabled ?? true,
+    ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
   })
 }
 
