@@ -207,8 +207,8 @@ describe('the Connections tab', () => {
 
   it('puts the name over the time it was checked, and the Tell flow in the same grid as the other cards', () => {
     expect(cardOf(html, 'jira')).toMatch(/<h3>Jira<\/h3><p[^>]*>Checked today, 9:00\.?<\/p>/)
-    expect(html).toMatch(/<div class="[^"]*connections[^"]*">(?:(?!<\/section>)[\s\S])*data-connection="tell"/)
-    expect(html.match(/class="[^"]*connections[^"]*"/g)).toHaveLength(1)
+    expect(html).toMatch(/<div class="_connections_\w+">(?:(?!<\/section>)[\s\S])*data-connection="tell"/)
+    expect(html.match(/class="_connections_\w+"/g)).toHaveLength(1)
   })
 
   it('shows the Tell flow as a connection fact, read only, and never its address or a claim that it posts yet', () => {

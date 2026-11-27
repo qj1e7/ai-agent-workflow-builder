@@ -49,7 +49,13 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
-  font-size: var(--fs-small);
+  margin: 0;
+  color: var(--muted);
+}
+
+.health b {
+  color: var(--ink);
+  font-weight: var(--fw-semi);
 }
 
 .hdots {
@@ -58,18 +64,20 @@
 }
 
 .hdots i {
-  width: 8px;
-  height: 8px;
-  border: 1.5px solid var(--muted);
+  width: 10px;
+  height: 10px;
+  border: 2px dashed var(--off);
   border-radius: 50%;
 }
 
 .hdots i[data-tone='ok'] {
+  border-style: solid;
   border-color: var(--green);
   background: var(--green);
 }
 
 .hdots i[data-tone='wait'] {
+  border-style: solid;
   border-color: var(--amber);
   background: var(--amber);
 }
@@ -468,59 +476,145 @@
   }
 }
 
+/* Connections, as the sketch draws it: two cards across, one soft shadow each, nothing boxed inside a card. */
 .connections {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-  align-items: start;
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+@media (max-width: 1100px) {
+  .connections {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .connection {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   min-width: 0;
-  padding: 16px 18px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
+  padding: 20px 22px;
+  border-radius: var(--r-lg);
   background: var(--surface);
+  box-shadow: var(--shadow-2);
 }
 
-.connection[data-state='needs_attention'],
-.connection[data-state='not_answering'] {
-  border-color: var(--amber-line);
+/* A system nobody set up is a dashed, flat card, so it reads as not there yet. */
+.connection[data-state='not_set_up'] {
+  border: 1.5px dashed var(--line-strong);
+  background: var(--subtle);
+  box-shadow: none;
 }
 
 .connectionTop {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 10px;
+  gap: 10px 14px;
 }
 
-.connectionTop h3 {
-  margin-right: auto;
-  font-size: var(--fs-body);
+.sys {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--sunk);
+  color: var(--ink);
+}
+
+.connectionName h3 {
+  font-size: var(--fs-head);
+  font-weight: var(--fw-semi);
+  line-height: 1.3;
+}
+
+.when {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+.tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+
+.connection p {
+  margin: 0;
+}
+
+.callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font-weight: var(--fw-semi);
+}
+
+.callout svg {
+  flex: none;
+  margin-top: 3px;
 }
 
 .facts {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 4px 16px;
+  gap: 14px;
   margin: 0;
-  font-size: var(--fs-small);
 }
 
 .facts dt {
   color: var(--muted);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .facts dd {
-  margin: 0;
+  margin: 4px 0 0;
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 480px) {
-  .facts {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.facts ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.facts li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.facts li::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  translate: 0 -2px;
+}
+
+.tags .tag {
+  margin-left: 0;
+}
+
+.connectionsPanel {
+  gap: 20px;
+}
+
+/* The buttons sit at the card's foot, so a row of cards lines up. */
+.connection > .buttons {
+  margin-top: auto;
 }
