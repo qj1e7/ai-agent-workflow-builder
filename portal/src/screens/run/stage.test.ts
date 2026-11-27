@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StepState } from '../../ui/StepLine'
 import type { Station } from './runModel'
-import { geometryOf, handoffsOf, MAX_STAGE_STEPS, stageOf, STAGE_STATE_WORDS } from './stage'
+import { geometryOf, handoffsOf, MAX_STAGE_STEPS, plannerFaceOf, stageOf } from './stage'
 
 const agent = { id: 'version_checker', display: 'Version checker' }
 
@@ -31,17 +31,6 @@ describe('the stage from the run line', () => {
     expect(stageOf(open)?.nodes[1]?.picture).toBe('icon')
   })
 
-  it('draws the Planner thinking while a step is at work, and waiting while the gate waits', () => {
-    expect(stageOf(line('done', 'now'))?.planner).toBe('thinking')
-    expect(stageOf(line('done', 'done', 'wait'))?.planner).toBe('waiting')
-  })
-
-  it('draws the Planner with a mark on a stop, smiling once everything is done, and idle before it starts', () => {
-    expect(stageOf(line('done', 'err'))?.planner).toBe('error')
-    expect(stageOf(line('done', 'done', 'done', 'done'))?.planner).toBe('success')
-    expect(stageOf(line('todo', 'todo'))?.planner).toBe('idle')
-  })
-
   it('joins each reached step to the one before it, and leaves the rest dashed', () => {
     const wires = stageOf(line('done', 'done', 'now'))?.wires.filter((wire) => wire.from !== 'planner')
     expect(wires?.map((wire) => `${wire.id}:${wire.kind}`)).toEqual(['track:1:track', 'track:2:track', 'track:3:todo'])
@@ -52,9 +41,9 @@ describe('the stage from the run line', () => {
     expect(wires?.map((wire) => `${wire.to}:${wire.kind}`)).toEqual(['1:ai', '2:gate'])
   })
 
-  it('cuts the Planner wire to a step that stopped, and does not wire the Planner to its own face', () => {
+  it('keeps the Planner wire to a step that stopped violet, and does not wire the Planner to its own face', () => {
     const stopped = stageOf(line('done', 'err'))
-    expect(stopped?.wires.find((wire) => wire.id === 'plan:1')?.kind).toBe('cut')
+    expect(stopped?.wires.find((wire) => wire.id === 'plan:1')?.kind).toBe('ai')
     const picking = [station('trigger', 'done', 'started'), station('agent:0', 'now', 'agent', { id: 'planner', display: 'Planner' })]
     expect(stageOf(picking)?.wires.some((wire) => wire.from === 'planner')).toBe(false)
   })
@@ -65,28 +54,57 @@ describe('the stage from the run line', () => {
     expect(stageOf([...six, station('more', 'todo', 'started')])).toBeNull()
     expect(stageOf([])).toBeNull()
   })
+})
 
-  it('says each state in one word or two', () => {
-    expect(STAGE_STATE_WORDS).toEqual({ todo: 'Not reached yet', now: 'At work', wait: 'Waits for approval', done: 'Done', err: 'Stopped', no: 'Declined', skip: 'Skipped' })
+describe('the Planner face follows the run, not the steps', () => {
+  it('works while the run goes, waits at the gate, smiles only when it succeeded, and frowns on a stop', () => {
+    for (const state of ['pending', 'working', 'proposed', 'acting'] as const) expect(plannerFaceOf(state)).toBe('thinking')
+    expect(plannerFaceOf('awaiting_approval')).toBe('waiting')
+    expect(plannerFaceOf('succeeded')).toBe('success')
+    expect(plannerFaceOf('failed')).toBe('error')
+  })
+
+  it('does not smile or frown on a run that was declined, expired, lost or skipped', () => {
+    for (const state of ['rejected', 'expired', 'lost', 'skipped'] as const) expect(plannerFaceOf(state)).toBe('idle')
   })
 })
 
 describe('the hand-offs that glow', () => {
-  it('plays every reached wire in order when the stage opens, each a little after the one before, in under five seconds', () => {
+  it('plays every reached wire in order when the stage opens, each a little after the one before', () => {
     const plays = handoffsOf(stageOf(line('done', 'done', 'wait'))!, null)
     expect(plays.map((play) => play.id)).toEqual(['track:1', 'plan:1', 'track:2', 'plan:2'])
     expect(plays.map((play) => play.delay)).toEqual([...plays.map((play) => play.delay)].sort((a, b) => a - b))
     expect(new Set(plays.map((play) => play.delay)).size).toBe(plays.length)
-    expect(Math.max(...plays.map((play) => play.delay))).toBeLessThan(5)
   })
 
-  it('after that, glows only into a step that just changed', () => {
+  it('opens in under five seconds even for six steps', () => {
+    const six = [
+      station('trigger', 'done', 'started'),
+      { ...station('agent:0', 'done', 'agent', agent), key: 'agent:0' },
+      { ...station('agent:1', 'done', 'agent', agent), key: 'agent:1' },
+      { ...station('agent:2', 'done', 'agent', agent), key: 'agent:2' },
+      station('gate', 'done', 'gate'),
+      station('write', 'done', 'write'),
+    ]
+    const plays = handoffsOf(stageOf(six)!, null)
+    expect(plays).toHaveLength(9)
+    expect(Math.max(...plays.map((play) => play.delay)) + 0.8).toBeLessThanOrEqual(5)
+    expect(new Set(plays.map((play) => play.delay)).size).toBe(plays.length)
+  })
+
+  it('opens a stopped run with the work flowing into the stop', () => {
+    const plays = handoffsOf(stageOf(line('done', 'err'))!, null)
+    expect(plays.map((play) => play.id)).toEqual(['track:1', 'plan:1'])
+  })
+
+  it('after that, glows into each step that changed, so a retry flows into the step again', () => {
     const plays = handoffsOf(stageOf(line('done', 'done', 'wait'))!, statesOf(line('done', 'now', 'todo')))
-    expect(plays.map((play) => play.id)).toEqual(['track:2', 'plan:2'])
+    expect(plays.map((play) => play.id)).toEqual(['track:1', 'plan:1', 'track:2', 'plan:2'])
     expect(plays.every((play) => play.delay === 0)).toBe(true)
+    expect(handoffsOf(stageOf(line('done', 'now'))!, statesOf(line('done', 'err'))).map((play) => play.id)).toEqual(['track:1', 'plan:1'])
   })
 
-  it('glows nothing when nothing changed, or when a step stopped', () => {
+  it('glows nothing when nothing changed, and nothing into a stop or a decline that just happened', () => {
     const same = line('done', 'now')
     expect(handoffsOf(stageOf(same)!, statesOf(same))).toEqual([])
     expect(handoffsOf(stageOf(line('done', 'err'))!, statesOf(line('done', 'now')))).toEqual([])

@@ -8,7 +8,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BlockKind } from '../../api/types'
 import { RunStage } from './RunStage'
-import { emptyModel, foldWire, stationsOf, type PlanBlock, type RunModel, type Station } from './runModel'
+import { emptyModel, foldWire, stationsOf, type Phase, type PlanBlock, type RunModel, type Station } from './runModel'
 
 interface Raw {
   readonly run_id: string
@@ -24,10 +24,10 @@ function replay(raw: readonly Raw[], upTo = Infinity): RunModel {
 
 const stationsAt = (raw: readonly Raw[], upTo = Infinity): Station[] => stationsOf(replay(raw, upTo), PLAN, 'Started by Alice')
 
-function stage(stations: readonly Station[]): string {
+function stage(stations: readonly Station[], phase: Phase['state'] = 'succeeded', stopNote: string | null = null): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <RunStage stations={stations} arrivedLive={null} />
+      <RunStage stations={stations} arrivedLive={null} phase={phase} stopNote={stopNote} />
     </MemoryRouter>,
   )
 }
@@ -49,22 +49,20 @@ describe('the stage on a run that wrote its ticket', () => {
     expect(text(html)).toContain('Planner')
   })
 
-  it('lists every step under one name, each with its state in a word for a screen reader, and shown only where the shape does not say it', () => {
+  it('lists every step, each with its state in the step line\'s words for a screen reader and none on screen', () => {
     expect(html).toContain('aria-label="Steps of this run"')
     expect(states(html)).toEqual(['done', 'done', 'done', 'done'])
-    expect(html.match(/class="[^"]*visually-hidden[^"]*">Done</g)).toHaveLength(4)
-  })
-
-  it('shows no state word on a step that is done, since its tick says it', () => {
-    expect(html.match(/class="(?![^"]*visually-hidden)[^"]*word[^"]*">/g)).toBeNull()
+    expect(html.match(/class="visually-hidden">Done: </g)).toHaveLength(4)
+    expect(html).not.toMatch(/Waits for approval|At work/)
   })
 
   it('puts an Orb on each agent step and the icon on the others', () => {
     expect(html.match(/data-face="orb"/g)).toHaveLength(1)
   })
 
-  it('draws the Planner smiling, since every step is done', () => {
+  it('draws the Planner smiling, since the run succeeded, and not for a run that was declined or expired', () => {
     expect(html).toMatch(/data-face="visor" data-state="success"/)
+    for (const phase of ['rejected', 'expired', 'lost', 'skipped'] as const) expect(stage(line('done', 'done', 'no', 'skip'), phase)).toMatch(/data-face="visor" data-state="idle"/)
   })
 })
 
@@ -74,11 +72,12 @@ function line(...states: Station['state'][]): Station[] {
 }
 
 describe('the stage on a run that waits for approval', () => {
-  const html = stage(line('done', 'done', 'wait', 'todo'))
+  const html = stage(line('done', 'done', 'wait', 'todo'), 'awaiting_approval')
 
-  it('says Waits for approval under the gate, marks it as the current step, and draws the gate wire in amber', () => {
+  it('names the gate as waiting for a screen reader only, since the pill says it, marks it the current step, and draws the gate wire in amber', () => {
     expect(states(html)).toEqual(['done', 'done', 'wait', 'todo'])
-    expect(text(html)).toContain('Waits for approval')
+    expect(html).toContain('class="visually-hidden">Waiting for approval: ')
+    expect(text(html.replace(/<span class="visually-hidden">[^<]*<\/span>/g, ''))).not.toMatch(/Waits for approval|Waiting for approval/)
     expect(html).toContain('data-hand="gate"')
     expect(html).toMatch(/<li [^>]*data-state="wait"[^>]*aria-current="step"|<li [^>]*aria-current="step"[^>]*data-state="wait"/)
   })
@@ -95,17 +94,20 @@ describe('the stage on a run that waits for approval', () => {
 describe('the stage on a run that stopped', () => {
   const stopped = line('done', 'err', 'todo', 'todo')
 
-  it('says Stopped at the step that stopped, and cuts the Planner wire to it', () => {
-    const html = stage(stopped)
+  it('marks the stopped step, shows the reason under it instead of a state word, and keeps the Planner wire violet', () => {
+    const html = stage(stopped, 'failed', 'GitHub did not answer.')
     expect(states(html)).toEqual(['done', 'err', 'todo', 'todo'])
-    expect(text(html)).toContain('Stopped')
-    expect(html).toContain('data-hand="cut"')
+    expect(html).toContain('class="visually-hidden">Stopped here: ')
+    expect(text(html)).toContain('GitHub did not answer.')
+    expect(html).toContain('data-hand="ai"')
+    expect(html).not.toContain('data-hand="cut"')
+    expect(html).toMatch(/data-face="visor" data-state="error"/)
   })
 
-  it('glows nothing into a stop', () => {
+  it('opens with the work flowing into the stop, as the run line does', () => {
     withReducedMotion(false)
-    const glows = [...stage(stopped).matchAll(/data-glow="([^"]+)"/g)].map((match) => match[1])
-    expect(glows).toEqual([])
+    const glows = [...stage(stopped, 'failed').matchAll(/data-glow="([^"]+)"/g)].map((match) => match[1])
+    expect(glows).toEqual(['track:1', 'plan:1'])
   })
 
   it('draws the stop from a real failed run too', () => {
@@ -150,6 +152,7 @@ describe('motion', () => {
     const css = readFileSync(new URL('./RunStage.module.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     const infinite = [...css.matchAll(/([^{}]+)\{[^}]*animation:[^;}]*infinite[^}]*\}/g)].map((match) => match[1]?.trim())
     expect(infinite).toEqual(['.node[data-ring]::after'])
+    expect(css, 'a face works a few times, then rests').toMatch(/\[data-face\][\s\S]*animation-iteration-count: 2 !important/)
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.node::after[\s\S]*animation: none !important/)
   })
 })
