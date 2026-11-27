@@ -80,7 +80,6 @@
 }
 
 .history {
-  margin-top: 22px;
   border-top: 1px solid var(--rule);
 }
 
@@ -139,7 +138,6 @@
   align-items: flex-start;
   gap: 14px;
   min-width: 0;
-  margin-top: 22px;
   padding: 14px 16px;
   border: 1px solid var(--rule);
   border-radius: var(--r-card);
@@ -159,9 +157,8 @@
   display: none;
 }
 
-/* The light stage, then the decision and the history. From 1240 px the decision and the history sit beside the stage, as the sketch has it. */
+/* The light stage, then the decision and the history. From 1240 px they sit beside the stage, as the sketch has it. */
 .body {
-  container-type: inline-size;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
@@ -171,14 +168,16 @@
 
 .side {
   display: grid;
+  gap: var(--space-5);
   min-width: 0;
 }
 
-@container (min-width: 1240px) {
-  .body:has(> :nth-child(2)) {
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+@media (min-width: 1240px) {
+  .withStage {
+    grid-template-columns: minmax(0, 1fr) 340px;
   }
 }
+
 
 .troubleBody {
   display: grid;

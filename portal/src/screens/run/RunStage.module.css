@@ -84,13 +84,13 @@
   border-radius: var(--r-lg);
 }
 
-.node > svg {
+.node > svg:not([data-face]) {
   width: 30px;
   height: 30px;
 }
 
-.todo .node > svg,
-.skip .node > svg {
+.todo .node > svg:not([data-face]),
+.skip .node > svg:not([data-face]) {
   opacity: 0.6;
 }
 
@@ -130,10 +130,6 @@
   box-shadow: 0 0 0 7px var(--wait-bg);
 }
 
-.wait .badge {
-  background: var(--wait-line);
-}
-
 /* The waiting gate pulses, and is the only thing that keeps moving. */
 .node[data-ring]::after {
   position: absolute;
@@ -171,31 +167,8 @@
   overflow-wrap: break-word;
 }
 
-.word {
-  order: 2;
-  font-size: var(--fs-small);
-  font-weight: var(--fw-semi);
-  color: var(--text-2);
-}
-
-.done .word {
-  color: var(--ok-text);
-}
-
-.now .word {
-  color: var(--run-text);
-}
-
-.wait .word {
-  color: var(--wait-text);
-}
-
-.err .word {
-  color: var(--stop-text);
-}
-
 .under {
-  order: 3;
+  order: 2;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -242,7 +215,7 @@
 }
 
 .wire[data-link='dead'] {
-  opacity: 0.5;
+  stroke-dasharray: 2 7;
 }
 
 .ai {
@@ -253,9 +226,15 @@
   stroke: var(--wait-line);
 }
 
-.cut {
-  stroke: var(--stop);
-  stroke-dasharray: 6 6;
+/* The reason a run stopped, under the step it stopped at. */
+.why {
+  color: var(--stop-text);
+}
+
+/* A face works a couple of times and then rests: after the opening only the waiting gate keeps moving (ADR 0052). */
+.stage :global([data-face]),
+.stage :global([data-face]) * {
+  animation-iteration-count: 2 !important;
 }
 
 /* A hand-off: a glowing dot runs along its wire once. It is invisible at rest. */

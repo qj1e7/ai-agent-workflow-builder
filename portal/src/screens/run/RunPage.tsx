@@ -9,6 +9,7 @@ import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
 import { AgentFace, type FaceState } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
+import { cx } from '../../ui/cx'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useFromChat } from '../../ui/fromChat'
 import { useView, ViewTabs } from '../../ui/ViewTabs'
@@ -35,7 +36,7 @@ import { historyOpen, WORKING } from './historyOpen'
 import { landingOf, scrollsToDecision } from './landing'
 import { useRunStory } from './useRunStory'
 import { testAgainOf } from './testAgain'
-import { announcementOf, declinedNext, declinedNowWords, feedTroubleOf, logRowsOf, messageRowsOf, RUN_MISSING, RUN_PROBLEM, stageWords } from './words'
+import { announcementOf, declinedNext, declinedNowWords, feedTroubleOf, logRowsOf, messageRowsOf, RUN_MISSING, RUN_PROBLEM, stageWords, withCurrentNames } from './words'
 import styles from './RunPage.module.css'
 
 function notFound(error: unknown): boolean {
@@ -316,8 +317,8 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
           <RunInN8n runId={run.run_id} name={run.use_case_name} seq={shown.seq} ended={modelFinished} />
         </div>
       ) : null}
-      <div className={styles['body']}>
-        {shownView === 'n8n' ? null : <RunStage stations={stations} arrivedLive={arrivedLive} />}
+      <div className={cx(styles['body'], shownView !== 'n8n' && styles['withStage'])}>
+        {shownView === 'n8n' ? null : <RunStage stations={stations} arrivedLive={arrivedLive} phase={shown.phase.state} stopNote={failure && story.stopped.advice ? withCurrentNames(story.stopped.advice.answers.what_happened) : null} />}
         <div className={styles['side']}>
           {main}
           <History rows={rows} messages={messages} loadedUpTo={loadedUpTo} open={open} onToggle={detail.choose} listRef={logList} />

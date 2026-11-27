@@ -1,19 +1,8 @@
 import type { StepIcon, StepState } from '../../ui/StepLine'
-import type { AgentRef, FaceState, Station, Under } from './runModel'
+import type { AgentRef, FaceState, Phase, Station, Under } from './runModel'
 
 /** The stage is drawn for one line of up to this many steps. A longer line falls back to the plain step line (ADR 0052). */
 export const MAX_STAGE_STEPS = 6
-
-/** What each state says under its step. The stage's key in the sketch, so no colour stands alone. */
-export const STAGE_STATE_WORDS: Readonly<Record<StepState, string>> = {
-  todo: 'Not reached yet',
-  now: 'At work',
-  wait: 'Waits for approval',
-  done: 'Done',
-  err: 'Stopped',
-  no: 'Declined',
-  skip: 'Skipped',
-}
 
 /** A link takes the state of the step it leads into: solid once done, dashes into the step at work or the gate that waits, red into a stop. */
 export type Link = 'solid' | 'flow' | 'wait' | 'stop' | 'dead' | 'todo'
@@ -33,10 +22,10 @@ const REACHED: ReadonlySet<StepState> = new Set(['now', 'wait', 'done', 'err', '
 export const reached = (state: StepState): boolean => REACHED.has(state)
 
 /**
- * A wire: the track between two steps, the Planner's hand-off to an agent (violet) or to the gate (amber), or the Planner's wire to a
- * step that stopped, cut. A wire to a step not reached is dashed.
+ * A wire: the track between two steps, or the Planner's hand-off to an agent (violet) or to the gate (amber). A track to a step not
+ * reached is dashed.
  */
-export type WireKind = 'track' | 'ai' | 'gate' | 'cut' | 'todo'
+export type WireKind = 'track' | 'ai' | 'gate' | 'todo'
 
 export interface Wire {
   /** "track:2" joins step 1 to step 2. "plan:2" is the Planner's wire to step 2. */
@@ -60,19 +49,30 @@ export interface StageNode {
 }
 
 export interface StageModel {
-  readonly planner: FaceState
   readonly nodes: readonly StageNode[]
   readonly wires: readonly Wire[]
 }
 
-/** The Planner's face follows the run: it looks up with a clock while the gate waits, and frowns where a step stopped. */
-function plannerFaceOf(stations: readonly Station[]): FaceState {
-  const has = (state: StepState) => stations.some((station) => station.state === state)
-  if (has('err')) return 'error'
-  if (has('wait')) return 'waiting'
-  if (has('now')) return 'thinking'
-  if (has('todo') || !has('done')) return 'idle'
-  return 'success'
+/**
+ * The Planner's face follows the run's own state, the one its pill says: at work while the run goes, up with a clock while the gate
+ * waits, smiling only when the run succeeded, and frowning when it stopped. A run that was declined, expired, lost or skipped is neither.
+ */
+export function plannerFaceOf(phase: Phase['state']): FaceState {
+  switch (phase) {
+    case 'pending':
+    case 'working':
+    case 'proposed':
+    case 'acting':
+      return 'thinking'
+    case 'awaiting_approval':
+      return 'waiting'
+    case 'succeeded':
+      return 'success'
+    case 'failed':
+      return 'error'
+    default:
+      return 'idle'
+  }
 }
 
 function wireOf(station: Station, index: number): Wire | null {
@@ -80,7 +80,7 @@ function wireOf(station: Station, index: number): Wire | null {
   const gate = station.spot.at === 'gate'
   const agent = station.spot.at === 'agent' && station.agent !== null && station.agent.id !== 'planner'
   if (!gate && !agent) return null
-  const kind: WireKind = station.state === 'err' ? 'cut' : gate ? 'gate' : 'ai'
+  const kind: WireKind = gate ? 'gate' : 'ai'
   return { id: `plan:${index}`, kind, from: 'planner', to: index }
 }
 
@@ -106,7 +106,7 @@ export function stageOf(stations: readonly Station[]): StageModel | null {
     const plan = wireOf(station, index)
     return plan ? [track, plan] : [track]
   })
-  return { planner: plannerFaceOf(stations), nodes, wires }
+  return { nodes, wires }
 }
 
 export interface Handoff {
@@ -115,25 +115,33 @@ export interface Handoff {
   readonly delay: number
 }
 
-/** The stage plays once when it opens, in under five seconds. */
-const OPENING_STEP = 0.8
+/** The stage plays once when it opens, in under five seconds: each hand-off runs for this long, and the opening has this long in all. */
+const TRAVEL = 0.8
+const OPENING = 5
 const OPENING_START = 0.2
+const OPENING_STEP = 0.8
 
 /**
- * The hand-offs that glow. When the stage opens, every wire the run reached, in order. After that, only the wires into a step that
- * has just been reached: a stop and a decline do not glow, since nothing was handed on, and a step already reached does not glow again.
+ * The hand-offs that glow. When the stage opens, every wire the run reached, in order, into a stop too, as the run line first showed the
+ * work flowing into a stop. The pace slows down to fit six steps in the opening. After that, only the wires into a step whose state just
+ * changed, a retry's flow into the step again included. A stop and a decline that just happened do not glow, since nothing was handed on.
  */
 export function handoffsOf(stage: StageModel, before: Readonly<Record<string, StepState>> | null): Handoff[] {
   const live = stage.wires.filter((wire) => {
     const node = stage.nodes[wire.to]
-    if (!node || wire.kind === 'todo' || wire.kind === 'cut' || node.state === 'no' || node.state === 'err') return false
-    const was = before?.[node.key]
-    return before === null || was === undefined || !reached(was)
+    if (!node || wire.kind === 'todo' || node.state === 'no') return false
+    if (before === null) return true
+    return node.state !== 'err' && before[node.key] !== node.state
   })
-  return live.map((wire, index) => ({ id: wire.id, delay: before === null ? Math.round((OPENING_START + index * OPENING_STEP) * 10) / 10 : 0 }))
+  const step = live.length > 1 ? Math.min(OPENING_STEP, (OPENING - OPENING_START - TRAVEL) / (live.length - 1)) : OPENING_STEP
+  const delay = (index: number) => Math.floor((OPENING_START + index * step) * 100) / 100
+  return live.map((wire, index) => ({ id: wire.id, delay: before === null ? delay(index) : 0 }))
 }
 
-const HUB = 148
+/** When the circle at the end of a wire turns blue on opening: as its own hand-off arrives. */
+export const ARRIVES = TRAVEL
+
+const HUB = 112
 const RISE = 44
 const NODE_MAX = 84
 const NODE_MIN = 52

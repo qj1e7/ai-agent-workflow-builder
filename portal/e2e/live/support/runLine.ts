@@ -45,3 +45,30 @@ export function linkAnimations(page: Page): Promise<string[][]> {
       ),
     )
 }
+
+/**
+ * Starts counting each animation the page starts, by name, from the first paint. A glowing hand-off is a dot that runs for under a second
+ * and then rests, so a check that looks afterwards cannot tell it ran. Call this before `page.goto`.
+ */
+export async function watchGlows(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const started: string[] = []
+    Object.assign(window, { animationsStarted: started })
+    document.addEventListener('animationstart', (event) => started.push(event.animationName), true)
+  })
+}
+
+/** How many hand-off dots (the stage's `pk` animation) the page has started since `watchGlows`. */
+export function glowsStarted(page: Page): Promise<number> {
+  return page.evaluate(() => ((window as unknown as { animationsStarted?: string[] }).animationsStarted ?? []).filter((name) => /pk/.test(name)).length)
+}
+
+/** The waiting gate's ring: whether its pulse runs now, or is paused (the tab is hidden or the stage is out of view). */
+export function ringState(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    document
+      .getAnimations()
+      .filter((animation) => (animation.effect as KeyframeEffect | null)?.pseudoElement === '::after' && (animation.effect as KeyframeEffect).target?.hasAttribute('data-ring') === true)
+      .map((animation) => animation.playState),
+  )
+}
