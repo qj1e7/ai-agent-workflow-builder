@@ -17,7 +17,7 @@ interface HistoryProps {
 }
 
 /**
- * "Run history (3 steps)", folded once the run needs the person or is over, and open while the agents work or the run is stopped.
+ * "Run history (3 steps)", open while the agents work, and folded once the run needs the person or is over, a stopped run included.
  * The agents' own words stay one more click away, for support, so the AI's report is never read as the check or repeated as a step.
  */
 export function History({ rows, messages, loadedUpTo, open, onToggle, line, listRef }: HistoryProps) {

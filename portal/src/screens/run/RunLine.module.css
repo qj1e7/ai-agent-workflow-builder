@@ -1,7 +1,6 @@
 /* The run line: the workflow's steps from end to end, small in cards and the side panel, large with the agents on the run page.
-   Each step is --w wide with a dot of --m, --top below the step's top. Narrower than that, the steps share the width with a gap
-   between them, down to --least, and the steps scroll sideways below that, as the sketch's do, so no name breaks inside a word.
-   The scroller's inline padding holds a ticket chip wider than its step. */
+   Small steps are --w wide with a dot of --m, sharing the width down to --least and then scrolling sideways. Large steps are boxes
+   of --sw that keep their width and scroll sideways when the page is narrower. The scroller's inline padding holds a ticket chip. */
 .line {
   --pad: 8px;
   container-type: inline-size;
@@ -416,6 +415,7 @@
 }
 
 .large .chip {
+  max-width: 100%;
   padding-inline: 9px;
 }
 

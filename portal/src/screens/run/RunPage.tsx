@@ -28,10 +28,10 @@ import { RunDecision } from './RunDecision'
 import { RunLine } from './RunLine'
 import { RunPill } from './RunPill'
 import { RunPlaceContext, type RunPlace } from './place'
-import { isFinished, type RunModel } from './runModel'
+import { isFinished } from './runModel'
 import { troubleFaceOf } from './troubleFace'
 import { IconChevronLeft } from '../../ui/icons'
-import { historyOpen } from './historyOpen'
+import { historyOpen, WORKING } from './historyOpen'
 import { landingOf, scrollsToDecision } from './landing'
 import { useRunStory } from './useRunStory'
 import { testAgainOf } from './testAgain'
@@ -163,8 +163,6 @@ interface RunViewProps {
   /** Whether a long Step by step is open, once the person chose. Null follows the run. */
   readonly detail: { readonly choice: boolean | null; readonly choose: (open: boolean) => void }
 }
-
-const WORKING = new Set<RunModel['phase']['state']>(['pending', 'working', 'proposed', 'acting'])
 
 /** The troubleshooter's face beside its words, as the sketch's `tr big`. Its mood follows the run, and a fix while one runs. */
 function TroubleshooterBlock({ face, children }: { face: FaceState; children: ReactNode }) {
