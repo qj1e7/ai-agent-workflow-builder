@@ -940,10 +940,10 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
       <ul class="nav">
         <li><button type="button" data-rail="chat" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 9v11.5h13V9"/><path d="M10 20.5v-6h4v6"/></svg><span class="nw">Home</span><span class="cnt alert" data-live="n-needs"></span></button></li>
         <li><button type="button" data-rail="wf" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="6" rx="1.5"/><rect x="15" y="14" width="6" height="6" rx="1.5"/><path d="M9 7h4a3 3 0 0 1 3 3v4"/></svg><span>Workflows</span><span class="cnt" data-live="n-wf"></span></button></li>
-        <li><button type="button" data-rail="watch" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/></svg><span>Watchlist</span><span class="cnt" data-live="n-watch"></span></button></li>
       </ul>
       <div class="rail-foot">
         <button type="button" data-teams aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Teams</span></button>
+        <button type="button" data-rail="jira" aria-pressed="false" aria-label="Jira, practice copy" title="Jira, practice copy"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 0 0 4v0a2 2 0 0 0 0 4v2h16v-2a2 2 0 0 0 0-4v0a2 2 0 0 0 0-4V6H4zM9 6v12"/></svg><span class="nw">Jira</span></button>
         <button type="button" data-rail="settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
         <span class="me" id="me" title="Alice, Operator"><span class="person" id="av" aria-hidden="true">A</span><span class="vh" id="who">Alice, Operator</span></span>
       </div>
@@ -977,10 +977,19 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
     </div>
   </div>
 
+  <section class="read" aria-labelledby="h-sync">
+    <h2 id="h-sync">Matched to the app on 27 Nov 2026</h2>
+    <ul>
+      <li>The rail has no Watchlist. The Software watchlist is a workflow, on Home’s board, the slim list and Workflows like any other. Its page has its list, Add software and the filters, and Pause (#361).</li>
+      <li>Jira sits at the rail’s foot beside Teams. It opens the practice Jira, which the sketch doesn’t draw.</li>
+      <li>A workflow shows one of four states: Needs you, On, Paused or Draft. Needs you is only for the person who has something to do. Anyone else reads “On · last run stopped” or “On · waiting for approval” (ADR 0053, #355).</li>
+      <li>A new workflow’s card has one Turn on. It runs the test, which writes nothing, and turns the workflow on if it passes (ADR 0053, #352).</li>
+    </ul>
+  </section>
   <section class="read" aria-labelledby="h-mc">
     <h2 id="h-mc">Redrawn on 22 Nov 2026: Mission control, light (ADR 0052)</h2>
     <ul>
-      <li>A dark rail holds Home, Workflows and the Watchlist, with Settings and the person at its foot. The top bar is gone. Home’s count is the Needs you count.</li>
+      <li>A dark rail holds Home and Workflows, with Teams, Jira, Settings and the person at its foot. The top bar is gone. Home’s count is the Needs you count.</li>
       <li>Home is the Planner’s box, then Needs you, then a board of workflow tiles. Each tile shows its state, its next run, and its last run as a line of steps.</li>
       <li>After a question, Home becomes a chat with the box at the bottom and a slim list docked on the right: the Needs you count, then each workflow’s name with its state mark. “‹ Home” or Home in the rail goes back to the board, and the chat is kept. In a narrower window the board gives way to the pinned line. Something opened from a card still shows beside the chat, in the board’s place.</li>
       <li>Workflows is filter chips, Needs you, then one table with each last run as steps. A workflow page draws its steps as a light diagram with today’s run on it.</li>
@@ -1004,7 +1013,7 @@ button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
   <section class="read" aria-labelledby="h-read">
     <h2 id="h-read">What’s new in version 3</h2>
     <ul>
-      <li>Where you came from decides. From the rail, Workflows and the Watchlist open as full pages, and the chat shows only on Home. From a card in the chat, the first click opens beside it, and anything you open from there goes full page, with Back to Home. A flow shows once: while it is open beside the chat, the card doesn’t repeat it. Play “Browse”, then “Morning check”.
+      <li>Where you came from decides. From the rail, Workflows opens as a full page, and the chat shows only on Home. From a card in the chat, the first click opens beside it, and anything you open from there goes full page, with Back to Home. A flow shows once: while it is open beside the chat, the card doesn’t repeat it. Play “Browse”, then “Morning check”.
       <li>The side panel is a summary: what it is, its state, and the next step. More details opens the full page, which adds what helps you understand it, such as a run’s step-by-step log or a release’s notes. An approval always shows everything that will be written.</li>
       <li>Every part of a request gets a tick or a cross, with a reason. Nothing is dropped, and a missing time is asked, never guessed.</li>
       <li>“Make the React check run on Mondays only” changes the workflow you have. You see before and after, and can undo.</li>
@@ -1213,18 +1222,22 @@ const srcOf = (s) => SRC[s.src || 'github'];
 const srcAt = (s) => (s.src === 'maven' ? `central.sonatype.com/artifact/${s.repo.replace(':', '/')}` : s.src === 'npm' ? `npmjs.com/package/${s.repo}` : `github.com/${s.repo}`);
 const d8 = { day: null, time: '8:00' };
 const d9 = { day: null, time: '9:00' };
+const wl9 = { day: 'mon', time: '9:00' };
 const WORLD = {
   user: 'alice', maint: false, stage: 'stopped', run: { when: 'done', read: 'err', compare: '', yes: '', write: '' },
   appr: 'none', apprUI: null, fix: 'none', cause: 'quiet', reason: '', asked: '', paused: {}, focus: null, key: true, langserve: true, schedEdit: null, sd: null, pendingEdit: '',
   wf: {
     fastapi: { name: 'FastAPI release check', soft: 'fastapi', sched: d8, then: 'jira', ver: 3, yes: true, by: 'Alice', on: '2 Nov' },
     react: { name: 'React release check', soft: 'react', sched: d8, then: 'jira', ver: 2, yes: true, by: 'Alice', on: '30 Oct' },
+    /* The Software watchlist is a workflow like the rest (ADR 0053, item 4, and #361): one list, checked on one schedule. It has no rail tab. */
+    swl: { name: 'Software watchlist', list: true, sched: wl9, then: 'jira', ver: 1, yes: true, by: 'Alice', on: '20 Oct' },
   },
   hist: {
     fastapi: [{ v: 3, what: 'Moved the run to 8:00', by: 'Alice', on: '2 Nov', sched: d8, yes: true }, { v: 2, what: 'Added a test run on practice Jira', by: 'Alice', on: '28 Oct', sched: d9, yes: true }, { v: 1, what: 'Built by the Planner', by: 'Alice', on: '20 Oct', sched: d9, yes: true }],
     react: [{ v: 2, what: 'Moved the run to 8:00', by: 'Alice', on: '30 Oct', sched: d8, yes: true }, { v: 1, what: 'Built by the Planner', by: 'Alice', on: '22 Oct', sched: d9, yes: true }],
+    swl: [{ v: 1, what: 'Built by the Planner', by: 'Alice', on: '20 Oct', sched: wl9, yes: true }],
   },
-  order: ['fastapi', 'react'], drafts: {}, edits: {}, dw: {}, dwFocus: null,
+  order: ['fastapi', 'react', 'swl'], drafts: {}, edits: {}, dw: {}, dwFocus: null,
 };
 const WAITING = { stage: 'waiting', appr: 'waiting', run: { when: 'done', read: 'done', compare: 'done', yes: 'wait', write: '' } };
 const DONE = { stage: 'done', appr: 'approved', run: { when: 'done', read: 'done', compare: 'done', yes: 'done', write: 'done' } };
@@ -1240,12 +1253,19 @@ const moved = () => W.cause === 'moved';
 const stopWhy = () => (moved() ? 'GitHub answered without the “tag” field' : 'GitHub didn’t answer');
 let FIXPLAN = 'ready';
 const flagged = (id) => W.wf[id].then === 'jira' && !W.wf[id].yes;
+/* A workflow shows one of four states (ADR 0053, item 2): Needs you, On, Paused or Draft, as [words, tone, state]. Needs you is only for
+   the person who has something to do, the same rule as their Needs you list. Anyone else reads On, with what it waits on. */
+const NEEDS = 'Needs you';
 function wfState(id) {
-  if (W.paused[id]) return ['Paused', 'idle'];
-  if (flagged(id)) return ['Needs a fix', 'err'];
-  if (id === 'fastapi' && W.stage === 'stopped') return ['Stopped', 'err'];
-  if (id === 'fastapi' && W.stage === 'waiting') return ['Waiting for approval', 'wait'];
-  return ['On', 'on'];
+  if (W.paused[id]) return ['Paused', 'idle', 'Paused'];
+  if (W.user === 'bob') {
+    if (id === 'fastapi' && (W.appr === 'waiting' || fixNeeds().length)) return [NEEDS, 'wait', NEEDS];
+    if (id === 'fastapi' && W.stage === 'stopped') return ['On · last run stopped', 'on', 'On'];
+    return ['On', 'on', 'On'];
+  }
+  if (flagged(id) || (id === 'fastapi' && W.stage === 'stopped')) return [NEEDS, 'err', NEEDS];
+  if (id === 'fastapi' && W.stage === 'waiting') return ['On · waiting for approval', 'wait', 'On'];
+  return ['On', 'on', 'On'];
 }
 const softIds = () => Object.keys(W.soft).filter((k) => k !== 'langserve' || W.langserve);
 function softState(k) {
@@ -1322,7 +1342,7 @@ const watchRows = () => softIds().map(softRow).join('');
 const behindIds = () => softIds().filter((k) => softState(k)[0] === 'Newer out');
 const listCard = () => '<div class="card"><div class="c-head"><b>Workflows</b><span class="small muted" data-live="n-wf"></span></div><ul class="wl" data-live="list"></ul></div>';
 const watchCard = () => '<div class="card"><div class="c-head"><b>Watchlist</b><span class="small muted" data-live="n-watch"></span></div><ul class="wl" data-live="watch"></ul></div>';
-const behindCard = () => '<div class="card"><div class="c-head"><b data-live="behind-h"></b></div><ul class="wl" data-live="behind"></ul><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="list:watch">See the watchlist</button></span></div></div>';
+const behindCard = () => '<div class="card"><div class="c-head"><b data-live="behind-h"></b></div><ul class="wl" data-live="behind"></ul><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="wf:swl">See the watchlist</button></span></div></div>';
 const needsCard = () => '<div class="card"><div class="c-head"><b data-live="needs-h"></b></div><div class="needs" data-live="needs"></div></div>';
 const histCard = () => `<div class="card"><div class="c-head"><b>Your recent decisions</b></div><ul class="rows plain">
   <li><span><b>React upgrade ticket</b><span class="s">Tue 4 Nov</span></span><span class="pill" data-s="ok">Approved</span></li>
@@ -1333,7 +1353,7 @@ const capsCard = () => (W.user === 'bob'
 const START_EXAMPLE = 'Keep track of the LangGraph version';
 const startCard = () => (W.user === 'bob'
   ? capsCard()
-  : `<div class="card"><div class="c-head"><b>How to start</b></div><p>This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written until an Approver approves it.</p><ol class="caps"><li>Tell me what should run by itself, in your own words, like “${START_EXAMPLE}”.</li><li>Check the card I make, and change anything I guessed.</li><li>Press Set up. I do a test run, which writes nothing.</li><li>If the test passes, press Turn it on.</li><li>Nothing is written until an Approver approves it in Teams.</li></ol><div class="pick" role="group" aria-label="Try one"><button type="button" data-say="${START_EXAMPLE}">${START_EXAMPLE}</button></div></div>`);
+  : `<div class="card"><div class="c-head"><b>How to start</b></div><p>This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written until an Approver approves it.</p><ol class="caps"><li>Tell me what should run by itself, in your own words, like “${START_EXAMPLE}”.</li><li>Check the card I make, and change anything I guessed.</li><li>Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.</li><li>Nothing is written until an Approver approves it in Teams.</li></ol><div class="pick" role="group" aria-label="Try one"><button type="button" data-say="${START_EXAMPLE}">${START_EXAMPLE}</button></div></div>`);
 const cantCard = (head, alt, ask) => `<div class="card"><div class="c-head"><b>${head}</b></div>${alt ? `<p class="muted">${alt}</p>` : ''}${ask ? '<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-toast="Asked the team. Their answer will show here.">Ask the team</button></span></div>' : ''}</div>`;
 const CANT = [
   [/(teams|channel|slack)/, 'I can’t post in Teams channels yet', 'Run results show here, in the chat.', true],
@@ -1779,7 +1799,7 @@ function apprFoot() {
 }
 
 /* ---------- Workflow, software and key views ---------- */
-const sentFor = (id) => { const f = W.wf[id]; return `${long(f.sched)}, check ${(W.soft[f.soft] || EXTRA[f.soft]).name} on ${srcOf(W.soft[f.soft] || EXTRA[f.soft])} for a new release. ${f.then === 'jira' ? 'If there is one, create an upgrade ticket in Jira project MOCK, after approval.' : 'If there is one, tell me here.'}`; };
+const sentFor = (id) => { const f = W.wf[id]; if (f.list) return `${long(f.sched)}, check each software on the list for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after approval.`; return `${long(f.sched)}, check ${(W.soft[f.soft] || EXTRA[f.soft]).name} on ${srcOf(W.soft[f.soft] || EXTRA[f.soft])} for a new release. ${f.then === 'jira' ? 'If there is one, create an upgrade ticket in Jira project MOCK, after approval.' : 'If there is one, tell me here.'}`; };
 const TIMES = ['7:30', '8:00', '9:00', '13:00', '17:00'];
 const dayOpts = (v) => [['', 'Every day'], ...['mon', 'tue', 'wed', 'thu', 'fri'].map((d) => [d, `Every ${DAY[d]}`])].map(([k, l]) => `<option value="${k}"${(v || '') === k ? ' selected' : ''}>${l}</option>`).join('');
 const timeOpts = (v) => [...new Set([...TIMES, v])].map((t) => `<option${t === v ? ' selected' : ''}>${t}</option>`).join('');
@@ -1789,7 +1809,7 @@ function whenHTML(id) {
   return `<div class="when-row"><span>${long(f.sched)}</span>${canEdit() ? `<button class="linkbtn" type="button" data-sched-edit="${id}">Change</button>` : ''}</div>`;
 }
 const versRows = (id) => W.hist[id].map((h, i) => `<li><span><b>Version ${h.v}${i === 0 ? ', in use' : ''}</b><span class="s">${h.what}. ${h.by}, ${h.on}.</span></span>${i === 0 || !canEdit() ? '<span></span>' : `<button class="btn ghost sm" type="button" data-rollback="${id}:${h.v}">Roll back</button>`}</li>`).join('');
-const lastRun = (id) => (id === 'fastapi' ? `Today 8:00: ${lower(TODAY[W.stage])}` : W.hist[id].length === 1 && W.hist[id][0].on === 'just now' ? 'No runs yet' : 'Today 8:00: nothing new');
+const lastRun = (id) => (id === 'fastapi' ? `Today 8:00: ${lower(TODAY[W.stage])}` : W.hist[id].length === 1 && W.hist[id][0].on === 'just now' ? 'No runs yet' : id === 'swl' ? 'Mon 9:00: nothing new' : 'Today 8:00: nothing new');
 const nextRun = (id) => (W.paused[id] ? 'Paused' : cap(firstRun(W.wf[id].sched)));
 function wfView(id, full = false) {
   const f = W.wf[id];
@@ -1798,7 +1818,9 @@ function wfView(id, full = false) {
     <p class="pv-sent" data-live="wf-sent"></p>
     <div class="banner" data-live="wf-banner"></div>
     <dl class="dl2"><div><dt>Last run</dt><dd data-live="wf-last"></dd></div><div><dt>Next run</dt><dd data-live="wf-next"></dd></div></dl>
+    ${f.list ? '<ul class="wl" data-live="watch"></ul>' : ''}
   </div>`;
+  if (f.list) return wlPage();
   const runs = id === 'fastapi'
     ? '<li data-live="wf-today"></li><li><span><b>Yesterday, 8:00</b><span class="s">No new release</span></span><span class="pill">Nothing new</span><span></span></li><li><span><b>Tue, 8:00</b><span class="s">1 ticket, approved by Bob</span></span><span class="pill" data-s="ok">Done</span><span></span></li>'
     : W.hist[id].length === 1 && W.hist[id][0].on === 'just now'
@@ -1825,18 +1847,41 @@ function wfView(id, full = false) {
     </div>` : ''}
   </div>`;
 }
+/* The Software watchlist's page (#361): a workflow page with the list drawn inside it. Pause and the When row's Change are its own, and it has no Change button or Delete. */
+const wlPage = () => `<div class="pv" data-live="wl">
+    <div class="pg-head"><div><p class="pv-kind">Workflow</p><div class="title-row"><h3 class="page-title">${nw('Software watchlist')}</h3><span class="pill lg" data-live="wl-pill"></span></div></div><div class="pv-actions" data-live="wl-acts"></div></div>
+    <p class="pv-sent" data-live="wl-sent"></p>
+    <dl class="meta-strip"><div><dt>When</dt><dd data-live="wl-when"></dd></div><div><dt>Who approves</dt><dd>Any Approver but you, in Teams.</dd></div><div><dt>Next run</dt><dd data-live="wl-next"></dd></div></dl>
+    <div class="banner" data-live="wl-banner"></div>
+    <section class="pv-sec" aria-labelledby="wl-list-h"><div class="pg-head"><h4 class="sec-title" id="wl-list-h">${nw('The list')} <span class="n" data-live="n-watch"></span></h4>${canEdit() ? `<form class="add" data-addf><label for="addIn">${nw('Add software')}</label><span class="add-row"><input id="addIn" type="text" autocomplete="off" placeholder="Grafana" data-nw="Grafana"><button class="btn" type="submit">${nw('Find it')}</button></span></form>` : ''}</div>
+      <div class="filters" role="group" aria-label="Show" data-live="watch-filters"></div>
+      <ul class="sw-list" data-live="watch-full"></ul></section>
+  </div>`;
+function patchWl(el) {
+  const [t, s] = wfState('swl');
+  const p = $('[data-live="wl-pill"]', el);
+  p.textContent = t;
+  p.dataset.s = s;
+  $('[data-live="wl-acts"]', el).innerHTML = canEdit() ? `<button class="btn ghost" type="button" data-pause="swl">${W.paused.swl ? 'Resume' : 'Pause'}</button>` : '';
+  $('[data-live="wl-sent"]', el).textContent = sentFor('swl');
+  if (W.schedEdit !== 'swl' || !$('#sdDay', el)) $('[data-live="wl-when"]', el).innerHTML = whenHTML('swl');
+  $('[data-live="wl-next"]', el).textContent = nextRun('swl');
+  $('[data-live="wl-banner"]', el).innerHTML = W.paused.swl ? '<span>Paused. It won’t run until you resume it.</span>' : '';
+}
 /* Under every Open in n8n editor button: the Portal and n8n sign in separately, so the line names the n8n account the workflow moves to. Nothing shows while the login is unknown. */
 const N8N_LOGIN = 'alice.n8ntest@example.test';
 const openInN8n = (id, ghost = false) => `<div class="n8nopen"><button class="btn${ghost ? ' ghost' : ''}" type="button" data-editor="${id}">Open in n8n editor</button>${N8N_LOGIN ? `<p class="small muted">Opens in n8n as ${N8N_LOGIN}.</p>` : ''}</div>`;
 const TICKET = { stopped: 'None yet. Today’s check stopped before it could tell.', retrying: 'None yet', waiting: '1 waiting for Bob to approve', writing: 'Being created', done: 'MOCK-22, created today', declined: 'Declined by Bob. None created.' };
-const ticketFor = (k) => { const s = W.soft[k]; if (k === 'fastapi') return TICKET[W.stage]; if (s.run && s.run === s.latest) return 'Not needed'; return W.wf[k] ? 'None yet' : 'None. Nothing checks it, so no ticket is made.'; };
+/* The Software watchlist checks every software on its list while it is on, as the app has it. A software with a release check of its own names that one. */
+const listChecks = (k) => !W.wf[k] && !W.paused.swl;
+const ticketFor = (k) => { const s = W.soft[k]; if (k === 'fastapi') return TICKET[W.stage]; if (s.run && s.run === s.latest) return 'Not needed'; return W.wf[k] || listChecks(k) ? 'None yet' : 'None. Nothing checks it, so no ticket is made.'; };
 const checkedFor = (k) => { if (!W.wf[k]) return ''; if (k === 'fastapi') return W.stage === 'stopped' ? 'Today 8:00, didn’t finish' : 'Today 9:01'; return lastRun(k) === 'No runs yet' ? 'Not yet' : 'Today 8:00'; };
 function softView(k, full = false) {
   const s = W.soft[k];
   const [t, c] = softState(k);
   const head = `<div class="pv-head"><div><p class="pv-kind">Watchlist</p><h3>${s.name}</h3></div><span class="pill lg" data-s="${c}">${t}</span></div>`;
   if (s.missing) return `<div class="pv" data-live="soft">${head}<div class="banner" data-tone="err"><span>GitHub can’t find ${s.repo}, and doesn’t say where it moved.</span></div><div class="pv-actions" data-live="soft-act"></div></div>`;
-  const by = W.wf[k] ? `<button class="linkbtn" type="button" data-open="wf:${k}">${W.wf[k].name}</button>` : isPkg(k) ? 'The Software watchlist' : '<span class="muted">Nothing checks it yet</span>';
+  const by = W.wf[k] ? `<button class="linkbtn" type="button" data-open="wf:${k}">${W.wf[k].name}</button>` : listChecks(k) ? '<button class="linkbtn" type="button" data-open="wf:swl">Software watchlist</button>' : '<span class="muted">Nothing checks it yet</span>';
   const now = !s.run ? 'Added today. The first check finds the version you run.' : s.run === s.latest ? `You run ${s.run}, the newest.` : `You run ${s.run}. Newest is ${s.latest}, out ${s.on}.`;
   const act = !W.wf[k] && canEdit() ? `<div class="pv-actions"><button class="btn" type="button" data-say="Watch ${s.name} releases">Watch for new releases</button></div>` : '';
   if (!full) return `<div class="pv">${head}<p class="pv-sent">${now}</p><dl class="dl2"><div><dt>Checked by</dt><dd>${by}</dd></div></dl>${act}</div>`;
@@ -1855,8 +1900,10 @@ const keyView = () => `<div class="pv" data-live="key"><div class="pv-head"><div
 const listView = (k) => ({
   needs: '<div class="pv"><div class="pv-head"><h3>Needs you</h3></div><div class="needs" data-live="needs"></div></div>',
   wf: '<div class="pv"><div class="pv-head"><h3>Workflows</h3><span class="muted" data-live="n-wf"></span></div><ul class="wl" data-live="list"></ul></div>',
-  watch: '<div class="pv"><div class="pv-head"><h3>Watchlist</h3><span class="muted" data-live="n-watch"></span></div><ul class="wl" data-live="watch"></ul></div>',
 }[k]);
+/* The practice Jira, at the rail's foot beside Teams. It shows only while no real Jira is set up, as the app has it. The sketch draws no page for it. */
+const jiraView = () => `<div class="pv"><div class="pg-head"><div><h3 class="page-title">${nw('Practice Jira')}</h3><p class="muted">${nw('Practice copy. Nothing reaches a real Jira.')}</p></div></div>
+  <p class="muted">${nw('In the app, this page stays as it is today.')}</p></div>`;
 
 /* ---------- n8n: the same steps, drawn as n8n blocks ---------- */
 const CV = {
@@ -2134,6 +2181,7 @@ function refresh() {
   $$('[data-live="fixappr"]').forEach(patchFixAppr);
   $$('[data-live="appr"]').forEach(patchAppr);
   $$('[data-live="wf"]').forEach(patchWf);
+  $$('[data-live="wl"]').forEach(patchWl);
   refreshDrafts();
   /* A flow shows once: while a card's item is open beside the chat, the card drops its own copy. */
   $$('#msgs [data-spec]').forEach((c) => c.classList.toggle('beside', c.dataset.spec === P.stack.at(-1)));
@@ -2259,8 +2307,9 @@ function scene(over, fresh) {
 /* ---------- The side panel keeps a short history, so Back works ---------- */
 function titleOf(spec) {
   const [v, id] = spec.split(':');
-  if (v === 'list') return id === 'wf' ? 'Workflows' : 'Watchlist';
+  if (v === 'list') return 'Workflows';
   if (v === 'settings') return 'Settings';
+  if (v === 'jira') return 'Practice Jira';
   if (v === 'wf') return W.wf[id].name;
   if (v === 'soft') return W.soft[id].name;
   if (v === 'dw') return dT(W.dw[id]).name;
@@ -2270,14 +2319,15 @@ function titleOf(spec) {
 const rowState = (id) => (W.dw[id] ? dwState(id) : wfState(id));
 const listRowsFull = () => boardIds().map((id) => {
   const d = W.dw[id];
-  const [t, s] = rowState(id);
+  const [t, s, f] = rowState(id);
   const last = d ? `${dwMini(id, true)}<span>${dwSub(id)}</span>` : `${wfMini(id, true)}<span>${lastRun(id)}</span>`;
   const when = d ? dT(d).whenShort(dVal(d, dT(d).settings[0]).value) : short(W.wf[id].sched);
-  return `<tr${W.wfFilter && W.wfFilter !== t ? ' hidden' : ''}><td class="c-state"><span class="pill" data-s="${s}">${t}</span></td><td><button class="wf-name" type="button" data-open="${d ? 'dw' : 'wf'}:${id}">${d ? dT(d).name : W.wf[id].name}</button></td><td><div class="wf-last">${last}</div></td><td class="c-when">${when}</td><td class="c-next">${d ? '' : nextRun(id)}</td></tr>`;
+  return `<tr${W.wfFilter && W.wfFilter !== f ? ' hidden' : ''}><td class="c-state"><span class="pill" data-s="${s}">${t}</span></td><td><button class="wf-name" type="button" data-open="${d ? 'dw' : 'wf'}:${id}">${d ? dT(d).name : W.wf[id].name}</button></td><td><div class="wf-last">${last}</div></td><td class="c-when">${when}</td><td class="c-next">${d ? '' : nextRun(id)}</td></tr>`;
 }).join('');
 function filtersHTML(ids, stateOf, key) {
   const counts = new Map();
-  ids.forEach((id) => { const [t, s] = stateOf(id); counts.set(t, [(counts.get(t)?.[0] || 0) + 1, s]); });
+  /* A workflow's chip is its state, so "On · waiting for approval" counts under On. Software has no third part and keeps its words. */
+  ids.forEach((id) => { const [t, s, f = t] = stateOf(id); counts.set(f, [(counts.get(f)?.[0] || 0) + 1, f === 'On' ? 'on' : counts.get(f)?.[1] || s]); });
   const btn = (v, label, n, s) => `<button type="button" data-filter="${key}|${v}" aria-pressed="${(W[key] || '') === v}">${s ? `<span class="sdot ${s}" aria-hidden="true"></span>` : ''}${label} <span class="n">${n}</span></button>`;
   return btn('', nw('All'), ids.length) + [...counts].map(([t, [n, s]]) => btn(t, t, n, s)).join('');
 }
@@ -2286,15 +2336,12 @@ const watchRowsFull = () => [...softIds()].sort((a, b) => RANK[softState(a)[0]] 
   const s = W.soft[k];
   const [t, c] = softState(k);
   const ver = s.missing ? 'GitHub can’t find it' : !s.run ? 'Added today' : s.run === s.latest ? `<b>${s.run}</b>, the newest` : `${s.run} → <b>${s.latest}</b>, out ${s.on}`;
-  return `<li${W.swFilter && W.swFilter !== t ? ' hidden' : ''}><button class="sw-row" type="button" data-open="soft:${k}"><span class="nm">${s.name}<span class="src">${W.wf[k] ? `checked by ${W.wf[k].name}` : isPkg(k) ? 'checked by the Software watchlist' : 'not checked automatically'}</span></span><span class="vers">${ver}</span><span class="pill" data-s="${c}">${t}</span></button></li>`;
+  return `<li${W.swFilter && W.swFilter !== t ? ' hidden' : ''}><button class="sw-row" type="button" data-open="soft:${k}"><span class="nm">${s.name}<span class="src">${W.wf[k] ? `checked by ${W.wf[k].name}` : listChecks(k) ? 'checked by the Software watchlist' : 'not checked automatically'}</span></span><span class="vers">${ver}</span><span class="pill" data-s="${c}">${t}</span></button></li>`;
 }).join('');
-const pageList = (k) => (k === 'wf'
-  ? `<div class="pv"><div class="pg-head"><h3 class="page-title">Workflows</h3><div class="filters" role="group" aria-label="Show" data-live="wf-filters"></div></div>
+/* Workflows from the rail. The Software watchlist is one of its rows (#361), so it has no page of its own. */
+const pageList = () => `<div class="pv"><div class="pg-head"><h3 class="page-title">Workflows</h3><div class="filters" role="group" aria-label="Show" data-live="wf-filters"></div></div>
     ${needs().length ? '<section class="pv-sec"><h4 class="sec-title">Needs you</h4><div class="needs" data-live="needs"></div></section>' : ''}
-    <section class="pv-sec"><h4 class="sec-title">All workflows <span class="n" data-live="n-wf"></span></h4><div class="tbl-wrap"><table class="wf-table"><thead><tr><th scope="col">${nw('State')}</th><th scope="col">Workflow</th><th scope="col">Last run</th><th scope="col" class="c-when">When</th><th scope="col">Next run</th></tr></thead><tbody data-live="list-full"></tbody></table></div></section></div>`
-  : `<div class="pv"><div class="pg-head"><h3 class="page-title">${nw('Software watchlist')}</h3>${canEdit() ? `<form class="add" data-addf><label for="addIn">${nw('Add software')}</label><span class="add-row"><input id="addIn" type="text" autocomplete="off" placeholder="Grafana" data-nw="Grafana"><button class="btn" type="submit">${nw('Find it')}</button></span></form>` : ''}</div>
-    <div class="filters" role="group" aria-label="Show" data-live="watch-filters"></div>
-    <ul class="sw-list" data-live="watch-full"></ul></div>`);
+    <section class="pv-sec"><h4 class="sec-title">All workflows <span class="n" data-live="n-wf"></span></h4><div class="tbl-wrap"><table class="wf-table"><thead><tr><th scope="col">${nw('State')}</th><th scope="col">Workflow</th><th scope="col">Last run</th><th scope="col" class="c-when">When</th><th scope="col">Next run</th></tr></thead><tbody data-live="list-full"></tbody></table></div></section></div>`;
 /* Settings carries the Portal's own words (ConnectionsTab), all new to this sketch. The sketch draws the Connections tab and ties the Jira key to Needs you. */
 const STABS = () => ['Connections', 'People and permissions', 'AI model', ...(canEdit() ? ['How it works'] : [])];
 function connHTML() {
@@ -2316,11 +2363,11 @@ function settingsView() {
   <div class="tabs" role="tablist" aria-label="Settings">${STABS().map((t, i) => `<button type="button" role="tab" id="stab${i}" aria-selected="${tab === i}" aria-controls="stabp" tabindex="${tab === i ? 0 : -1}" data-stab="${i}">${nw(t)}</button>`).join('')}</div>
   <div role="tabpanel" id="stabp" aria-labelledby="stab${tab}" class="pv"${tab === 0 ? ' data-live="conns"' : ''}>${tab === 0 ? '' : `<p class="muted">${nw('In the app, this tab stays as it is today.')}</p>`}</div></div>`;
 }
-const RAIL_PAGES = { wf: 'list:wf', watch: 'list:watch', settings: 'settings' };
+const RAIL_PAGES = { wf: 'list:wf', jira: 'jira', settings: 'settings' };
 function viewHTML(spec, full = false) {
   const [v, id] = spec.split(':');
   if (v === 'needs') return listView('needs');
-  if (v === 'list') return full ? pageList(id) : listView(id);
+  if (v === 'list') return full ? pageList() : listView(id);
   if (v === 'wf') return wfView(id, full);
   if (v === 'run') return runView(full);
   if (v === 'appr') return apprView(full);
@@ -2331,6 +2378,7 @@ function viewHTML(spec, full = false) {
   if (v === 'dw') return dwView(id, full);
   if (v === 'slog') return slogView(id);
   if (v === 'settings') return settingsView();
+  if (v === 'jira') return jiraView();
   return keyView();
 }
 /* The side panel shows one thing from the chat. Anything opened from inside it goes full page. */
@@ -2590,7 +2638,7 @@ function patchParts(c) {
   const left = $('[data-p-left]', c);
   left.className = 'c-left';
   left.textContent = '';
-  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button>${n ? `<span class="waiting dwait">Pick ${n} more to finish</span>` : `<button class="btn" type="button" data-setup>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`}`;
+  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button>${n ? `<span class="waiting dwait">Pick ${n} more to finish</span>` : '<button class="btn" type="button" data-setup>Turn on</button>'}`;
 }
 function pickPart(btn) {
   const c = btn.closest('[data-parts]');
@@ -2739,13 +2787,12 @@ async function setupDraft(c) {
     cvOk(li.dataset.id);
   }
   bcheck(d.then === 'jira' ? 'Test run passed on practice Jira.' : 'Test run passed.');
-  bstat('Saved as a draft in n8n.');
   left.className = 'c-left okline';
   left.innerHTML = `${ICON.check}Test run passed`;
-  pill.textContent = 'Ready';
-  pill.dataset.s = 'ready';
+  /* One Turn on (ADR 0053, item 1): a passed test turns the workflow on, with no second button. */
   d.status = 'ready';
-  $('[data-p-act]', c).innerHTML = '<button class="btn turnon" type="button">Turn it on</button>';
+  await wait(450);
+  turnOn(c);
   scroll();
 }
 function turnOn(c) {
@@ -2791,7 +2838,7 @@ function editAsk(s, forced, open) {
   const id = forced || findWf(s);
   if (!id) {
     W.pendingEdit = s;
-    return pushCard(`<div class="card"><div class="c-head"><b>Which workflow?</b></div><div class="pick">${W.order.map((k) => `<button type="button" data-which="${k}">${W.wf[k].name}</button>`).join('')}</div></div>`);
+    return pushCard(`<div class="card"><div class="c-head"><b>Which workflow?</b></div><div class="pick">${W.order.filter((k) => !W.wf[k].list).map((k) => `<button type="button" data-which="${k}">${W.wf[k].name}</button>`).join('')}</div></div>`);
   }
   const f = W.wf[id];
   const to = { ...f.sched };
@@ -3104,7 +3151,8 @@ function dPill(d) {
   return ['Draft', 'idle'];
 }
 const dwListed = () => Object.keys(W.dw).filter((k) => ['sent', 'half', 'approved'].includes(W.dw[k].status));
-const dwState = (k) => (W.dw[k].status === 'approved' ? ['Draft', 'idle'] : ['Waiting for approval', 'wait']);
+/* A drafted workflow is a Draft until it is turned on, and Needs you for an Approver who may decide its set-up (ADR 0053, item 2). Its line says where it stands. */
+const dwState = (k) => (canDecide(W.dw[k]) ? [NEEDS, 'wait', NEEDS] : ['Draft', 'idle', 'Draft']);
 function dwSub(k) {
   const d = W.dw[k];
   if (d.status === 'approved') return `${dAcceptLine(d)} · no runs yet`;
@@ -3532,9 +3580,6 @@ const TASKS = {
       await wait(800);
       await tap($('[data-setup]', c));
       await setupDraft(c);
-      await wait(600);
-      await tap($('.turnon', c));
-      turnOn(c);
     },
   },
   edit: {
@@ -3760,7 +3805,6 @@ app.addEventListener('click', (e) => {
   if (pick('[data-pchg]')) { changePart(pick('[data-pchg]')); return; }
   if (pick('[data-setup]')) { quiet(setupDraft(pick('[data-parts]'))); return; }
   if (pick('[data-drop]')) { dropDraft(pick('[data-parts]')); return; }
-  if (pick('.turnon')) { turnOn(pick('[data-parts]')); return; }
   if (pick('[data-dq]')) { dAnswer(pick('[data-dq]')); return; }
   if (pick('[data-dtype]')) { const d = W.dw[pick('[data-dtype]').dataset.dtype]; d.typing = true; refresh(); vis(`[data-dtf="${d.key}"] input`)?.focus(); return; }
   if (pick('[data-dop]')) { W.dw[pick('[data-dop]').dataset.dop].opAsked = true; refresh(); toast('Asked the Operators. Their answer will show here.'); return; }
