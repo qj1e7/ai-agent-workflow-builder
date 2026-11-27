@@ -184,4 +184,12 @@ describe('the practice Teams drawer', () => {
     expect(html).toContain('role="alert"')
     expect(text(html)).toContain('Someone changed this request. Read it again.')
   })
+
+  it('keeps saying why when the read after a conflict hides the buttons', () => {
+    const decided = { ...BOB, you_can_decide: false, why_not: 'not_an_approver' } as ApprovalView
+    const html = renderToStaticMarkup(<TeamsDecide approval={decided} decision={{ ...idle, error: 'Another Approver decided this step first.' }} />)
+    expect(buttonsOf(html)).toEqual([])
+    expect(html).toContain('role="alert"')
+    expect(text(html)).toBe('Another Approver decided this step first.')
+  })
 })

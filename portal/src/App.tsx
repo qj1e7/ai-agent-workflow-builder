@@ -15,6 +15,7 @@ import { AppRoutes } from './shell/routes'
 import { TestControls } from './shell/TestControls'
 import { ErrorBoundary } from './ui/ErrorBoundary'
 import { useFromChat } from './ui/fromChat'
+import { SoftwareLinksProvider } from './ui/softwareLinks'
 import styles from './shell/Shell.module.css'
 
 /** Focus stays where it is on first load, so the skip link stays the first Tab stop. */
@@ -63,6 +64,7 @@ export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
   const fromChat = useFromChat()
   useHeadingFocus()
 
+  const ready = me.data !== undefined && me.data.on_list !== false
   let content
   if (me.isPending) content = <p className="muted" role="status">Loading</p>
   else if (me.isError && platformIsDown(me.error)) content = <PlatformDown onRetry={() => void me.refetch()} />
@@ -80,7 +82,7 @@ export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
         <main id="main" tabIndex={-1} className={styles['sheet']}>
           <div className={styles['wrap']}>
             {fromChat ? <BackToChat /> : null}
-            <ErrorBoundary resetKey={pathname}>{content}</ErrorBoundary>
+            <ErrorBoundary resetKey={pathname}>{ready ? <SoftwareLinksProvider>{content}</SoftwareLinksProvider> : content}</ErrorBoundary>
           </div>
         </main>
       </div>
