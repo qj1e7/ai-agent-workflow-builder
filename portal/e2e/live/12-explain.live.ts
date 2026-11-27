@@ -67,7 +67,6 @@ test.describe('Explain this workflow', () => {
       await expect(row.getByRole('link', { name: /^Explain/ }), `${person}: no Explain on the row`).toHaveCount(0)
 
       await page.goto(`/workflows/${versioned.id}`)
-      await page.locator('summary', { hasText: 'Details' }).click()
       await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem'), 'both versions are listed').toHaveCount(2)
       await expect(page.getByRole('main').getByRole('link', { name: /^Explain/ }), `${person}: no Explain on the page or a version`).toHaveCount(0)
       await expect(page.getByRole('main').getByRole('button', { name: /^Explain/ })).toHaveCount(0)

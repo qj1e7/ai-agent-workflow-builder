@@ -321,7 +321,7 @@ for (const phone of [false, true]) {
   })
 }
 
-const LAST_RUN = /^(?:Daily|Weekdays|Mon|Tue|Wed|Thu|Fri|Sat|Sun|No schedule)(?: \d{1,2}:\d{2})? · (?:no runs yet|last run (?:today|[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}(?: \d{4})?), .+)$/
+const LAST_RUN = /Last run\s*(?:No runs yet|(?:Today|[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2})[^]*?)When/s
 
 /** Every second line is whole: none is cut with an ellipsis or runs past its row. It may wrap, as the sketch's rows do. */
 async function lineFits(lines: Locator): Promise<{ rows: number; broken: string[] }> {
@@ -343,18 +343,18 @@ for (const user of ['alice', 'bob']) {
     const page = await context.newPage()
     const rows = page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]')
     const watchlist = rows.filter({ hasText: 'Software watchlist' })
-    const lastLine = (row: Locator) => row.locator('span[class*="sub"]')
+    const link = (row: Locator) => row.getByRole('link')
     for (const width of [1920, 1280, 1050, 900, 390]) {
       await page.setViewportSize({ width, height: 900 })
       await page.goto('/workflows')
       await expect(watchlist).toBeVisible()
-      await expect(lastLine(watchlist), 'a waiting check says it waits for approval, and is not a test run').toHaveText(/^(?:No schedule|Mon \d+:\d\d|Daily \d+:\d\d|Weekdays \d+:\d\d) · last run today, waiting for approval$/)
+      await expect(watchlist, 'a waiting check says it waits for approval, and is not a test run').toContainText(/Last run\s*Today \d+:\d\d\s*Waiting for approval/)
       await expect(watchlist.getByText(user === 'alice' ? 'On · waiting for approval' : 'Needs you', { exact: true })).toBeVisible()
       await expect(watchlist.getByText('Test run', { exact: true }), 'Check now is not a test run').toHaveCount(0)
-      const fit = await lineFits(lastLine(rows))
-      expect(fit.rows, 'every row has a last-run line').toBe(await rows.count())
-      expect(fit.broken, `each row’s line is whole and inside its row at ${width} px`).toEqual([])
-      for (const text of await lastLine(rows).allInnerTexts()) expect(LAST_RUN.test(text), `"${text}" is a row’s line`).toBe(true)
+      const fit = await lineFits(link(rows))
+      expect(fit.rows, 'every row is one link').toBe(await rows.count())
+      expect(fit.broken, `each row is whole and inside its list at ${width} px`).toEqual([])
+      for (const text of await link(rows).evaluateAll((els) => els.map((el) => el.textContent ?? ''))) expect(LAST_RUN.test(text), `"${text}" is a row’s last run`).toBe(true)
       await expectAccessible(page, path.join(OUT, 'axe'), `workflows-last-run-${user}-${width}`)
       await shot(page, info, `r9-workflows-${user}-${width}`)
     }
@@ -362,8 +362,8 @@ for (const user of ['alice', 'bob']) {
     if (user === 'alice') {
       await page.goto('/workflows')
       await expect(watchlist).toBeVisible()
-      const pageLines = new Map<string, string>()
-      for (const row of await rows.all()) pageLines.set((await row.getAttribute('data-workflow-id')) ?? '', await lastLine(row).innerText())
+      const pageFacts = new Map<string, string>()
+      for (const row of await rows.all()) pageFacts.set((await row.getAttribute('data-workflow-id')) ?? '', (await row.locator('b').first().innerText()).trim())
       for (const width of [1920, 1280, 1050, 900, 390]) {
         await page.setViewportSize({ width, height: 900 })
         await page.goto('/')
@@ -377,11 +377,11 @@ for (const user of ['alice', 'bob']) {
         if (shown === 5) await expect(page.getByRole('main').getByRole('button', { name: 'See all workflows' }), 'with more left out, it ends with a way to the whole list').toBeVisible()
         for (const row of await card.locator('li[data-workflow-id]').all()) {
           const id = (await row.getAttribute('data-workflow-id')) ?? ''
-          await expect(lastLine(row), `the check card says what the Workflows row of ${id} says`).toHaveText(pageLines.get(id) ?? 'a row on the Workflows page')
+          await expect(row.locator('b').first(), `the check card names the workflow as the Workflows row of ${id} does`).toHaveText(pageFacts.get(id) ?? 'a row on the Workflows page')
         }
-        const fit = await lineFits(lastLine(card.locator('li[data-workflow-id]')))
-        expect(fit.rows, 'the card has a line for each workflow').toBe(shown)
-        expect(fit.broken, `each line in the check card is whole at ${width} px`).toEqual([])
+        const fit = await lineFits(card.locator('li[data-workflow-id] > a'))
+        expect(fit.rows, 'the card has a link for each workflow').toBe(shown)
+        expect(fit.broken, `each row in the check card is whole at ${width} px`).toEqual([])
         await shot(page, info, `r9-check-card-alice-${width}`)
       }
     }
@@ -393,9 +393,9 @@ for (const user of ['alice', 'bob']) {
       const declined = await again.newPage()
       await declined.goto('/workflows')
       const row = declined.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
-      await expect(lastLine(row), 'a declined run names who declined, and writes no ticket').toHaveText(/ · last run [^,]+, declined by Bob\. Nothing was written\.$/)
+      await expect(row, 'a declined run names who declined, and writes no ticket').toContainText(/Last run\s*[^\n]+\s*Declined by Bob\. Nothing was written\./)
       await expect(row.getByText('On', { exact: true }), 'a declined run has no pill, so the workflow reads On').toBeVisible()
-      expect((await lineFits(lastLine(row))).broken).toEqual([])
+      expect((await lineFits(link(row))).broken).toEqual([])
       await shot(declined, info, 'r9-workflows-declined')
       await again.close()
     }

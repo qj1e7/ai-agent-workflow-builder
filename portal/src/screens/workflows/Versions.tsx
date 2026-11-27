@@ -18,7 +18,7 @@ interface VersionsProps {
 }
 
 /**
- * Versions, as the sketch draws them: a details with a row for each, "Version 3, in use" and what changed. An Operator can roll an
+ * Versions, as the sketch draws them: a section beside Recent runs with a row for each, "Version 3, in use" and what changed. An Operator can roll an
  * n8n workflow back to any version but the one in use, which publishes it again as a new version. A change of when it runs is
  * undone on the chat's edit card, so a workflow on the shared n8n workflow shows no Roll back. Nor does one someone has open in
  * n8n, where the platform would refuse it.
@@ -47,7 +47,7 @@ export function Versions({ useCase, now, nameOf, operator, say }: VersionsProps)
   }
   return (
     <section className={styles['section']} aria-labelledby={headingId}>
-      <h3 id={headingId}>Versions</h3>
+      <h2 id={headingId}>Versions</h2>
       {versions.data ? (
         <ol className={styles['rows']} aria-label="Versions, newest first">
           {versions.data.map((version) => (

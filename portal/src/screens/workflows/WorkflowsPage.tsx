@@ -10,12 +10,13 @@ import { useDisplayName } from '../../api/people'
 import { useMe, useUseCases } from '../../api/queries'
 import type { DraftView, Me, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
+import { scheduleShort } from '../run/words'
 import { OperatorsNote } from '../../shell/OperatorsNote'
 import { PageHead, PageNote } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
 import { FROM_LIST } from '../../ui/fromList'
-import { IconSearch } from '../../ui/icons'
+import { IconSearch, IconX } from '../../ui/icons'
 import { OpenLink } from '../../ui/OpenItem'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
 import { draftPath, savedLeft } from '../home/card'
@@ -29,7 +30,7 @@ import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
 import { REQUEST_PARAM } from './requests'
 import { draftItem, FollowingSection } from './Sections'
-import { changeProblem, changeWords, FILTERS, meansOutOfDate, pressChange, REFRESH_MS, rowLine, rowsOf, viewerOf, workflowPath, type Filter, type Row } from './workflow'
+import { changeProblem, changeWords, FILTERS, lastRunParts, meansOutOfDate, NO_RUNS, nextRunWords, pressChange, REFRESH_MS, rowsOf, runsOnlyByHand, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
@@ -63,29 +64,38 @@ interface RowProps {
 /** The list's class. */
 export const listClass = (_rows: readonly Row[], extra = ''): string => [styles['list'], extra].filter(Boolean).join(' ')
 
+const COLUMNS = ['State', 'Workflow', 'Last run', 'When', 'Next run'] as const
+
+/** The column names. Each row's link already names its facts, so the head is for the eye only. On a narrow screen each fact carries its own name instead. */
+function TableHead() {
+  return (
+    <div className={styles['tableHead']} data-table-head aria-hidden="true">
+      {COLUMNS.map((name) => (
+        <span key={name}>{name}</span>
+      ))}
+    </div>
+  )
+}
+
+/** A fact's name, drawn only where the table's head is not. */
+const Label = ({ children }: { children: string }) => (
+  <span className={styles['cellLabel']} aria-hidden="true">
+    {children}
+  </span>
+)
+
 /**
- * One workflow, as the sketch draws it: its name, "Daily 8:00 · last run today, {where it stands}", and one pill. The whole row is one link of 44 px or more.
- * In the chat it opens the workflow in the side panel.
+ * One workflow, as the sketch's table draws it: its state, its name, its last run, when it runs and its next run. The whole row is one
+ * link of 44 px or more. In the chat the same workflow is a row of its own, which opens it in the side panel.
  */
 export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
   const { useCase } = row
   const path = workflowPath(useCase)
   const item = { kind: 'workflow', id: useCase.use_case_id } as const
   const ids = useId()
-  const link = { 'aria-labelledby': `${ids}-name`, 'aria-describedby': `${ids}-pill ${ids}-sub` }
-  const inside = (
-    <>
-      <span className={styles['main']}>
-        <b id={`${ids}-name`}>{useCase.name}</b>
-        <span id={`${ids}-sub`} className={styles['sub']}>
-          {rowLine(useCase, now, nameOf)}
-        </span>
-      </span>
-      <span id={`${ids}-pill`}>
-        <StatusPills useCase={useCase} test={useCase.last_run?.test === true} />
-      </span>
-    </>
-  )
+  const link = { 'aria-labelledby': `${ids}-name`, 'aria-describedby': `${ids}-pill ${ids}-last ${ids}-when ${ids}-next` }
+  const last = lastRunParts(useCase, now, nameOf)
+  const notes = [useCase.move_refused ? 'Not running' : null, useCase.held_in_n8n ? `${useCase.held_in_n8n.name} has it open in n8n` : null].filter(Boolean)
   return (
     <li
       className={[styles['row'], arrive ? styles['arrive'] : ''].filter(Boolean).join(' ')}
@@ -93,8 +103,40 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
       data-workflow-id={useCase.use_case_id}
       data-paused={useCase.state === 'paused' || undefined}
     >
-      <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']} {...link}>
-        {inside}
+      <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={`${styles['rowLink']} ${styles['tableLink']}`} {...link}>
+        <span id={`${ids}-pill`} className={styles['cState']}>
+          <StatusPills useCase={useCase} />
+        </span>
+        <span className={styles['cName']}>
+          <b id={`${ids}-name`}>{useCase.name}</b>
+        </span>
+        <span id={`${ids}-last`} className={styles['cFact']} data-tone={last?.stopped ? 'bad' : undefined}>
+          <Label>Last run</Label>
+          {last ? (
+            <>
+              <b>{last.when}</b>
+              <span className={styles['sub']}>
+                {last.stopped ? <IconX size={12} /> : null}
+                {last.what}
+              </span>
+            </>
+          ) : (
+            <span className={styles['sub']}>{NO_RUNS}</span>
+          )}
+        </span>
+        <span id={`${ids}-when`} className={styles['cFact']}>
+          <Label>When</Label>
+          <b>{useCase.schedule ? scheduleShort(useCase.schedule) : 'No schedule'}</b>
+          {notes.map((note) => (
+            <span key={note} className={styles['sub']}>
+              {note}
+            </span>
+          ))}
+        </span>
+        <span id={`${ids}-next`} className={styles['cFact']}>
+          <Label>Next run</Label>
+          <b>{runsOnlyByHand(useCase) ? 'Not scheduled' : nextRunWords(useCase, now)}</b>
+        </span>
       </OpenLink>
     </li>
   )
@@ -163,16 +205,14 @@ function DraftRow({ draft, index, arrive, now }: { draft: DraftView; index: numb
   const ids = useId()
   return (
     <li className={arrive ? `${styles['row']} ${styles['arrive']}` : styles['row']} style={{ '--i': index } as CSSProperties} data-draft={draft.draft_id}>
-      <Link to={draftPath(draft.draft_id)} className={styles['rowLink']} aria-labelledby={`${ids}-name`} aria-describedby={`${ids}-pill ${ids}-sub`}>
-        <span className={styles['main']}>
+      <Link to={draftPath(draft.draft_id)} className={`${styles['rowLink']} ${styles['tableLink']}`}aria-labelledby={`${ids}-name`} aria-describedby={`${ids}-pill ${ids}-sub`}>
+        <span id={`${ids}-pill`} className={`${styles['pills']} ${styles['cState']}`}>
+          <span className={styles['pill']}>Draft</span>
+        </span>
+        <span className={`${styles['cName']} ${styles['cDraft']}`}>
           <b id={`${ids}-name`}>{words.name}</b>
           <span id={`${ids}-sub`} className={styles['sub']}>
             {words.sub}
-          </span>
-        </span>
-        <span className={styles['pills']}>
-          <span id={`${ids}-pill`} className={styles['pill']}>
-            Draft
           </span>
         </span>
       </Link>
@@ -276,14 +316,17 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
           </div>
         ) : null}
         {rows.length + draftRows.length > 0 ? (
-          <ul className={listClass(rows)} aria-label="Workflows">
-            {rows.map((row, index) => (
-              <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} arrive={!back} now={now} nameOf={nameOf} />
-            ))}
-            {draftRows.map((draft, index) => (
-              <DraftRow key={draft.draft_id} draft={draft} index={rows.length + index} arrive={!back} now={now} />
-            ))}
-          </ul>
+          <div className={styles['table']}>
+            <TableHead />
+            <ul className={listClass(rows)} aria-label="Workflows">
+              {rows.map((row, index) => (
+                <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} arrive={!back} now={now} nameOf={nameOf} />
+              ))}
+              {draftRows.map((draft, index) => (
+                <DraftRow key={draft.draft_id} draft={draft} index={rows.length + index} arrive={!back} now={now} />
+              ))}
+            </ul>
+          </div>
         ) : null}
       </section>
       <MadeInN8nSection me={me} />

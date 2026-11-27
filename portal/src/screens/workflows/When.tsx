@@ -100,9 +100,6 @@ export function When({ useCase, now, mayChange, held, onSaved }: WhenProps) {
   const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
   const [refused, setRefused] = useState<string | null>(null)
   const { words, small } = whenWords(useCase)
-  // A workflow that runs only on Run now has no next run, and its words above already say so.
-  const next = heldNote(useCase) ?? (runsOnlyByHand(useCase) ? '' : `Next run: ${nextRunWords(useCase, now)}`)
-  const changes = useChanges(next)
   const stale = () => {
     setRefused(CHANGED_SINCE_OPENED)
     close()
@@ -133,13 +130,10 @@ export function When({ useCase, now, mayChange, held, onSaved }: WhenProps) {
           ) : null}
         </div>
       )}
-      {small || useCase.schedule || next ? (
+      {small || useCase.schedule ? (
         <p className={styles['small']}>
           {small}
-          {useCase.schedule ? (useCase.schedule.owner_name ? ` Set by ${useCase.schedule.owner_name}.` : ' Set in n8n.') : ''}{' '}
-          <span key={changes} className={changes > 0 ? styles['changed'] : undefined}>
-            {next}
-          </span>
+          {useCase.schedule ? (useCase.schedule.owner_name ? ` Set by ${useCase.schedule.owner_name}.` : ' Set in n8n.') : ''}
         </p>
       ) : null}
       {refused ? (
@@ -147,6 +141,25 @@ export function When({ useCase, now, mayChange, held, onSaved }: WhenProps) {
           {refused}
         </p>
       ) : null}
+    </section>
+  )
+}
+
+/**
+ * Next run, the third fact of the strip under the sentence: the time while the schedule will start a run, or Paused, or why it is not
+ * running. A workflow that runs only on Run now has none, and its When already says so.
+ */
+export function NextRun({ useCase, now }: { useCase: UseCaseView; now: Date }) {
+  const headingId = useId()
+  const next = heldNote(useCase) ?? (runsOnlyByHand(useCase) ? '' : nextRunWords(useCase, now))
+  const changes = useChanges(next)
+  if (!next) return null
+  return (
+    <section className={styles['section']} aria-labelledby={headingId}>
+      <h2 id={headingId}>Next run</h2>
+      <p key={changes} className={changes > 0 ? styles['changed'] : undefined}>
+        {next}
+      </p>
     </section>
   )
 }

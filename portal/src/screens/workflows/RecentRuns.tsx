@@ -17,7 +17,7 @@ interface RecentRunsProps {
   readonly firstRun: string | null
 }
 
-/** Recent runs, as the sketch draws them: the day and time, where the run stands, its pill, and Open. Each row is one link of 44 px or more. */
+/** Recent runs, as the sketch draws them: the day and time, where the run stands, and its pill. Each row is one link of 44 px or more, so it has no Open button. */
 export function RecentRuns({ runs, now, nameOf, firstRun }: RecentRunsProps) {
   const [all, setAll] = useState(false)
   const headingId = useId()
@@ -45,7 +45,6 @@ export function RecentRuns({ runs, now, nameOf, firstRun }: RecentRunsProps) {
                     <span className={styles['sub']}>{stageWords(stage, nameOf)}</span>
                   </span>
                   <RunPill facts={stage} />
-                  <span className={styles['open']}>Open</span>
                 </Link>
               </li>
             )

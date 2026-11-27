@@ -161,6 +161,12 @@ export function lastRunLine({ last_run: last }: Pick<UseCaseView, 'last_run'>, n
   return last ? `last run ${dayOf(lastRunAt(last), now)}, ${lowerStart(lastRunWhat(last, nameOf, 'line'))}` : 'no runs yet'
 }
 
+/** A table row's Last run, in two parts: when it was and where it stands. `stopped` marks the failing fact. Null before the first run. */
+export function lastRunParts({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): { readonly when: string; readonly what: string; readonly stopped: boolean } | null {
+  if (!last) return null
+  return { when: lineWhen(lastRunAt(last), now), what: lastRunWhat(last, nameOf, 'line'), stopped: runPill(stageOfLast(last)).tone === 'bad' }
+}
+
 /** The line without its label, for the side panel's Last run, where a declined run gives its whole record. Null before the first run. */
 export function lastRunWords({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf, room: Room = 'record'): string | null {
   if (!last) return null

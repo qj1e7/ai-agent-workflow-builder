@@ -10,14 +10,14 @@ const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 const rowOf = (page: Page, useCaseId: string) => page.locator(`li[data-workflow-id="${useCaseId}"]`)
 const ownLink = (row: Locator) => row.getByRole('link', { name: /^(?!Explain )/ })
 const whenSection = (page: Page) => page.locator('section', { has: page.getByRole('heading', { name: 'When', exact: true }) })
-const nextRun = (page: Page) => whenSection(page).locator('p')
+const nextRunSection = (page: Page) => page.locator('section', { has: page.getByRole('heading', { name: 'Next run', exact: true }) })
+const nextRun = (page: Page) => nextRunSection(page).locator('p')
 const changeWhen = (page: Page) => page.getByRole('button', { name: /^(Change|Set) when it runs$/ })
 const versionsList = (page: Page) => page.getByRole('list', { name: 'Versions, newest first' })
 
-/** Versions sit inside Details, closed until opened. */
+/** Versions sit beside Recent runs, in view, from the second version on. */
 async function openVersions(page: Page): Promise<void> {
-  const summary = page.locator('summary', { hasText: 'Details' })
-  if ((await versionsList(page).count()) === 0 || !(await versionsList(page).isVisible())) await summary.click()
+  await expect(versionsList(page)).toBeVisible()
 }
 const moreActions = (page: Page) => page.getByRole('button', { name: 'More actions' })
 const menuItem = (page: Page, name: string) => page.getByRole('menuitem', { name })
@@ -102,16 +102,16 @@ test('alice pauses a workflow, its next run reads Paused and Run now goes, and r
   await page.goto(`/workflows/${workflow.id}`)
   await expect(heading(page)).toHaveText(workflow.name)
   await expect(whenSection(page)).toContainText('Runs only when you press Run now.')
-  await expect(whenSection(page)).not.toContainText('Next run')
+  await expect(nextRunSection(page), 'a workflow with no schedule has no next run to give').toHaveCount(0)
 
   await page.getByRole('button', { name: 'Pause' }).click()
-  await expect(nextRun(page)).toContainText('Next run: Paused')
-  await expect(page.getByRole('main')).toContainText('Paused. It won’t run until you resume it.')
+  await expect(nextRun(page)).toHaveText('Paused')
+  await expect(page.getByRole('main').locator('span[data-life]').first()).toHaveText('Paused')
   await expect(page.getByRole('button', { name: 'Resume' })).toBeFocused()
   await expect(page.getByRole('button', { name: 'Pause' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Run now' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Resume' }).click()
-  await expect(whenSection(page)).not.toContainText('Next run')
+  await expect(nextRunSection(page)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Pause' })).toBeFocused()
   await expect(page.getByRole('button', { name: 'Run now' })).toBeVisible()
   await context.close()
@@ -221,10 +221,10 @@ test('scenario H: alice changes the schedule, pauses and deletes through the pag
 
   const order = await page.evaluate(() => {
     const at = (needle: string) => document.body.innerText.indexOf(needle)
-    return ['On. Runs only when you press Run now.', 'Who approves', 'Recent runs', 'Pause'].map(at)
+    return ['Pause', 'Runs only when you press Run now.', 'Who approves', 'Recent runs'].map(at)
   })
   expect(order.every((place) => place >= 0), 'every section is on the page').toBe(true)
-  expect(order, 'banner, who approves, recent runs, then the buttons, as the sketch orders them').toEqual([...order].sort((a, b) => a - b))
+  expect(order, 'the buttons in the title row, then When, who approves and recent runs, as the sketch orders them').toEqual([...order].sort((a, b) => a - b))
   await expect(page.getByRole('main').getByText('Agents', { exact: true }), 'the agents are on the step line, with no section of their own').toHaveCount(0)
 
   await moreActions(page).focus()
@@ -258,7 +258,7 @@ test('scenario H: alice changes the schedule, pauses and deletes through the pag
 
   await page.getByRole('button', { name: 'Pause' }).focus()
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('main')).toContainText('Paused. It won’t run until you resume it.')
+  await expect(nextRun(page)).toHaveText('Paused')
   await expect(page.getByRole('button', { name: 'Resume' })).toBeFocused()
   await shot(page, info, 'n16-paused')
 
@@ -349,7 +349,7 @@ test('alice’s schedule changes publish versions the page lists read only, an U
   for (const [who, reader] of [['alice', page], ['bob', bob]] as const) {
     for (const width of [1920, 1280, 900, 390]) {
       await reader.setViewportSize({ width, height: 900 })
-      await reader.locator('summary', { hasText: 'Details' }).scrollIntoViewIfNeeded()
+      await versionsList(reader).scrollIntoViewIfNeeded()
       const widths = await reader.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
       expect(widths[0], `${who}’s page does not scroll sideways at ${width} px`).toBeLessThanOrEqual(widths[1] ?? 0)
       await shot(reader, info, `r6-versions-${who}-${width}`)

@@ -11,7 +11,21 @@ type Action = NonNullable<Banner['action']>
 /** The banner's actions that are the state's main one. The page draws no other primary button beside them. */
 const PRIMARY: ReadonlySet<Action['kind']> = new Set(['resume', 'decide', 'yes', 'resave'])
 
-export const leadsThePage = (action: Banner['action']): boolean => action !== null && PRIMARY.has(action.kind)
+/** The actions that sit in the page's title row, beside Change and Pause, instead of in a banner. */
+export const titleRowAction = (action: Banner['action']): action is Extract<NonNullable<Banner['action']>, { kind: 'resume' | 'decide' | 'open' }> =>
+  action !== null && (action.kind === 'resume' || action.kind === 'decide' || action.kind === 'open')
+
+/**
+ * Whether the banner says nothing the page does not already say. The state mark says On, Paused or Needs you, the title row holds the
+ * action for a run or a pause, Next run says when, and Recent runs says how the last run went, so only what none of them says stays:
+ * a refused write, a version that needs a fix, one deleted in n8n, a workflow that could not move to n8n.
+ */
+export function bannerRepeatsThePage(banner: Banner, useCase: { readonly state: string; readonly deleted_in_n8n_at?: string | null }): boolean {
+  if (titleRowAction(banner.action) || banner.tone === 'ok') return true
+  return banner.tone === 'off' && useCase.state === 'paused' && !useCase.deleted_in_n8n_at
+}
+
+export const leadsThePage =(action: Banner['action']): boolean => action !== null && PRIMARY.has(action.kind)
 
 interface BannerViewProps {
   readonly banner: Banner

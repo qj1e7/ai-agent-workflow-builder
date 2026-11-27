@@ -87,6 +87,15 @@ function rowsIn(html: string, attribute: 'data-software-id' | 'data-workflow-id'
   return [...html.matchAll(new RegExp(`<li[^>]*${attribute}="([^"]+)"[^>]*>([\\s\\S]*?)</li>`, 'g'))].map((match) => [match[1] ?? '', text(match[2] ?? '')])
 }
 
+/** Each workflow row's id, name and state pill. The page draws a row as a table row and the chat as a line, so these are what they share. */
+function stateRowsIn(html: string): [string, string, string][] {
+  return [...html.matchAll(/<li[^>]*data-workflow-id="([^"]+)"[^>]*>([\s\S]*?)<\/li>/g)].map((match) => [
+    match[1] ?? '',
+    text(/<b[^>]*>([\s\S]*?)<\/b>/.exec(match[2] ?? '')?.[1] ?? ''),
+    text(/<span[^>]*data-life[^>]*>([\s\S]*?)<\/span>/.exec(match[2] ?? '')?.[1] ?? ''),
+  ])
+}
+
 describe('a list in the chat says what its page says', () => {
   it('lists the watchlist in the panel row for row as the Watchlist page does, urgent first, for every state', () => {
     for (const watchlist of [EVERY_SOFTWARE, NOT_CHECKED_ON_ITS_OWN]) {
@@ -105,16 +114,19 @@ describe('a list in the chat says what its page says', () => {
   })
 
   it('lists the workflows in the panel row for row as the Workflows page does, for every state', () => {
-    const page = rowsIn(render(<WorkflowsPage heading="Workflows" now={NOW} />, { path: '/workflows' }), 'data-workflow-id')
+    const html = render(<WorkflowsPage heading="Workflows" now={NOW} />, { path: '/workflows' })
+    const page = stateRowsIn(html)
     expect(page).toHaveLength(EVERY_WORKFLOW.length)
-    const said = page.map(([, row]) => row).join(' | ')
-    for (const state of ['no runs yet On', 'Paused', 'stopped Needs you', 'stopped Needs you Test run', 'waiting for approval On · waiting for approval', 'declined by Bob', 'approved by Bob On']) expect(said).toContain(state)
-    expect(rowsIn(panel({ kind: 'workflows' }), 'data-workflow-id')).toEqual(page)
+    const said = rowsIn(html, 'data-workflow-id')
+      .map(([, row]) => row)
+      .join(' | ')
+    for (const state of ['No runs yet', 'Paused', 'Needs you', 'On · waiting for approval', 'Declined by Bob', 'approved by Bob']) expect(said).toContain(state)
+    expect(stateRowsIn(panel({ kind: 'workflows' }))).toEqual(page)
   })
 
   it('draws the Workflows card’s rows as the Workflows page draws them', () => {
-    const page = rowsIn(render(<WorkflowsPage heading="Workflows" now={NOW} />, { path: '/workflows' }), 'data-workflow-id')
-    const card = rowsIn(render(<CheckWorkflowsAnswer useCaseId={null} now={NOW} say={() => undefined} />), 'data-workflow-id')
+    const page = stateRowsIn(render(<WorkflowsPage heading="Workflows" now={NOW} />, { path: '/workflows' }))
+    const card = stateRowsIn(render(<CheckWorkflowsAnswer useCaseId={null} now={NOW} say={() => undefined} />))
     expect(card).toEqual(page.slice(0, card.length))
     expect(card.length).toBeGreaterThan(0)
   })

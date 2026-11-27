@@ -570,19 +570,6 @@
   line-height: 1.6;
 }
 
-.pair {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
-  margin-bottom: 24px;
-}
-
-@media (max-width: 760px) {
-  .pair {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 .section {
   display: grid;
   align-content: start;
@@ -648,7 +635,7 @@
 
 .runLink {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   min-height: 56px;
@@ -663,42 +650,10 @@
   outline-offset: -3px;
 }
 
-.open {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--rail);
-  border-radius: var(--r-ctl);
-  font-weight: 700;
-}
-
 @media (max-width: 480px) {
   .runLink {
     grid-template-columns: minmax(0, 1fr) auto;
   }
-
-  .open {
-    grid-column: 1 / -1;
-    justify-content: center;
-  }
-}
-
-details.more {
-  display: grid;
-  gap: 8px;
-  margin-block: 16px 24px;
-}
-
-/* A summary draws its open or closed triangle only while its display stays list-item. */
-details.more > summary {
-  width: fit-content;
-  min-width: 44px;
-  min-height: 44px;
-  padding-block: 10px;
-  font-size: 0.95rem;
-  font-weight: 800;
-  cursor: pointer;
 }
 
 /* Who can't say yes: the whole rule, one tap from the sketch's short line. */
@@ -775,4 +730,179 @@ details.rule > p {
   flex-basis: 100%;
   color: var(--red-ink);
   font-weight: 600;
+}
+
+/* The title row: the name and its one state mark on the left, the page's actions on the right. */
+.titleBlock {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.titleLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.titleLine h1 {
+  margin-top: 0;
+}
+
+.titleActions {
+  display: flex;
+  flex-wrap: wrap;
+  /* Open in n8n editor has its login line under it, so the other buttons keep their own height. */
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* When, Who approves and Next run in one strip, under the sentence. */
+.strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px 32px;
+  margin-bottom: 8px;
+}
+
+/* Recent runs and Versions side by side, one column on a narrow screen. */
+.duo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 0 24px;
+}
+
+@media (max-width: 860px) {
+  .duo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.draftWords {
+  margin-bottom: 16px;
+}
+
+/* The Workflows table: State, Workflow, Last run, When, Next run, in one bordered block. */
+.table {
+  --cols: 168px minmax(0, 1.2fr) minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1.1fr);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.table > .list {
+  border: 0;
+  border-radius: 0;
+}
+
+.tableHead {
+  display: grid;
+  grid-template-columns: var(--cols);
+  gap: 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.tableLink {
+  grid-template-columns: var(--cols);
+  gap: 16px;
+}
+
+.cState,
+.cName,
+.cFact {
+  min-width: 0;
+}
+
+.cFact {
+  display: grid;
+  gap: 2px;
+}
+
+.cFact b {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.cFact .sub {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.cFact .sub svg {
+  flex: none;
+  margin-top: 4px;
+}
+
+.cFact[data-tone='bad'] .sub {
+  color: var(--red-ink);
+  font-weight: 600;
+}
+
+.cState .pill {
+  white-space: normal;
+}
+
+.cName b {
+  font-size: 1rem;
+}
+
+.cDraft {
+  grid-column: 2 / -1;
+  display: grid;
+  gap: 2px;
+}
+
+.cellLabel {
+  display: none;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+@media (max-width: 960px) {
+  .tableHead {
+    display: none;
+  }
+
+  .tableLink {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 16px;
+  }
+
+  .cName {
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .cState {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .cellLabel {
+    display: block;
+  }
+}
+
+@media (max-width: 640px) {
+  .tableLink {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cName,
+  .cState,
+  .cDraft {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }

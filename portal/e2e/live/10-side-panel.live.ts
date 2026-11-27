@@ -28,6 +28,10 @@ const heading = (page: Page) => page.locator('#side-panel-h')
 const rowWords = (rows: Locator) =>
   rows.evaluateAll((els) => els.map((el) => [el.getAttribute('data-workflow-id') ?? el.getAttribute('data-software-id') ?? '', (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()]))
 
+/** Each workflow row's id, name and state, in the order shown. The page draws a row as a table row and the chat as a line, so these are what they share. */
+const rowFacts = (rows: Locator) =>
+  rows.evaluateAll((els) => els.map((el) => [el.getAttribute('data-workflow-id') ?? '', el.querySelector('b')?.textContent?.trim() ?? '', el.querySelector('span[data-life]')?.textContent?.trim() ?? '']))
+
 async function ask(page: Page, text: string): Promise<void> {
   await box(page).fill(text)
   await box(page).press('Enter')
@@ -568,7 +572,7 @@ test(`PANEL-lists at ${String(width)} px: See all workflows and See the watchlis
   await page.setViewportSize({ width, height: width > 900 ? 900 : 844 })
   await page.goto('/workflows')
   await expect(page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]').first()).toBeVisible()
-  const workflowsPage = await rowWords(page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]'))
+  const workflowsPage = await rowFacts(page.getByRole('list', { name: 'Workflows' }).locator('li[data-workflow-id]'))
   await page.goto('/software')
   await expect(page.locator('main li[data-software-id]').first()).toBeVisible()
   const watchlistPage = await rowWords(page.locator('main li[data-software-id]'))
@@ -578,7 +582,7 @@ test(`PANEL-lists at ${String(width)} px: See all workflows and See the watchlis
   await newest(page).getByRole('button', { name: 'See all workflows' }).click()
   await expect(heading(page)).toHaveText('Workflows')
   await expect(panel(page).locator('li[data-workflow-id]').nth(5), 'the panel lists the rest').toBeVisible()
-  expect(await rowWords(panel(page).locator('li[data-workflow-id]')), 'each row says what its row on Workflows says, in the same order').toEqual(workflowsPage)
+  expect(await rowFacts(panel(page).locator('li[data-workflow-id]')), 'each row names the workflow and its state as its row on Workflows does, in the same order').toEqual(workflowsPage)
   await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/workflows')
   await shot(page, info, `c4-workflows-${String(width)}`)
   await panel(page).locator('li[data-workflow-id] button').first().click()
