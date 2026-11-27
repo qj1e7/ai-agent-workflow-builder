@@ -12,7 +12,7 @@
 
 .was {
   color: var(--muted);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   text-decoration-color: var(--rail);
 }
 
@@ -30,7 +30,7 @@
 
 .note {
   color: var(--muted);
-  font-size: 0.9375rem;
+  font-size: var(--fs-small);
 }
 
 .status {

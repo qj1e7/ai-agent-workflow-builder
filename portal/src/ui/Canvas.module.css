@@ -36,12 +36,12 @@
 }
 
 .label {
-  font: 700 13px var(--font);
+  font: var(--fw-bold) var(--fs-tiny) var(--font);
   fill: var(--ink);
 }
 
 .sub {
-  font: 600 11px var(--font);
+  font: var(--fw-semi) var(--fs-tiny) var(--font);
   fill: var(--muted);
 }
 
@@ -50,7 +50,7 @@
 }
 
 .oursText {
-  font: 700 9.5px var(--font);
+  font: var(--fw-bold) var(--fs-tiny) var(--font);
   fill: var(--safety);
 }
 
@@ -160,7 +160,7 @@
 }
 
 .edge text {
-  font: 600 11px var(--font);
+  font: var(--fw-semi) var(--fs-tiny) var(--font);
   fill: var(--muted);
 }
 

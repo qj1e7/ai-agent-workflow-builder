@@ -22,8 +22,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 /* Only a sub-agent brought in while the page is open moves. Reduced motion stops it (base.css). */

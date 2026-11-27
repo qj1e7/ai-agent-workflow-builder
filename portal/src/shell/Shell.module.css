@@ -2,55 +2,65 @@
   position: fixed;
   z-index: var(--z-toast);
   top: -80px;
-  left: 16px;
-  padding: 10px 16px;
+  left: var(--space-4);
+  padding: 10px var(--space-4);
   border: 0;
-  border-radius: var(--r-ctl);
-  background: var(--primary);
+  border-radius: var(--r-sm);
+  background: var(--action);
   color: var(--on-ink);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 
 .skip:focus {
-  top: 12px;
+  top: var(--space-3);
 }
 
-/* The sketch's frame: the white top bar over a 76 px rail and the page, with a hairline between the rail and the page. */
+/* The sketch's frame: the 92 px dark rail beside the page, with no top bar. */
 .shell {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 92px minmax(0, 1fr);
   align-items: start;
-  background: var(--surface);
+  /* The rail's column stays navy below the sticky rail, however long the page. */
+  background: linear-gradient(to right, var(--rail-bg) 92px, var(--bg-app) 92px);
 }
 
 .sheet {
-  min-height: calc(100dvh - 53px);
-  border-left: 1px solid var(--hair);
-  background: var(--bg);
+  min-width: 0;
+  min-height: 100dvh;
+  background: var(--bg-app);
 }
 
 .wrap {
   max-width: 1180px;
   margin: 0 auto;
-  padding-block: 32px 150px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: var(--space-6) 150px;
+  padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
 }
 
-@media (max-width: 900px) {
+/* At 860 px and narrower the rail is a bar on top, and the page fills the rest of the window, however many rows the bar takes. */
+@media (max-width: 860px) {
   .shell {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 100dvh;
+    background: var(--bg-app);
+  }
+
+  .shell > nav {
+    flex: none;
   }
 
   .sheet {
-    min-height: calc(100dvh - 106px);
-    border-left: 0;
+    flex: 1;
+    min-height: 0;
   }
 }
 
-/* Home's hero stretches to the sheet, which is as tall as the window under the top bar, so it never adds a scroll; the page only
-   scrolls when its rows are taller than the window. */
+/* Home's hero stretches to the sheet, which is as tall as the window, so it never adds a scroll; the page only scrolls when its
+   rows are taller than the window. */
 :global(#root):has([data-hero]) .sheet {
   display: flex;
   flex-direction: column;
@@ -61,11 +71,11 @@
   flex: 1;
   flex-direction: column;
   width: 100%;
-  padding-bottom: 24px;
+  padding-bottom: var(--space-5);
 }
 
 /* While chatting, the page is exactly as tall as the window and only the conversation scrolls, so the box stays docked at the
-   bottom and nothing depends on the header's height. */
+   bottom. */
 :global(#root):has([data-chat]) {
   display: flex;
   flex-direction: column;
@@ -77,10 +87,6 @@
   flex: 1;
   min-height: 0;
   align-items: stretch;
-}
-
-:global(#root):has([data-chat]) .shell > nav {
-  align-self: start;
 }
 
 :global(#root):has([data-chat]) .sheet {
@@ -101,18 +107,8 @@
   padding: 0;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 860px) {
   :global(#root):has([data-chat]) .shell {
-    display: flex;
-    flex-direction: column;
-  }
-
-  :global(#root):has([data-chat]) .shell > nav {
-    flex: none;
-    align-self: stretch;
-  }
-
-  :global(#root):has([data-chat]) .sheet {
-    flex: 1;
+    min-height: 0;
   }
 }

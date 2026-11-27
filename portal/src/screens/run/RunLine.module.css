@@ -365,15 +365,15 @@
   position: relative;
   z-index: 1;
   max-width: 100%;
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-semi);
   line-height: 1.2;
   overflow-wrap: break-word;
 }
 
 .large .label {
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .under {
@@ -385,14 +385,14 @@
   gap: 4px;
   max-width: 100%;
   color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 700;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-bold);
   line-height: 1.3;
   overflow-wrap: break-word;
 }
 
 .large .under {
-  font-size: 0.78rem;
+  font-size: var(--fs-tiny);
 }
 
 .timer {
@@ -460,8 +460,8 @@
   align-items: flex-start;
   gap: 6px;
   margin: 0;
-  font-size: 0.92rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
   animation: fade-up var(--dur-small) var(--ease-out);
 }
 

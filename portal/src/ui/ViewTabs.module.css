@@ -17,8 +17,8 @@
   background: none;
   color: var(--muted);
   font: inherit;
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
   cursor: pointer;
   transition:
     background-color var(--dur-press) ease,

@@ -30,14 +30,14 @@
 .row b {
   display: block;
   overflow-wrap: anywhere;
-  font-size: 0.92rem;
+  font-size: var(--fs-small);
 }
 
 .row .sub {
   display: block;
   overflow-wrap: anywhere;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-tiny);
 }
 
 .pill {
@@ -48,8 +48,8 @@
   border-radius: 999px;
   background: var(--sunk);
   color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-semi);
   white-space: nowrap;
 }
 
@@ -79,8 +79,8 @@
 
 .count {
   color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .stack {
@@ -96,8 +96,8 @@
 }
 
 .head h3 {
-  font-size: 1.15rem;
-  font-weight: 800;
+  font-size: var(--fs-head);
+  font-weight: var(--fw-bold);
 }
 
 .calm {
@@ -121,13 +121,13 @@
 .sent {
   max-width: 68ch;
   margin: 0;
-  font-size: 1.02rem;
+  font-size: var(--fs-body);
   line-height: 1.6;
 }
 
 .kind {
   margin: 0;
   color: var(--muted);
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }

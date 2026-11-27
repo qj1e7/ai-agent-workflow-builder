@@ -2,15 +2,15 @@
   padding: 0 4px;
   border-radius: 4px;
   background: var(--sunk);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   overflow-wrap: anywhere;
 }
 
 .s {
   display: block;
   color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 400;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-regular);
 }
 
 .rows {
@@ -33,18 +33,18 @@
 
 .touches dt {
   color: var(--muted);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .touches dd {
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .sub {
   color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-bold);
 }
 
 .ok {
@@ -52,15 +52,15 @@
   gap: 2px;
   padding-left: 18px;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: var(--fs-small);
 }
 
 .mark {
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: var(--fs-tiny);
 }
 
 .mark[data-mark='needed'] {
   color: var(--amber-ink);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }

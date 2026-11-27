@@ -9,8 +9,8 @@
 }
 
 .found {
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: var(--fs-head);
+  font-weight: var(--fw-bold);
   line-height: 1.35;
 }
 
@@ -60,7 +60,7 @@
 /* The gist is cut by code to one sentence's worth, so it fits one line on a wide window and wraps on a narrow one, never cut off. */
 .gist {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-small);
   overflow-wrap: anywhere;
 }
 
@@ -68,8 +68,8 @@
   flex: none;
   padding-top: 1px;
   color: var(--ink);
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
   text-decoration: underline;
   text-underline-offset: 3px;
 }

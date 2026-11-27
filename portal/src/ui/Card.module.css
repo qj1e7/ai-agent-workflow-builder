@@ -22,8 +22,8 @@
 
 .head h3 {
   min-width: 0;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
   overflow-wrap: anywhere;
 }
 
@@ -42,8 +42,8 @@
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
 
 .actions {

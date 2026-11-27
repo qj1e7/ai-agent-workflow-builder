@@ -3,5 +3,5 @@
   flex: none;
   place-items: center;
   border-radius: 50%;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }

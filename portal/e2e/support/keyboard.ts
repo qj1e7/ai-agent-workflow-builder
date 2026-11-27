@@ -11,6 +11,7 @@ export interface Stop {
   top: number
   bottom: number
   left: number
+  right: number
   rest: Ring
   focused: Ring
   /** Set only when the styles show no ring (the range input draws it on its thumb), by comparing shots of the focused and unfocused element. */
@@ -65,7 +66,7 @@ async function stampTabbables(page: Page): Promise<number> {
 // Runs inside the page after each Tab.
 function describeFocus(): Omit<Stop, 'id' | 'pixelsChange'> & { id: number | null; atBody: boolean } {
   const el = document.activeElement as HTMLElement | null
-  if (!el || el === document.body || el === document.documentElement) return { id: null, atBody: true, label: '', top: 0, bottom: 0, left: 0, rest: { style: '', width: 0 }, focused: { style: '', width: 0 } }
+  if (!el || el === document.body || el === document.documentElement) return { id: null, atBody: true, label: '', top: 0, bottom: 0, left: 0, right: 0, rest: { style: '', width: 0 }, focused: { style: '', width: 0 } }
   const style = getComputedStyle(el, el instanceof HTMLInputElement && el.type === 'range' ? '::-webkit-slider-thumb' : null)
   const outlineWidth = style.outlineStyle !== 'none' ? parseFloat(style.outlineWidth) : 0
   const outline = outlineWidth > 0 ? `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor} +${style.outlineOffset}` : 'none'
@@ -86,6 +87,7 @@ function describeFocus(): Omit<Stop, 'id' | 'pixelsChange'> & { id: number | nul
     top,
     bottom: top + rect.height,
     left: rect.left + window.scrollX,
+    right: rect.right + window.scrollX,
     rest: { style: el.dataset['e2eRest'] ?? '', width: 0 },
     focused: { style: `${outline} | ${shadow}`, width: Math.max(outlineWidth, shadow !== 'none' ? 1 : 0) },
   }
@@ -131,12 +133,15 @@ export async function walkTabs(page: Page): Promise<Walk> {
     if (at.atBody || at.id === null || seen.has(at.id)) break
     seen.add(at.id)
     const noRingInStyles = at.focused.width === 0 || at.focused.style === at.rest.style
-    stops.push({ id: at.id, label: at.label, top: at.top, bottom: at.bottom, left: at.left, rest: at.rest, focused: at.focused, pixelsChange: noRingInStyles ? await pixelsChange(page) : null })
+    stops.push({ id: at.id, label: at.label, top: at.top, bottom: at.bottom, left: at.left, right: at.right, rest: at.rest, focused: at.focused, pixelsChange: noRingInStyles ? await pixelsChange(page) : null })
   }
   const labels = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-e2e-stop]')].map((el) => [el.dataset['e2eStop'] ?? '', el.dataset['e2eName'] ?? el.tagName] as const))
   const unreached = labels.filter(([id]) => !seen.has(Number(id)) && Number(id) < total).map(([, label]) => label)
   return { stops, unreached }
 }
+
+/** The dark rail's width, in the window wider than 860 px. */
+const RAIL_WIDTH = 92
 
 export function outOfVisualOrder(stops: readonly Stop[]): string[] {
   const problems: string[] = []
@@ -146,7 +151,9 @@ export function outOfVisualOrder(stops: readonly Stop[]): string[] {
     if (!before || !after) continue
     const overlap = Math.min(before.bottom, after.bottom) - Math.max(before.top, after.top)
     const sameRow = overlap > Math.min(before.bottom - before.top, after.bottom - after.top) / 2
-    const inOrder = sameRow ? after.left >= before.left - 1 : after.top >= before.top - 1
+    // From the 92 px rail's foot into the page beside it, the page's column starts from its top.
+    const nextColumn = before.right <= RAIL_WIDTH + 1 && after.left >= RAIL_WIDTH
+    const inOrder = nextColumn || (sameRow ? after.left >= before.left - 1 : after.top >= before.top - 1)
     if (!inOrder) problems.push(`"${before.label}" (top ${Math.round(before.top)}, left ${Math.round(before.left)}) then "${after.label}" (top ${Math.round(after.top)}, left ${Math.round(after.left)})`)
   }
   return problems

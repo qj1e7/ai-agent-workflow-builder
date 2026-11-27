@@ -45,8 +45,8 @@
   padding: 0 7px;
   border-radius: 999px;
   background: var(--active);
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-bold);
 }
 
 .bump {
@@ -109,21 +109,21 @@
 }
 
 .cardTitle {
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: var(--fs-head);
+  font-weight: var(--fw-bold);
 }
 
 .cardMeta,
 .note {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
   overflow-wrap: anywhere;
 }
 
 .lines {
   display: grid;
   gap: 4px;
-  font-size: 0.95rem;
+  font-size: var(--fs-body);
 }
 
 .lines li {
@@ -150,14 +150,14 @@
   padding: 10px 14px 12px 10px;
   border-radius: var(--r-well);
   background: var(--sunk);
-  font-size: 0.95rem;
+  font-size: var(--fs-body);
 }
 
 .says b {
   display: block;
   color: var(--muted);
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-bold);
 }
 
 .buttons {
@@ -213,7 +213,7 @@
 .rowMeta,
 .rowWhy {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .rowWhy {
@@ -222,12 +222,12 @@
 
 .rowWhy b {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .more {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 /* “N more” is a line of small text under WCAG 2.5.8's 24 px, so it gets a full target. */
@@ -240,7 +240,7 @@
 .problem {
   flex-basis: 100%;
   color: var(--red-ink);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .row > .problem {
@@ -281,13 +281,13 @@
 
 .rowName {
   display: block;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .rowSub {
   display: block;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .steps {
@@ -317,18 +317,18 @@
   border-radius: 50%;
   background: var(--sunk);
   color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .what {
-  font-weight: 600;
+  font-weight: var(--fw-semi);
 }
 
 .how {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--fs-small);
 }
 
 .linkButton {
@@ -340,8 +340,8 @@
   border: 0;
   background: none;
   color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
   text-decoration: underline;
   text-decoration-color: var(--rail);
   text-underline-offset: 3px;
@@ -408,8 +408,8 @@
 
 .group > h3 {
   color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 /* The sketch's Needs you on Home: plain rows under small group headings, each row one control. */
@@ -431,8 +431,8 @@
 
 .group > h2 {
   color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
   line-height: 1.5;
 }
 

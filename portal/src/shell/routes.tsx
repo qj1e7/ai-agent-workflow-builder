@@ -9,7 +9,7 @@ import { useWatchlist } from '../api/queries'
 import { WATCHLIST_PATH } from '../screens/software/software'
 import { howItWorksPath } from '../screens/agents/agents'
 import { JIRA_PATH } from '../screens/jira/tickets'
-import { ChatIcon, NodesIcon, SettingsIcon, TicketIcon } from './icons'
+import { HomeIcon, SettingsIcon, TicketIcon, WorkflowsIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
 import { PageHead } from './PageHead'
 import { greeting, today } from './today'
@@ -37,8 +37,8 @@ export type PageId = (typeof PAGE_IDS)[number]
 export const PAGES: Readonly<Record<PageId, PageEntry>> = {
   home: {
     path: '/',
-    railLabel: 'Chat',
-    icon: ChatIcon,
+    railLabel: 'Home',
+    icon: HomeIcon,
     heading: ({ name, now }) => (name ? `${greeting(now)}, ${name}` : greeting(now)),
     lead: ({ now }) => `${today(now)}.`,
     inRail: true,
@@ -46,7 +46,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
   workflows: {
     path: '/workflows',
     railLabel: 'Workflows',
-    icon: NodesIcon,
+    icon: WorkflowsIcon,
     heading: 'Workflows',
     lead: '',
     inRail: true,
@@ -92,7 +92,7 @@ export const RAIL_PAGE_IDS: readonly PageId[] = PAGE_IDS.filter((id) => PAGES[id
 
 const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`)
 
-/** The rail item marked current: Chat only at Home, Workflows on the addresses under it, and on a run or approval page, whichever workflow it is. */
+/** The rail item marked current: Home only at Home, Workflows on the addresses under it, and on a run or approval page, whichever workflow it is. */
 export function railCurrent(pathname: string): PageId | null {
   if (pathname === PAGES.home.path) return 'home'
   if (under(pathname, PAGES.workflows.path)) return 'workflows'
@@ -100,13 +100,28 @@ export function railCurrent(pathname: string): PageId | null {
   return null
 }
 
+/** What the rail counts, each from the query its page reads, so a count never disagrees with the page it leads to. */
+export interface RailCounts {
+  /** Needs you's count, from `needsTotal`, the same as Home's Needs you. */
+  readonly needs?: number | undefined
+  readonly workflows?: number | undefined
+}
+
 /**
- * Each rail item's count, the same for everyone: the total the sketch shows, how many workflows the team has. What needs
- * the person is the needs strip's and Workflows' number, so the rail never says it too.
+ * Each rail item's count (ADR 0052): Home's is the Needs you count, and Workflows shows its total, how many workflows the
+ * team has. None shows for nothing, or before the numbers have loaded.
  */
-export function railCountFor(id: PageId, workflows: number | undefined): number | null {
-  const total = id === 'workflows' ? workflows : undefined
-  return total !== undefined && total > 0 ? total : null
+export function railCountFor(id: PageId, counts: RailCounts): number | null {
+  const count = id === 'home' ? counts.needs : id === 'workflows' ? counts.workflows : undefined
+  return count !== undefined && count > 0 ? count : null
+}
+
+/** The item's name with its count: "Home, 2 things need you", or "Workflows, 3 in all". */
+export function railNameFor(id: PageId, count: number | null): string | undefined {
+  if (count === null) return undefined
+  const label = PAGES[id].railLabel
+  if (id === 'home') return `${label}, ${count === 1 ? '1 thing needs' : `${String(count)} things need`} you`
+  return `${label}, ${String(count)} in all`
 }
 
 export function wordsOf(words: Words, context: PageContext): string {
