@@ -160,8 +160,11 @@ export function softwareLine(row: WatchedSoftwareView, now: Date, checkedBy: str
             : row.newest_version !== null
               ? `Newest is ${row.newest_version}`
               : `Added ${dayOf(row.added_at, now)}`
-  return `${version} · ${checkedBy ? `checked by ${checkedBy}` : NOT_AUTOMATIC.toLowerCase()}`
+  return `${version} · ${checkedByWords(checkedBy)}`
 }
+
+/** What checks a row: "checked by Software watchlist", or "not checked automatically" while nothing checks the list. */
+export const checkedByWords = (checkedBy: string | null): string => (checkedBy ? `checked by ${checkedBy}` : NOT_AUTOMATIC.toLowerCase())
 
 /** The side panel's one sentence on where the software stands. Nothing here is guessed: a version nobody knows is said to be unknown. */
 export function sentenceFor(row: WatchedSoftwareView): string {

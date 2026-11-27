@@ -680,7 +680,7 @@ test.describe('with the AI model on', () => {
     await thread(page).getByRole('link', { name: 'Open the Software watchlist' }).click()
     await expect(page).toHaveURL(/\/workflows\/[^/?]+$/)
     const row = page.locator('li[data-status]').filter({ hasText: 'Redis' })
-    await expect(row, 'the row says it is only watched so far, and what checks it').toContainText(/Redis\s*Added today · (?:checked by Software watchlist|not checked automatically)[\s\S]*Watching/)
+    await expect(row, 'the row says it is only watched so far, with no version yet, and what checks it').toContainText(/Redis\s*(?:checked by Software watchlist|not checked automatically)\s*You run\s*Not known\s*Newest\s*Not checked yet\s*Watching/)
     await expect(page.locator('[data-count-line]'), 'the count line counts it').toHaveText('1 watching')
     assertClean(watch)
     await context.close()

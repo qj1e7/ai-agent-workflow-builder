@@ -6,7 +6,6 @@ import { useDisplayName } from '../../api/people'
 import { useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useUseNewAddress, useWatchlist } from '../../api/queries'
 import type { WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { Button } from '../../ui/Button'
-import { IconChevronRight } from '../../ui/icons'
 import { AddSoftware } from './AddSoftware'
 import { FindSoftware } from './FindSoftware'
 import { askButtonId } from './NewAddress'
@@ -38,7 +37,9 @@ import {
   REFRESH_MS,
   rowsMatching,
   scheduleRuns,
-  softwareLine,
+  checkedByWords,
+  newestOf,
+  oursOf,
   softwareInWorkflow,
   softwarePath,
   stateOf,
@@ -61,32 +62,48 @@ function useFocusOnceRendered(feedback: ChangeFeedback) {
 interface RowsProps {
   readonly rows: readonly WatchedSoftwareView[]
   readonly checkedBy: string | null
-  readonly now: Date
   readonly pathOf: (id: string) => string
 }
 
-/** One link of 44 px or more for each software: its name, "1.2.14 → 1.2.16 · checked by Software watchlist", and its pill. Urgent first. */
-function Rows({ rows, checkedBy, now, pathOf }: RowsProps) {
+/**
+ * One link of 44 px or more for each software, as the sketch's list draws it: its name and what checks it, the version you run, the newest,
+ * and its pill, each in a column that lines up on every row. Urgent first. The two headings are drawn once, for the eye. Each cell names
+ * itself for a screen reader, and on a narrow list for everyone.
+ */
+function Rows({ rows, checkedBy, pathOf }: RowsProps) {
   if (rows.length === 0) return null
   const sorted = [...rows].sort((a, b) => watchRank(a) - watchRank(b))
   return (
-    <ul className={styles['list']} aria-label="Software on the watchlist">
-      {sorted.map((row) => {
-        const state = stateOf(row)
-        return (
-          <li key={row.id} data-status={row.status} data-software-id={row.id}>
-            <Link to={pathOf(row.id)} className={styles['rowLink']}>
-              <span className={styles['who']}>
-                <b>{row.name}</b>
-                <span className={styles['src']}>{softwareLine(row, now, checkedBy)}</span>
-              </span>
-              <Pill tone={state.tone}>{state.words}</Pill>
-              <IconChevronRight size={16} />
-            </Link>
-          </li>
-        )
-      })}
-    </ul>
+    <div className={styles['table']}>
+      <div className={styles['cols']} aria-hidden="true">
+        <span>You run</span>
+        <span>Newest</span>
+      </div>
+      <ul className={styles['list']} aria-label="Software on the watchlist">
+        {sorted.map((row) => {
+          const state = stateOf(row)
+          return (
+            <li key={row.id} data-status={row.status} data-software-id={row.id}>
+              <Link to={pathOf(row.id)} className={styles['rowLink']}>
+                <span className={styles['who']}>
+                  <b>{row.name}</b>
+                  <span className={styles['src']}>{checkedByWords(checkedBy)}</span>
+                </span>
+                <span className={styles['ver']} data-col="ours">
+                  <span className={styles['cellLabel']}>You run</span>
+                  {oursOf(row).version}
+                </span>
+                <span className={styles['ver']} data-col="newest">
+                  <span className={styles['cellLabel']}>Newest</span>
+                  {newestOf(row).version}
+                </span>
+                <Pill tone={state.tone}>{state.words}</Pill>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 
@@ -149,12 +166,11 @@ interface LoadedProps {
   readonly operator: boolean
   /** Someone has the watchlist open in n8n, so the platform would refuse a schedule change. The page says who, once. */
   readonly held: boolean
-  readonly now: Date
   /** Set on a software's own page. The Watchlist itself has none. */
   readonly rowId: string | null
 }
 
-function Loaded({ view, operator, held, now, rowId }: LoadedProps) {
+function Loaded({ view, operator, held, rowId }: LoadedProps) {
   const [query, setQuery] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -285,7 +301,7 @@ function Loaded({ view, operator, held, now, rowId }: LoadedProps) {
             </div>
           </div>
         ) : null}
-        <Rows rows={rows} checkedBy={checkedBy} now={now} pathOf={pathOf} />
+        <Rows rows={rows} checkedBy={checkedBy} pathOf={pathOf} />
         {operator ? (
           <AddSoftware software={software} onShowRow={(id) => void navigate(pathOf(id))} onAdded={(name) => dispatch({ type: 'added', name })} />
         ) : null}
@@ -306,7 +322,7 @@ interface RouteProps {
 }
 
 /** The watchlist's list, its add form and its schedule. The workflow page around it holds the name, status, Run now, Pause and Resume. */
-export function SoftwareRoute({ now, rowId, held = false }: RouteProps) {
+export function SoftwareRoute({ rowId, held = false }: RouteProps) {
   const me = useMe()
   const watchlist = useWatchlist({ poll: REFRESH_MS })
   const { softwareId: fromAddress = null } = useParams()
@@ -327,5 +343,5 @@ export function SoftwareRoute({ now, rowId, held = false }: RouteProps) {
       </p>
     )
   }
-  return <Loaded view={watchlist.data} operator={operator} held={held} now={now} rowId={softwareId} />
+  return <Loaded view={watchlist.data} operator={operator} held={held} rowId={softwareId} />
 }
