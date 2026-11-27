@@ -1,22 +1,13 @@
 import failure from '@contracts/fixtures/runs/failure.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { describe, expect, it } from 'vitest'
-import { runId } from '../../stream/brand'
-import { parseEvent } from '../../stream/parse'
 import { historyOpen } from './historyOpen'
-import { emptyModel, foldAll } from './runModel'
+import { emptyModel, foldWire } from './runModel'
 
-const replay = (raw: readonly { run_id: string; seq: number }[], upTo = Infinity) =>
-  foldAll(
-    emptyModel,
-    raw
-      .filter((item) => item.seq <= upTo)
-      .map((item) => {
-        const result = parseEvent(item, runId(item.run_id))
-        if (!result.ok) throw new Error(result.problem)
-        return result.event
-      }),
-  )
+const replay = (raw: readonly { run_id: string; seq: number }[], upTo = Infinity) => {
+  const kept = raw.filter((item) => item.seq <= upTo)
+  return foldWire(emptyModel, kept, kept[0]?.run_id ?? '')
+}
 
 describe('Run history', () => {
   it('stays folded on a stopped run, where the troubleshooter already says what happened', () => {

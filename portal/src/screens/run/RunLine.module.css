@@ -45,11 +45,83 @@
 }
 
 .large .track {
-  --w: 100px;
-  --least: 72px;
-  --m: 34px;
-  --top: 46px;
-  padding-top: 12px;
+  --sw: 208px;
+  --m: 28px;
+  width: max-content;
+  justify-content: flex-start;
+  gap: 22px;
+  padding-top: 10px;
+}
+
+/* On the run page and the workflow page each step is a box: its picture and name on one line, its note under. The boxes sit in a
+   row at their own width and scroll sideways when the page is narrower, so no name or note stretches across the page. */
+.large .step {
+  width: var(--sw);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: start;
+  gap: 6px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--rail);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  text-align: left;
+}
+
+.large .link {
+  top: 23px;
+  left: 100%;
+  width: 22px;
+}
+
+.large .who {
+  grid-row: 1;
+  grid-column: 3;
+  height: auto;
+  margin: 0;
+}
+
+.large .who:empty {
+  display: none;
+}
+
+.large .dot {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.large .label {
+  grid-row: 1;
+  grid-column: 2;
+}
+
+.large .under {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.large .done {
+  border-color: var(--ink);
+}
+
+.large .now,
+.large .step[data-replay] {
+  border-color: var(--accent);
+}
+
+.large .wait {
+  border-color: var(--amber);
+}
+
+.large .err {
+  border-color: var(--red);
+}
+
+.large .todo,
+.large .no,
+.large .skip {
+  border-style: dashed;
 }
 
 .step {

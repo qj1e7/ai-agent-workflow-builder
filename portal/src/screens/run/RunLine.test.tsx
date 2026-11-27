@@ -338,9 +338,11 @@ describe('the Step by step', () => {
     expect(said.join(' ')).not.toMatch(/Done|created/)
   })
 
-  it('says a run that stopped before writing in plain words, with no red row', () => {
+  it('says the stop row of a run that stopped before writing in plain words, with no red', () => {
     const html = steps(replay(failure).chat)
-    expect(html).not.toMatch(/class="[^"]*bad[^"]*"/)
+    const stop = html.split('<li').at(-1) ?? ''
+    expect(stop).toContain('The run stopped. Nothing was written.')
+    expect(stop).not.toMatch(/class="[^"]*bad[^"]*"/)
     expect(text(html)).toContain('The run stopped. Nothing was written.')
   })
 

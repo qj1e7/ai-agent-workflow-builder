@@ -76,7 +76,7 @@ function UnderStep({ under, small }: { under: Under; small: boolean }) {
 
 function Face({ station }: { station: Station }) {
   if (station.spot.at !== 'agent') return null
-  return station.agent ? <AgentFace id={station.agent.id} display={station.agent.display} size={34} state={station.face} /> : <span className={styles['nobody']} />
+  return station.agent ? <AgentFace id={station.agent.id} display={station.agent.display} size={30} state={station.face} /> : <span className={styles['nobody']} />
 }
 
 interface RunLineProps {
