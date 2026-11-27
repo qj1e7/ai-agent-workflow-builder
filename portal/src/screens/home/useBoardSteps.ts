@@ -3,7 +3,7 @@ import { useApiClient, useCacheScope } from '../../api/context'
 import { useDisplayName } from '../../api/people'
 import { fetchEventPage, keys } from '../../api/queries'
 import type { StepDraw } from '../../ui/StepLine'
-import { stepsOfRun, type Tile } from './boardTiles'
+import { readsOf, stepsOfRun, type Tile } from './boardTiles'
 
 const STALE_MS = 30_000
 
@@ -15,7 +15,7 @@ export function useBoardSteps(tiles: readonly Tile[]): ReadonlyMap<string, reado
   const client = useApiClient()
   const user = useCacheScope()
   const nameOf = useDisplayName()
-  const reading = tiles.flatMap((tile) => (tile.lastRunId && tile.useCase.last_run ? [{ tile, runId: tile.lastRunId, state: tile.useCase.last_run.state }] : []))
+  const reading = readsOf(tiles)
   const results = useQueries({
     queries: reading.map(({ runId, state }) => ({
       queryKey: keys.runSteps(user, runId, state),

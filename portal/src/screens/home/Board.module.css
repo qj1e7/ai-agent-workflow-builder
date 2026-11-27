@@ -32,21 +32,28 @@
 
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  column-gap: var(--space-4);
+  row-gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* A tile spans three rows of the board's grid, its name row, its step line and its facts, and its card shares them, so in one row of tiles
+   every step line starts at one height, however many lines a name or a pill takes. */
 .cell {
   display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  padding-bottom: var(--space-4);
 }
 
 .tile {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  display: grid;
+  grid-row: 1 / span 3;
+  grid-template-rows: subgrid;
+  row-gap: var(--space-3);
   width: 100%;
   padding: var(--space-4) var(--space-5);
   border: 0;
@@ -74,10 +81,18 @@
 }
 
 .top {
+  grid-row: 1;
+  align-self: start;
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
+}
+
+/* A pill never shrinks into a second line: it drops under a long name instead. */
+.top > :last-child {
+  flex: none;
 }
 
 .name {
@@ -88,11 +103,17 @@
   overflow-wrap: anywhere;
 }
 
+.steps {
+  grid-row: 2;
+  justify-self: start;
+}
+
 .meta {
+  grid-row: 3;
+  align-self: end;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 4.5rem minmax(0, 1fr);
   gap: var(--space-1) var(--space-3);
-  margin-top: auto;
   color: var(--text-2);
   font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
@@ -131,6 +152,7 @@
 }
 
 .pulseTitle {
+  flex: none;
   font-size: var(--fs-head);
   font-weight: var(--fw-semi);
   line-height: 1.3;

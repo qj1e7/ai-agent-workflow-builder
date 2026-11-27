@@ -3,7 +3,8 @@ import watchlist from '../../../../contracts/fixtures/builder/use-case.json'
 import failure from '../../../../contracts/fixtures/runs/failure.json'
 import success from '../../../../contracts/fixtures/runs/success.json'
 import type { UseCaseView } from '../../api/types'
-import { BOARD_SHOWN, boardOf, nextUp, stepsOfRun } from './boardTiles'
+import { keys } from '../../api/queries'
+import { BOARD_SHOWN, boardOf, nextUp, readsOf, stepsOfRun } from './boardTiles'
 
 const NOW = new Date('2026-11-27T01:00:00Z')
 const base = watchlist as unknown as UseCaseView
@@ -66,5 +67,22 @@ describe('a tile’s last run as steps', () => {
 
   it('draws no steps from no events, so a tile never shows a made-up line', () => {
     expect(stepsOfRun([], 'run_x', base, (id) => id)).toEqual([])
+  })
+})
+
+describe('what the board reads', () => {
+  it('reads one run per tile that has run, and never more than the board draws', () => {
+    const many = Array.from({ length: BOARD_SHOWN + 4 }, (_, index) => made(`w${String(index)}`, { last_run: { ...(ran as NonNullable<UseCaseView['last_run']>), run_id: `run_${String(index)}` } }))
+    const reads = readsOf(boardOf([made('none'), ...many], NOW).tiles)
+    expect(reads).toHaveLength(BOARD_SHOWN - 1)
+    expect(reads.map((read) => read.runId)).not.toContain(undefined)
+  })
+
+  it('keys a read by the run and its state, so a run that moves on is read again and the same run is read once', () => {
+    const waiting = keys.runSteps('alice', 'run_1', 'awaiting_approval')
+    expect(waiting).not.toEqual(keys.runSteps('alice', 'run_1', 'succeeded'))
+    expect(waiting).not.toEqual(keys.runSteps('alice', 'run_2', 'awaiting_approval'))
+    expect(waiting).toEqual(keys.runSteps('alice', 'run_1', 'awaiting_approval'))
+    expect(waiting.slice(0, 3)).toEqual(keys.run('alice', 'run_1'))
   })
 })

@@ -86,8 +86,8 @@ describe('the line that says nothing needs the person', () => {
     expect(html).toContain('Monday 9:00')
   })
 
-  it('leaves out the sentence when the page’s heading already says it, and says nothing with no next run either', () => {
-    expect(line(null, [made('a')])).not.toContain('Nothing needs')
+  it('draws nothing where the page’s heading already says it, so there is no card with only a next run', () => {
+    expect(line(null, [made('a')])).toBe('')
     expect(line(null, [])).toBe('')
   })
 })

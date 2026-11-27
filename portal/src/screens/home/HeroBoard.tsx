@@ -18,7 +18,7 @@ interface HeroBoardProps {
   /** What follows Needs you's tiles: the link to the rest, or Show more. */
   readonly more: ReactNode
   readonly now: Date
-  /** An Operator's board is "Your workflows". An Approver's is "Workflows", and their heading already says whether anything needs them. */
+  /** An Approver's heading already counts what needs them, so Needs you carries no second count. An Operator's board is "Your workflows". An Approver's is "Workflows", and their heading already says whether anything needs them. */
   readonly operator: boolean
 }
 
@@ -35,9 +35,9 @@ export function HeroBoard({ needs, total, more, now, operator }: HeroBoardProps)
       {needs.length > 0 ? (
         <section className={styles['block']} aria-labelledby={headingId}>
           <h2 id={headingId} className={styles['blockHead']}>
-            Needs you <span className={styles['blockCount']}>{total}</span>
+            Needs you {operator ? <span className={styles['blockCount']}>{total}</span> : null}
           </h2>
-          <NeedRows needs={needs} now={now} level={3} more={more} />
+          <NeedRows needs={needs} now={now} level={3} tiles more={more} />
         </section>
       ) : useCases.data ? (
         <NextUp title={operator ? NOTHING_NEEDS_YOU : null} next={nextUp(listed, now)} />

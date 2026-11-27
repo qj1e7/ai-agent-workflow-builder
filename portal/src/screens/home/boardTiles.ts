@@ -50,3 +50,8 @@ export function stepsOfRun(events: readonly unknown[], runId: string, useCase: U
   const trigger = triggerWords(model, useCase.schedule, nameOf, useCase.last_run?.at ?? '')
   return stationsOf(model, planOf(useCase), trigger).map((station) => ({ key: station.key, name: station.label, icon: station.icon, state: station.state }))
 }
+
+/** The runs the board reads, one per tile that has run, each with the state its read is keyed by. */
+export function readsOf(tiles: readonly Tile[]): readonly { readonly tile: Tile; readonly runId: string; readonly state: string }[] {
+  return tiles.slice(0, BOARD_SHOWN).flatMap((tile) => (tile.lastRunId && tile.useCase.last_run ? [{ tile, runId: tile.lastRunId, state: tile.useCase.last_run.state }] : []))
+}

@@ -193,7 +193,7 @@ function NeedsYou({ now }: { now: Date }) {
   return (
     <section className={styles['block']} aria-labelledby={headingId}>
       <h2 id={headingId}>Needs you</h2>
-      <NeedRows needs={needs.shown} now={now} level={3} more={<NeedsMore needs={needs} pager={pager} />} />
+      <NeedRows needs={needs.shown} now={now} level={3} tiles more={<NeedsMore needs={needs} pager={pager} />} />
     </section>
   )
 }

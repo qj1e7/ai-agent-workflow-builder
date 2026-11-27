@@ -412,56 +412,118 @@
   font-weight: var(--fw-bold);
 }
 
-/* Needs you's groups under their small headings. */
+/* The sketch's Needs you on Home: plain rows under small group headings, each row one control. */
 .plain {
   display: grid;
-  gap: var(--space-3);
+  gap: 14px;
   width: 100%;
+  margin-top: 8px;
   text-align: left;
 }
 
 .plain .groups {
-  gap: var(--space-4);
+  gap: 14px;
 }
 
 .plain .group {
-  gap: var(--space-2);
+  gap: 6px;
 }
 
-/* Needs you as the sketch draws it: bright tiles, one control each. A tile's tone is its bar and its tint, and its mark carries the shape. */
+.group > h2 {
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
+  line-height: 1.5;
+}
+
 .needRows {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  gap: var(--space-4);
+  gap: 6px;
   list-style: none;
 }
 
 .need {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-press) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.need:active {
+  transform: scale(0.99);
+}
+
+.need svg {
+  flex: none;
+  color: var(--muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .need:hover {
+    border-color: var(--ink);
+  }
+}
+
+.needText {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+[data-tone='err'] .dot {
+  background: var(--red);
+}
+
+/* Home's and Workflows' Needs you as the sketch draws it: bright tiles, one control each. A tile's tone is its bar and its tint, and its mark
+   carries the shape. The chat's card and the side panel keep the compact rows above. */
+.tiles .needRows {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-4);
+}
+
+.tiles .group > h3 {
+  margin-bottom: 0;
+}
+
+.tiles .need {
   position: relative;
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto;
-  align-items: center;
   gap: var(--space-3);
-  width: 100%;
-  min-height: 64px;
   height: 100%;
+  min-height: 64px;
   padding: var(--space-3) var(--space-4) var(--space-3) var(--space-5);
   border: 0;
-  border-radius: var(--r-md);
   overflow: hidden;
   background: var(--wait-bg);
   box-shadow: var(--shadow-2);
-  color: var(--ink);
-  font: inherit;
-  text-align: start;
-  text-decoration: none;
-  cursor: pointer;
   transition:
     box-shadow var(--dur-press) ease,
     scale var(--dur-press) var(--ease-out);
 }
 
-.need::before {
+.tiles .need::before {
   content: '';
   position: absolute;
   inset-block: 0;
@@ -470,31 +532,28 @@
   background: var(--wait);
 }
 
-[data-tone='err'] > .need {
+.tiles [data-tone='err'] > .need {
   background: var(--stop-bg);
 }
 
-[data-tone='err'] > .need::before {
+.tiles [data-tone='err'] > .need::before {
   background: var(--stop);
 }
 
-.need:active {
+.tiles .need:active {
+  transform: none;
   scale: 0.99;
 }
 
-.need > svg {
+.tiles .need > svg {
   color: var(--text-2);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .need:hover {
+  .tiles .need:hover {
+    border: 0;
     box-shadow: var(--shadow-3);
   }
-}
-
-.needText {
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 .mark {
@@ -507,7 +566,7 @@
   color: var(--on-wait);
 }
 
-[data-tone='err'] > .need .mark {
+.tiles [data-tone='err'] > .need .mark {
   background: var(--stop);
   color: var(--on-status);
 }

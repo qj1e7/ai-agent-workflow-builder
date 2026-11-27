@@ -184,6 +184,10 @@ describe('Home for an Approver with a run waiting for their yes', () => {
     expect(linksIn(html)).toContainEqual(['Dave waits to be confirmed as an Approver', '/settings?tab=people'])
   })
 
+  it('says what needs an Approver once: their heading has the count, and the Needs you heading under it has none', () => {
+    expect(text(sectionOf(html, 'Needs you'))).toMatch(/^Needs you Do now/)
+  })
+
   it('never offers a decision on Home', () => {
     expect([...buttonsIn(html), ...linksIn(html).map(([name]) => name)].filter((name) => /^(Approve|Decline|Confirm|Not now|Review and decide)/.test(name ?? ''))).toEqual([])
   })

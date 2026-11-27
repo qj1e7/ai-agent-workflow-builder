@@ -60,6 +60,23 @@ test('Home’s board lists the workflows as tiles under Needs you, each one link
   await expect(page.getByRole('main').getByText('needs your approval'), 'said once on the page').toHaveCount(1)
   const edges = await page.evaluate(() => ['form', 'ul[aria-label="Needs you"]', 'ul[aria-label="Workflows"]'].map((query) => document.querySelector(query)?.getBoundingClientRect().left ?? -1))
   expect(Math.max(...edges) - Math.min(...edges), 'the box, Needs you and the board start at one left edge').toBeLessThanOrEqual(1)
+  for (const width of [1280, 800]) {
+    await page.setViewportSize({ width, height: 900 })
+    const fit = await page.evaluate(() => {
+      const tiles = [...document.querySelectorAll('ul[aria-label="Workflows"] > li[data-workflow-id]')]
+      const pills = tiles.flatMap((item) => [...item.querySelectorAll('[data-life]')]).map((pill) => pill.getBoundingClientRect().height)
+      const lines = tiles.flatMap((item) => {
+        const line = item.querySelector('[role="img"]')
+        return line ? [{ row: Math.round(item.getBoundingClientRect().top), inTile: Math.round(line.getBoundingClientRect().top - item.getBoundingClientRect().top) }] : []
+      })
+      return { tallest: Math.max(0, ...pills), lines }
+    })
+    expect(fit.tallest, `every board pill is one line at ${String(width)} px`).toBeLessThan(34)
+    for (const row of new Set(fit.lines.map((line) => line.row))) {
+      const heights = new Set(fit.lines.filter((line) => line.row === row).map((line) => line.inTile))
+      expect(heights.size, `step lines in one row share a top edge at ${String(width)} px`).toBe(1)
+    }
+  }
   await shot(page, info, 'mc-board-bob-home')
   await context.close()
 })
@@ -76,6 +93,8 @@ test('alice sees no Waiting on others on Home or Workflows, and the run she star
   await shot(page, info, 'p11-06-alice-home')
   await page.goto('/workflows')
   await expect(page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })).toContainText('On · waiting for approval')
+  const pill = page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' }).locator('[data-life]')
+  expect((await pill.boundingBox())?.height ?? 99, 'the state column fits its longest pill on one line').toBeLessThan(34)
   await expect(waitingOnOthers(page)).toHaveCount(0)
   await expect(page.locator(`a[href="/runs/${runId}"]`), 'Needs you offers alice no run she can’t decide').toHaveCount(0)
   await context.close()

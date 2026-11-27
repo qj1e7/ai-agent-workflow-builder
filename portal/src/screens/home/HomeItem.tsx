@@ -209,15 +209,19 @@ export function NeedItem({ need, card, quiet = false, connectAbove = false, now,
  * One tile of Needs you as the sketch draws it: a mark in the tile’s tone, what it is about in bold, what happened, and a chevron. The
  * whole row opens the item, beside the chat when the chat drew it and as its page anywhere else.
  */
-export function NeedRow({ need, now }: { need: Need; now: Date }) {
+export function NeedRow({ need, now, tile = false }: { need: Need; now: Date; tile?: boolean }) {
   const { tone, subject, rest } = lineOf(need, now)
   const item = panelItemOf(need)
   const to = openPathOf(need)
   const words = (
     <>
-      <span className={styles['mark']} aria-hidden="true">
-        {tone === 'err' ? <IconX size={18} /> : <IconAlert size={18} />}
-      </span>
+      {tile ? (
+        <span className={styles['mark']} aria-hidden="true">
+          {tone === 'err' ? <IconX size={18} /> : <IconAlert size={18} />}
+        </span>
+      ) : (
+        <span className={styles['dot']} aria-hidden="true" />
+      )}
       <span className={styles['needText']}>
         <b>{subject}</b> {rest}
       </span>

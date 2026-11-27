@@ -34,7 +34,7 @@ function WorkflowTile({ tile, steps, now, nameOf }: TileProps) {
           </b>
           <StatusPills useCase={useCase} />
         </span>
-        {steps ? <StepLine steps={steps} label="Last run" /> : null}
+        <span className={styles['steps']}>{steps ? <StepLine steps={steps} label="Last run" /> : null}</span>
         <span id={`${ids}-meta`} className={styles['meta']}>
           {next !== null ? (
             <>
@@ -81,24 +81,20 @@ export function Board({ board, steps, now, heading, nameOf }: BoardProps) {
 }
 
 interface NextUpProps {
-  /** "Nothing needs you.", or null where the page's heading already says it. */
+  /** "Nothing needs you.", or null where the page's heading already says it, and then nothing is drawn. */
   readonly title: string | null
   readonly next: { readonly name: string; readonly when: string } | null
 }
 
 /** What Home says while nothing needs the person: one line, with the next run. */
 export function NextUp({ title, next }: NextUpProps) {
-  if (title === null && next === null) return null
+  if (title === null) return null
   return (
     <div className={styles['pulse']}>
-      {title !== null ? (
-        <>
-          <span className={styles['mark']} aria-hidden="true">
-            <IconCheck />
-          </span>
-          <p className={styles['pulseTitle']}>{title}</p>
-        </>
-      ) : null}
+      <span className={styles['mark']} aria-hidden="true">
+        <IconCheck />
+      </span>
+      <p className={styles['pulseTitle']}>{title}</p>
       {next ? (
         <p className={styles['pulseNext']}>
           Next run
