@@ -11,9 +11,6 @@ import { LINK_INTO, type Link } from './stage'
 import { sentToWords, UNSENT_WORDS, workingWords, type Settled } from './words'
 import styles from './RunLine.module.css'
 
-/** The state in words, for a screen reader: the line shows it by shape and colour. */
-export const STATE_WORDS = STEP_STATE_WORDS
-
 const MARCHES: ReadonlySet<Link> = new Set(['flow', 'wait'])
 
 /** A stopped run's line first shows the work flowing into the stop for this long, then the stop. */
