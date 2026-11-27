@@ -63,19 +63,13 @@ function ConnectionCard({ connection, capabilities, canCheck, now }: CardProps) 
         </div>
         <span className={styles['tags']}>
           {connection.practice ? <span className={styles['tag']}>Practice copy</span> : null}
-          <span className={styles['pill']} data-tone={says.health}>
+          <span className={styles['pill']} data-tone={DOT[says.health]}>
             {says.health === 'ok' ? <CheckMark /> : says.health === 'warn' ? <AlertMark /> : null}
             {says.label}
           </span>
         </span>
       </div>
       {sentence ? <p id={textId}>{sentence}</p> : null}
-      {says.note ? (
-        <p className={styles['callout']}>
-          <AlertMark />
-          <span>{says.note}</span>
-        </p>
-      ) : null}
       {connection.id === 'github' && says.checked ? <p className={styles['small']}>{GITHUB_KEY_NOTE}</p> : null}
       <dl className={styles['facts']}>
         {connection.id === 'teams' ? (
@@ -107,6 +101,12 @@ function ConnectionCard({ connection, capabilities, canCheck, now }: CardProps) 
           </div>
         ) : null}
       </dl>
+      {says.note ? (
+        <p className={styles['callout']}>
+          <AlertMark />
+          <span>{says.note}</span>
+        </p>
+      ) : null}
       {canCheck && connection.state !== 'not_set_up' ? <CheckNow connection={connection} describedBy={sentence ? textId : undefined} /> : null}
     </article>
   )
