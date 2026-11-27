@@ -338,9 +338,9 @@ describe('the Step by step', () => {
     expect(said.join(' ')).not.toMatch(/Done|created/)
   })
 
-  it('lets the agent that failed say so in red', () => {
+  it('says a run that stopped before writing in plain words, with no red row', () => {
     const html = steps(replay(failure).chat)
-    expect(html).toMatch(/class="[^"]*bad[^"]*"/)
+    expect(html).not.toMatch(/class="[^"]*bad[^"]*"/)
     expect(text(html)).toContain('The run stopped. Nothing was written.')
   })
 
