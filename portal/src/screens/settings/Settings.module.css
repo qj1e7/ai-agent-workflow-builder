@@ -1,36 +1,31 @@
 .tabs {
-  display: inline-flex;
+  display: flex;
   max-width: 100%;
-  margin: -4px 0 18px;
-  padding: 3px;
+  margin: 0 0 var(--space-5);
   flex-wrap: wrap;
-  gap: 2px;
-  border-radius: calc(var(--r-ctl) + 3px);
-  background: var(--sunk);
+  gap: 0 var(--space-4);
+  border-bottom: 1px solid var(--hair);
 }
 
 .tabs button {
   position: relative;
   flex: none;
   min-height: 44px;
-  padding: 0 var(--space-4);
+  margin-bottom: -1px;
+  padding: 0 var(--space-2);
   border: 0;
-  border-radius: var(--r-ctl);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: none;
   color: var(--muted);
   font-weight: 600;
   white-space: nowrap;
-  transition:
-    background-color var(--dur-press) ease,
-    color var(--dur-press) ease;
+  transition: color var(--dur-press) ease;
 }
 
 .tabs button[aria-pressed='true'] {
-  background: var(--surface);
+  border-bottom-color: var(--ink);
   color: var(--ink);
-  box-shadow:
-    inset 0 0 0 1.5px var(--ink),
-    0 1px 2px rgba(18, 20, 23, 0.06);
 }
 
 .dot {
@@ -47,14 +42,36 @@
   display: grid;
   gap: 14px;
   min-width: 0;
-  padding: 20px 24px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
-  background: var(--surface);
 }
 
-.panel h2 {
-  font-size: 1.2rem;
+.health {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: var(--text-14);
+}
+
+.hdots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.hdots i {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+}
+
+.hdots i[data-tone='ok'] {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.hdots i[data-tone='wait'] {
+  border-color: var(--amber);
+  background: var(--amber);
 }
 
 .note {
@@ -326,9 +343,13 @@
 }
 
 .roles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 8rem);
+  gap: 4px 12px;
+}
+
+.roleSlot {
+  min-width: 0;
 }
 
 .rolesText {
@@ -386,15 +407,7 @@
 }
 
 .rules li {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
-  gap: 8px;
   font-size: 0.95rem;
-}
-
-.rules svg {
-  margin-top: 3px;
-  color: var(--green);
 }
 
 .history > summary {
@@ -426,10 +439,6 @@
 }
 
 @media (max-width: 600px) {
-  .panel {
-    padding: 16px;
-  }
-
   .person {
     grid-template-columns: 34px minmax(0, 1fr);
   }
@@ -438,6 +447,10 @@
   .person .rolesText {
     grid-column: 2;
     text-align: left;
+  }
+
+  .roles {
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
   }
 
   .waiting {
@@ -457,6 +470,8 @@
 
 .connections {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  align-items: start;
   gap: 14px;
 }
 
@@ -471,8 +486,7 @@
 }
 
 .connection[data-state='needs_attention'],
-.connection[data-state='not_answering'],
-.connection[data-state='not_set_up'] {
+.connection[data-state='not_answering'] {
   border-color: var(--amber-line);
 }
 

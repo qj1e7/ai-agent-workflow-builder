@@ -145,7 +145,7 @@ describe('the Settings tabs', () => {
       </QueryClientProvider>,
     )
     expect(html).toMatch(/<h1 tabindex="-1">Settings<\/h1>/)
-    expect(text(html)).toContain('Every change here is recorded with who made it.')
+    expect(text(html)).not.toContain('Every change here is recorded')
   })
 })
 
@@ -171,7 +171,8 @@ describe('the Connections tab', () => {
 
   it('says a key that runs out soon, with the one fix the platform gave, and that the result may be old for GitHub', () => {
     const github = text(cardOf(html, 'github'))
-    expect(github).toContain('Key running out')
+    expect(github).toContain('Working')
+    expect(github).not.toContain('Key running out')
     expect(github).toContain('The key runs out soon. Ask whoever set up GitHub for a new key before this one runs out.')
     expect(github).toContain(GITHUB_KEY_NOTE)
     expect(text(cardOf(html, 'jira'))).not.toContain(GITHUB_KEY_NOTE)
@@ -513,5 +514,50 @@ describe('n8n access on People and permissions', () => {
     const html = render({ me: ALICE, tab: 'people', people: withCarol({ n8n_account: 'invited' }), myN8n: meN8nInvited as MyN8nOut })
     expect(html).not.toContain('Set your n8n password')
     expect(html).not.toContain('example-not-a-real-token')
+  })
+})
+
+describe('the Settings tabs, in the taste pass', () => {
+  it('lead with one finding on Connections, counted from the cards, and carry no intro lines', () => {
+    const some = text(render({ tab: 'connections', connections: ALL }))
+    expect(some).toContain('2 of 4 working. A check only reads, so it never changes anything.')
+    expect(text(render({ tab: 'connections' }))).toContain('4 of 4 working.')
+    expect(some).not.toContain('The systems the platform signs in to')
+    expect(text(render({ tab: 'model' }))).not.toContain('The model the agents use to plan')
+  })
+
+  it('count the working connections from the same words as the card pills, and give not set up the grey tone on the dot', () => {
+    const html = render({ tab: 'connections', connections: ALL })
+    const cards = ['jira', 'github', 'teams', 'confluence'].map((id) => text(cardOf(html, id)))
+    const pills = cards.filter((card) => / Working /.test(` ${card} `) && !card.includes('Not working')).length
+    expect(text(html)).toContain(`${pills} of 4 working.`)
+    const dots = [...html.matchAll(/<i data-tone="([^"]*)"/g)].map((m) => m[1])
+    expect(dots).toEqual(['ok', 'ok', 'wait', 'off'])
+  })
+
+  it('still mark the Connections tab when an expiring key is the only issue', () => {
+    const calm = { ...CALM, connections: CALM.connections.map((c) => (c.id === 'github' ? { ...c, expires_at: '2026-11-18T09:00:00Z' } : c)) }
+    expect(render({ tab: 'people', connections: calm })).toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
+    expect(text(render({ tab: 'connections', connections: calm }))).toContain('4 of 4 working.')
+  })
+
+  it('keep each tab name as a hidden heading, not a visible repeat', () => {
+    for (const [tab, name] of [['connections', 'Connections'], ['people', 'People and permissions'], ['model', 'AI model']] as const) {
+      const html = render({ tab })
+      expect(html).toMatch(new RegExp(`<h2[^>]*class="[^"]*visually-hidden[^"]*"[^>]*>${name}</h2>`))
+    }
+  })
+
+  it('list the role rules as plain text, with no decorative icon', () => {
+    const rules = /<ul[^>]*aria-label="The rules"[^>]*>([\s\S]*?)<\/ul>/.exec(render({ tab: 'people' }))?.[1] ?? ''
+    expect(rules).toContain('<li')
+    expect(rules).not.toContain('<svg')
+  })
+
+  it('give every row the same three role slots, so the boxes line up', () => {
+    const html = render({ tab: 'people' })
+    for (const name of ['Alice', 'Carol']) expect(rowOf(html, name)).toMatch(/class="[^"]*roles[^"]*"/)
+    expect(rowOf(html, 'Carol').match(/class="[^"]*roleSlot[^"]*"/g)).toHaveLength(3)
+    expect(rowOf(html, 'Alice').match(/class="[^"]*roleSlot[^"]*"/g)).toHaveLength(3)
   })
 })
