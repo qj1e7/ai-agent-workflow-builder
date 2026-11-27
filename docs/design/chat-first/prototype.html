@@ -1369,7 +1369,7 @@ const softRow = (k) => { const s = W.soft[k]; const [t, c] = softState(k); retur
 const watchRows = () => softIds().map(softRow).join('');
 const behindIds = () => softIds().filter((k) => softState(k)[0] === 'Newer out');
 const listCard = () => '<div class="card"><div class="c-head"><b>Workflows</b><span class="small muted" data-live="n-wf"></span></div><ul class="wl" data-live="list"></ul></div>';
-const watchCard = () => '<div class="card"><div class="c-head"><b>Watchlist</b><span class="small muted" data-live="n-watch"></span></div><ul class="wl" data-live="watch"></ul></div>';
+const watchCard = () => '<div class="card"><div class="c-head"><b>Software watchlist</b><span class="small muted" data-live="n-watch"></span></div><ul class="wl" data-live="watch"></ul><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="wf:swl">Open it</button></span></div></div>';
 const behindCard = () => '<div class="card"><div class="c-head"><b data-live="behind-h"></b></div><ul class="wl" data-live="behind"></ul><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="wf:swl">See the watchlist</button></span></div></div>';
 const needsCard = () => '<div class="card"><div class="c-head"><b data-live="needs-h"></b></div><div class="needs" data-live="needs"></div></div>';
 const histCard = () => `<div class="card"><div class="c-head"><b>Your recent decisions</b></div><ul class="rows plain">
