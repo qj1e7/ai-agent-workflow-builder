@@ -28,6 +28,7 @@ import {
 } from './removal'
 import { declinedNext, declinedOfSteps, declinedWithNext } from '../run/words'
 import { BackToWatchlist, SoftwareItem } from './SoftwareItem'
+import { SoftwareList } from './SoftwareList'
 import {
   CHECKER,
   checksOnItsOwn,
@@ -37,16 +38,10 @@ import {
   REFRESH_MS,
   rowsMatching,
   scheduleRuns,
-  checkedByWords,
-  newestOf,
-  oursOf,
   softwareInWorkflow,
   softwarePath,
-  stateOf,
-  watchRank,
 } from './software'
 import styles from './Software.module.css'
-import { Pill } from '../../ui/Pill'
 
 function useFocusOnceRendered(feedback: ChangeFeedback) {
   const focusedFor = useRef<ChangeFeedback | null>(null)
@@ -59,51 +54,19 @@ function useFocusOnceRendered(feedback: ChangeFeedback) {
   })
 }
 
-interface RowsProps {
-  readonly rows: readonly WatchedSoftwareView[]
-  readonly checkedBy: string | null
-  readonly pathOf: (id: string) => string
-}
-
-/**
- * One link of 44 px or more for each software, as the sketch's list draws it: its name and what checks it, the version you run, the newest,
- * and its pill, each in a column that lines up on every row. Urgent first. The two headings are drawn once, for the eye. Each cell names
- * itself for a screen reader, and on a narrow list for everyone.
- */
-function Rows({ rows, checkedBy, pathOf }: RowsProps) {
-  if (rows.length === 0) return null
-  const sorted = [...rows].sort((a, b) => watchRank(a) - watchRank(b))
+/** The watchlist's rows: each one links to its software's page. */
+function Rows({ rows, checkedBy, pathOf }: { readonly rows: readonly WatchedSoftwareView[]; readonly checkedBy: string | null; readonly pathOf: (id: string) => string }) {
   return (
-    <div className={styles['table']}>
-      <div className={styles['cols']} aria-hidden="true">
-        <span>You run</span>
-        <span>Newest</span>
-      </div>
-      <ul className={styles['list']} aria-label="Software on the watchlist">
-        {sorted.map((row) => {
-          const state = stateOf(row)
-          return (
-            <li key={row.id} data-status={row.status} data-software-id={row.id}>
-              <Link to={pathOf(row.id)} className={styles['rowLink']}>
-                <span className={styles['who']}>
-                  <b>{row.name}</b>
-                  <span className={styles['src']}>{checkedByWords(checkedBy)}</span>
-                </span>
-                <span className={styles['ver']} data-col="ours">
-                  <span className={styles['cellLabel']}>You run</span>
-                  {oursOf(row).version}
-                </span>
-                <span className={styles['ver']} data-col="newest">
-                  <span className={styles['cellLabel']}>Newest</span>
-                  {newestOf(row).version}
-                </span>
-                <Pill tone={state.tone}>{state.words}</Pill>
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
+    <SoftwareList
+      rows={rows}
+      checkedBy={checkedBy}
+      label="Software on the watchlist"
+      open={(row, className, cells) => (
+        <Link to={pathOf(row.id)} className={className}>
+          {cells}
+        </Link>
+      )}
+    />
   )
 }
 
