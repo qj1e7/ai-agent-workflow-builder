@@ -231,7 +231,7 @@ export function lineOf(item: ChatItem, nameOf: NameOf, declinedNext: string | nu
       return {
         speaker: platform,
         text: item.stage === 'acting' ? 'The run stopped while writing.' : 'The run stopped. Nothing was written.',
-        tone: 'bad',
+        tone: item.stage === 'acting' ? 'bad' : 'plain',
       }
     case 'reported':
       return { speaker: app, text: `${nameOf(item.by)} reported this run to support.`, tone: 'plain' }

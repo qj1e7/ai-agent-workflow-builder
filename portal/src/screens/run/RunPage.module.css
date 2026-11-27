@@ -16,11 +16,6 @@
   transition: color var(--dur-press) ease;
 }
 
-.back span {
-  font-size: var(--fs-head);
-  line-height: 1;
-}
-
 @media (hover: hover) and (pointer: fine) {
   .back:hover {
     color: var(--ink);
@@ -189,10 +184,27 @@
   gap: 14px;
   min-width: 0;
   margin-top: 22px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--trouble) 6%, var(--surface));
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  background: var(--surface);
   font-size: var(--fs-body);
+}
+
+/* Retry and Report to support sit under the three answers, left, where the answer is. */
+.stopActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.stopActions:empty {
+  display: none;
+}
+
+.stoppedLine {
+  margin-top: 6px;
 }
 
 .troubleBody {
@@ -208,7 +220,6 @@
   min-width: 0;
 }
 
-.foot,
 .panelFoot {
   display: flex;
   flex-wrap: wrap;
@@ -219,11 +230,6 @@
   border-top: 1px solid var(--rule);
 }
 
-.foot {
-  margin-top: 18px;
-}
-
-.foot:empty,
 .panelFoot:empty {
   display: none;
 }

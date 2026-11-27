@@ -1,20 +1,19 @@
 .tabs {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   max-width: 100%;
   margin-bottom: var(--space-5);
-  padding: 3px;
-  gap: 2px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-ctl);
-  background: var(--sunk);
+  gap: 0 var(--space-4);
+  border-bottom: 1px solid var(--hair);
 }
 
 .tabs button {
   min-height: 44px;
-  padding: 0 var(--space-4);
+  margin-bottom: -1px;
+  padding: 0 var(--space-2);
   border: 0;
-  border-radius: var(--r-ctl);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: none;
   color: var(--muted);
   font: inherit;
@@ -23,9 +22,8 @@
 }
 
 .tabs button[aria-pressed='true'] {
-  background: var(--surface);
+  border-bottom-color: var(--ink);
   color: var(--ink);
-  box-shadow: 0 0 0 1px var(--hair);
 }
 
 .count {

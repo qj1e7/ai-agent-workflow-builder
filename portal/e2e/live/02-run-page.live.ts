@@ -331,6 +331,7 @@ test('scenario B: a stopped run opens on the three answers, an Operator retries 
   expect(await runLinks(page), 'red dashes lead into the stop, and the links after it are plain').toEqual(['stop', 'todo', 'todo'])
   await expect(page.getByRole('main')).not.toContainText(/write key/i)
   await expect(page.getByRole('button', { name: 'Report to support' }), 'a retryable stop offers Retry, not a report').toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Why it stopped' }).getByRole('button', { name: 'Retry', exact: true }), 'Retry sits under the answers').toBeVisible()
   await shot(page, info, 'n15-b-stopped')
 
   await page.getByRole('button', { name: 'Retry', exact: true }).click()
@@ -431,6 +432,7 @@ for (const phone of [false, true]) {
     const link = sent.getByRole('link', { name: 'Open it under Following up' })
     await expect(link).toHaveAttribute('href', `/workflows?request=${made[0]?.request_id}`)
 
+    await showHistory(page)
     await expect(stepLog(page).getByText('Alice reported this run to support.')).toHaveCount(1)
     const events = (await backend.get<{ events: { kind: string }[] }>('alice', `/api/v1/runs/${runId}/events?after=0`)).events
     expect(events.filter((event) => event.kind === 'support_reported'), 'the event is written once').toHaveLength(1)

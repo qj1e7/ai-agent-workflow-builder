@@ -210,6 +210,7 @@ describe('the side panel’s views', () => {
     expect(html).toMatch(/<h2[^>]*>GitHub key<\/h2>/)
     expect(text(html)).toContain('Connection')
     expect(text(html)).toContain('Expires Wed 18 Nov')
+    expect(html).toMatch(/data-tone="wait"[^>]*>\s*Expires Wed 18 Nov/)
     expect(text(html)).toContain('The key runs out soon.')
     expect(text(html)).not.toContain('Asked the admin')
     expect(links(html)).toEqual([

@@ -7,6 +7,8 @@ export interface ConnectionWords {
   readonly label: string
   readonly health: Health
   readonly text: string
+  /** A key that runs out soon still works: the card says so and keeps this as a note. */
+  readonly note: string | null
   /** When the result shown was found, in words. Null when nothing has been tried with the address and key in use now. */
   readonly checked: string | null
 }
@@ -17,7 +19,7 @@ export const cardsOf = (connections: readonly ConnectionOut[]) => connections.fi
 const SAYS: Record<Exclude<ConnectionOut['state'], 'working' | 'not_checked'>, { label: string; health: Health }> = {
   needs_attention: { label: 'Needs attention', health: 'warn' },
   not_answering: { label: 'Not working right now', health: 'warn' },
-  not_set_up: { label: 'Not set up', health: 'warn' },
+  not_set_up: { label: 'Not set up', health: 'off' },
 }
 
 /** "Today, 9:00" reads "today, 9:00" in the middle of a sentence. */
@@ -31,15 +33,13 @@ export function connectionWords(connection: ConnectionItem, now: Date): Connecti
   const fix = connection.fix ? ` ${dot(connection.fix)}` : ''
   const problem = dot(connection.problem ?? `${connection.name} needs attention.`)
   if (connection.state === 'working') {
-    return connection.expires_at
-      ? { label: 'Key running out', health: 'warn', text: `${problem}${fix}`, checked }
-      : { label: 'Working', health: 'ok', text: `${connection.name} is working.`, checked }
+    return { label: 'Working', health: 'ok', text: `${connection.name} is working.`, note: connection.expires_at ? `${problem}${fix}` : null, checked }
   }
   if (connection.state === 'not_checked') {
-    return { label: 'Not checked', health: 'off', text: dot(connection.problem ?? `${connection.name} has not been checked yet.`), checked }
+    return { label: 'Not checked', health: 'off', text: dot(connection.problem ?? `${connection.name} has not been checked yet.`), note: null, checked }
   }
   const last = connection.state === 'not_answering' && connection.last_ok_at ? ` Last seen working ${when(connection.last_ok_at, now)}.` : ''
-  return { ...SAYS[connection.state], text: `${problem}${last}${fix}`, checked }
+  return { ...SAYS[connection.state], text: `${problem}${last}${fix}`, note: null, checked }
 }
 
 /** What a Check now found, said from the answer's own state so a check that tried nothing never reads as a test. */
