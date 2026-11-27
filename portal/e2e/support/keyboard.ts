@@ -140,6 +140,9 @@ export async function walkTabs(page: Page): Promise<Walk> {
   return { stops, unreached }
 }
 
+/** The dark rail's width, in the window wider than 860 px. */
+const RAIL_WIDTH = 92
+
 export function outOfVisualOrder(stops: readonly Stop[]): string[] {
   const problems: string[] = []
   for (let index = 1; index < stops.length; index += 1) {
@@ -148,8 +151,8 @@ export function outOfVisualOrder(stops: readonly Stop[]): string[] {
     if (!before || !after) continue
     const overlap = Math.min(before.bottom, after.bottom) - Math.max(before.top, after.top)
     const sameRow = overlap > Math.min(before.bottom - before.top, after.bottom - after.top) / 2
-    // A move into the column on the right, such as from the rail's foot to the page, starts that column from its top.
-    const nextColumn = after.left >= before.right - 1
+    // From the 92 px rail's foot into the page beside it, the page's column starts from its top.
+    const nextColumn = before.right <= RAIL_WIDTH + 1 && after.left >= RAIL_WIDTH
     const inOrder = nextColumn || (sameRow ? after.left >= before.left - 1 : after.top >= before.top - 1)
     if (!inOrder) problems.push(`"${before.label}" (top ${Math.round(before.top)}, left ${Math.round(before.left)}) then "${after.label}" (top ${Math.round(after.top)}, left ${Math.round(after.left)})`)
   }

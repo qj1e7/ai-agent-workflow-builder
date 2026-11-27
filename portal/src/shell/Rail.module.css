@@ -8,7 +8,7 @@
   gap: 6px;
   height: 100dvh;
   padding: 18px var(--space-2) var(--space-4);
-  background: var(--rail);
+  background: var(--rail-bg);
   color: var(--rail-text);
 }
 
@@ -85,7 +85,7 @@
   background: var(--on-ink);
 }
 
-/* A quiet total. Home's turns red while anything needs the person, and Teams' is amber while a yes waits there. */
+/* A quiet total. Home's turns red while anything needs the person, and Teams' is amber while an approval waits there. */
 .count {
   position: absolute;
   top: var(--space-1);
@@ -202,5 +202,36 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+}
+
+/* On a phone the bar keeps one row: the mark shrinks and the items tighten, so Home, Workflows and the foot all fit. */
+@media (max-width: 480px) {
+  .rail {
+    flex-wrap: nowrap;
+    gap: 2px;
+    padding-inline: max(6px, env(safe-area-inset-left, 0px));
+  }
+
+  .logo {
+    width: 28px;
+    height: 28px;
+    margin: 0 2px 0 0;
+    border-radius: 8px;
+    font-size: var(--fs-small);
+  }
+
+  .items {
+    flex-wrap: nowrap;
+    gap: 0;
+  }
+
+  .item {
+    gap: 4px;
+    padding: 7px 8px;
+  }
+
+  .foot {
+    gap: 0;
   }
 }

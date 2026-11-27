@@ -70,7 +70,7 @@ export function Rail({ person }: { person: Me | null }) {
         {/* Teams' badge polls runs and Teams messages, and the practice Jira reads tickets: the platform refuses both to someone not on the People list. */}
         {onList ? <TeamsButton person={person} className={styles['item']} labelClassName={styles['label']} countClassName={styles['count']} /> : null}
         {onList && practiceJira ? <RailLink id="jira" current={under(pathname, PAGES.jira.path)} label="Jira" name={JIRA_TITLE} /> : null}
-        <RailLink id="settings" current={under(pathname, PAGES.settings.path)} />
+        <RailLink id="settings" current={under(pathname, PAGES.settings.path)} name="Settings" />
         {person ? <PersonChip person={person} /> : null}
       </div>
     </nav>

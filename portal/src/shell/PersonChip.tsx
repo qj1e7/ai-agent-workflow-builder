@@ -40,15 +40,11 @@ export function focusMovedOutside(root: Pick<Node, 'contains'> | null, next: Eve
 
 export function PersonChip({ person }: { person: Me }) {
   const session = useSession()
-  if (session.kind === 'oidc') return <SignOutChip person={person} session={session} />
-  return (
-    <div className={styles['chip']} title={titleOf(person)}>
-      <Who person={person} />
-    </div>
-  )
+  return <SignOutChip person={person} session={session.kind === 'oidc' ? session : null} />
 }
 
-function SignOutChip({ person, session }: { person: Me; session: OidcSession }) {
+/** The person at the rail's foot, as a button that opens who they are. Real sign-in adds Sign out. The dev sign-in has none. */
+function SignOutChip({ person, session }: { person: Me; session: OidcSession | null }) {
   const [open, setOpen] = useState(false)
   const [failed, setFailed] = useState(false)
   const root = useRef<HTMLDivElement>(null)
@@ -72,7 +68,7 @@ function SignOutChip({ person, session }: { person: Me; session: OidcSession }) 
 
   function signOut() {
     setFailed(false)
-    session.signOut().catch(() => setFailed(true))
+    session?.signOut().catch(() => setFailed(true))
   }
 
   return (
@@ -99,7 +95,7 @@ function SignOutChip({ person, session }: { person: Me; session: OidcSession }) 
       {open ? (
         <div id={panelId} className={styles['panel']}>
           <p className={styles['signedIn']}>{titleOf(person)}</p>
-          <Button onClick={signOut}>Sign out</Button>
+          {session ? <Button onClick={signOut}>Sign out</Button> : null}
           {failed ? (
             <p className={styles['failed']} role="alert">
               {SIGN_OUT_FAILED_WORDS}

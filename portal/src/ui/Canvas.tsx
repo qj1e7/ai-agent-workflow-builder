@@ -97,7 +97,7 @@ export function Canvas({ blocks, name, nodes = {}, edges = {} }: CanvasProps) {
               <Picture x={26} y={node.ours ? 14 : 26} size={32} />
               {node.ours ? (
                 <>
-                  <rect className={styles['ours']} x={14} y={58} width={56} height={16} rx={8} />
+                  <rect className={styles['ours']} x={8} y={58} width={68} height={16} rx={8} />
                   <text className={styles['oursText']} x={42} y={69.5} textAnchor="middle">
                     Our block
                   </text>

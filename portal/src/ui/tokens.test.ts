@@ -87,7 +87,7 @@ const TEXT_ON: readonly (readonly [text: string, background: string])[] = [
     [`${tone}-text`, 'surface'],
     [`${tone}-text`, 'bg-app'],
   ] as const),
-  ['rail-text', 'rail'],
+  ['rail-text', 'rail-bg'],
   ['rail-text', 'rail-hover'],
   ['on-ink', 'rail-active'],
   ['rail-count-text', 'rail-count'],
@@ -125,10 +125,10 @@ const TEXT_ON: readonly (readonly [text: string, background: string])[] = [
 /** Marks, rings and edges a person must see: 3:1 or more (WCAG 1.4.11). */
 const MARK_ON: readonly (readonly [mark: string, background: string])[] = [
   ...['surface', 'bg-app', 'sunk'].map((ground) => ['focus', ground] as const),
-  ['focus-on-rail', 'rail'],
+  ['focus-on-rail', 'rail-bg'],
   ['focus-on-rail', 'rail-active'],
   // The test controls' ring, on the rail and on their own dark panel.
-  ['mock-ink', 'rail'],
+  ['mock-ink', 'rail-bg'],
   ['mock-ink', 'mock-bg'],
   ['edge', 'surface'],
   ['edge', 'bg-app'],
@@ -285,5 +285,25 @@ describe('every stylesheet', () => {
     expect(value(light, 'fs-small')).toBe('0.875rem')
     expect(value(light, 'fs-tiny')).toBe('0.8125rem')
     expect([value(light, 'fw-regular'), value(light, 'fw-semi'), value(light, 'fw-bold')]).toEqual(['400', '600', '700'])
+  })
+})
+
+describe('the rail’s two colours', () => {
+  it('keeps --rail the light grey line the screens draw edges with, and --rail-bg the navy of the shell', () => {
+    expect(luminance(channels(light, 'rail'))).toBeGreaterThan(0.5)
+    expect(luminance(channels(light, 'rail-bg'))).toBeLessThan(0.02)
+  })
+
+  it('draws an unreached step, an idle node and a field’s edge as a light line, not as navy', () => {
+    expect(contrast(light, 'rail', 'surface')).toBeLessThan(2)
+  })
+})
+
+describe('the Planner’s box', () => {
+  it('shows focus with an ink edge and a halo, because its field has no outline of its own', () => {
+    const css = readFileSync(path.join(srcDir, 'screens/home/Planner.module.css'), 'utf8')
+    const rule = /\.composer:focus-within\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(rule).toContain('border-color: var(--ink)')
+    expect(rule).toContain('box-shadow: 0 0 0 3px var(--focus-halo)')
   })
 })

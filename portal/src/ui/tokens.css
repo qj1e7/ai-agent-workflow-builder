@@ -63,7 +63,7 @@
   --brand-ink: #0b78a8; /* the logo's square, dark enough for its letters */
 
   /* The rail. */
-  --rail: var(--n-950);
+  --rail-bg: var(--n-950);
   --rail-text: #c3ccdb;
   --rail-active: var(--n-800);
   --rail-hover: #151f33;
@@ -129,7 +129,7 @@
   --lead-tint: #dfe5ff;
   --checker: #0a7068;
   --checker-tint: #d3f0ec;
-  --safety: var(--checker); /* the safety checker: its note, its ring on the yes it added, and our blocks' badge */
+  --safety: var(--checker); /* the safety checker: its note, its ring on the approval it added, and our blocks' badge */
   --trouble: #7a4bd6;
   --trouble-tint: #ece3ff;
   --agent-1: #b02a6b;
@@ -177,11 +177,12 @@
   --primary: var(--action);
   --primary-hover: var(--action-hover);
   --hair: var(--line);
+  --rail: var(--line-strong); /* the grey line colour the screens drew with before the dark rail; the rail itself is --rail-bg */
   --rule: var(--line);
   --link: var(--ink);
-  --accent: var(--off);
-  --accent-soft: var(--off-bg);
-  --accent-ink: var(--off-text);
+  --accent: var(--run);
+  --accent-soft: var(--run-bg);
+  --accent-ink: var(--run-text);
   --info-bg: var(--off-bg);
   --info-ink: var(--off-text);
   --float: var(--shadow-3);

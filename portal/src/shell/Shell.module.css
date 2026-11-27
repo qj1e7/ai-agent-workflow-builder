@@ -22,7 +22,7 @@
   grid-template-columns: 92px minmax(0, 1fr);
   align-items: start;
   /* The rail's column stays navy below the sticky rail, however long the page. */
-  background: linear-gradient(to right, var(--rail) 92px, var(--bg-app) 92px);
+  background: linear-gradient(to right, var(--rail-bg) 92px, var(--bg-app) 92px);
 }
 
 .sheet {

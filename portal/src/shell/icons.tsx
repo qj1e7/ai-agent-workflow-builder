@@ -50,15 +50,6 @@ export const WorkflowsIcon = drawn(
   </>,
 )
 
-/** The Watchlist on the rail: two rows, as in the sketch. */
-export const WatchlistIcon = drawn(
-  'WatchlistIcon',
-  <>
-    <rect x="4" y="4" width="16" height="6" rx="1.5" />
-    <rect x="4" y="14" width="16" height="6" rx="1.5" />
-  </>,
-)
-
 /** Settings at the rail's foot: a gear, as in the sketch. */
 export const SettingsIcon = drawn(
   'SettingsIcon',

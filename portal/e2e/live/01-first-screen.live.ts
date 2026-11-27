@@ -250,7 +250,7 @@ test('at 390 px wide the page does not scroll sideways, and every rail item can 
   await expect(railItems(page)).toHaveText([linkText('Home'), linkText('Workflows')])
   const barBox = await bar.boundingBox()
   expect(barBox?.y ?? -1, 'at 390 px the rail is a bar across the top, with no bar above it').toBeLessThanOrEqual(1)
-  expect(barBox?.height ?? 999, 'at 390 px the rail stays a short bar').toBeLessThanOrEqual(120)
+  expect(barBox?.height ?? 999, 'at 390 px the rail stays on one row').toBeLessThanOrEqual(70)
   for (const control of [bar.getByRole('button', { name: /^Teams, practice copy/ }), bar.getByRole('link', { name: 'Settings', exact: true })]) {
     const box = await control.boundingBox()
     expect((box?.x ?? -1) >= 0 && (box?.x ?? 0) + (box?.width ?? 0) <= 390, 'the rail’s foot fits within 390 px').toBe(true)

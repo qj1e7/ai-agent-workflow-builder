@@ -208,6 +208,14 @@ describe('the rail’s counts', () => {
     expect(linkNames(render())).toEqual(['Home', 'Workflows'])
   })
 
+  it('leave a calm Home with no count and no red mark', () => {
+    const calm: HomeOut = { ...ALICE_HOME, approvals_total: 0, confirmations: [], setup_approvals: [], stopped_total: 0, fixes: [], declined_total: 0, questions_for_me_total: 0, connections: [], addresses: [], replied: [] }
+    expect(needsTotal(calm)).toBe(0)
+    const html = railOf(render({ home: calm }))
+    expect(html).not.toContain('data-tone="alert"')
+    expect(linkNames(render({ home: calm }))[0]).toBe('Home')
+  })
+
   it('follow one rule for every item', () => {
     expect(railCountFor('home', { needs: 3, workflows: 5 })).toBe(3)
     expect(railCountFor('home', { needs: 0, workflows: 5 })).toBeNull()
@@ -299,8 +307,10 @@ describe('the person', () => {
     expect(text(railOf(render({ me: BOB })))).not.toContain('Operator')
   })
 
-  it('is not a control with the dev sign-in', () => {
-    expect(railOf(render())).not.toContain('aria-expanded')
+  it('is a button with the dev sign-in too, so a keyboard or a touch can read who they are, with no Sign out', () => {
+    const html = railOf(render())
+    expect(html).toMatch(/<button\b[^>]*aria-expanded="false"[^>]*>/)
+    expect(html).not.toContain('Sign out')
   })
 
   it('is a collapsed button with real sign-in, and Sign out is not shown yet', () => {
