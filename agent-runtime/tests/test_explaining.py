@@ -271,10 +271,9 @@ BEFORE_THE_MODEL = [
     ("Please explain the weekly summary", "weekly summary"),
     ("explain it", None),
     ("what does my workflow do?", None),
-    ("explain the Kubernetes upgrade check", "Kubernetes upgrade check"),
+    ("explain the Morning new-ticket check", "Morning new-ticket check"),
 ]
-"""Requests only to explain: a workflow's name, part of one, "it", what it does, and words that
-name none of their workflows, which the platform says back."""
+"""Requests only to explain: a workflow's name, part of one, "it", and what it does."""
 
 
 @pytest.mark.parametrize(("task", "words"), BEFORE_THE_MODEL)
@@ -296,6 +295,31 @@ def test_the_ai_led_planner_explains_with_no_model_call(task: str, words: str | 
     assert untouched(chat), "no model call"
 
 
+NAME_NONE = ["explain the Kubernetes upgrade check", "explain the setup"]
+"""Words that name none of their workflows. Only a workflow's name vouches for the words, so the
+model reads them first, and its answer to the skip question sees any way to leave someone out."""
+
+
+@pytest.mark.parametrize("task", NAME_NONE)
+def test_words_that_name_none_of_their_workflows_are_read_by_the_model_then_explained(task: str):
+    chat = ScriptedChat(structured=[read()])
+    result = answer_task(asked_for(task), lambda timeout: chat, free_reply=False)
+    assert chat.asked, "the model read it"
+    assert isinstance(result, Answered)
+    assert result.answer == explained(task.removeprefix("explain the "))
+    assert {p.mark for p in result.parts} == {"will_do"}
+
+
+@pytest.mark.parametrize("task", NAME_NONE)
+def test_the_ai_led_planner_explains_words_that_name_none_after_the_model_reads(task: str):
+    chat = ScriptedChat(script=[ANY_LEAD[0]], structured=[read()])
+    result = led(asked_for(task), lambda timeout: chat)
+    assert chat.asked, "the model read it"
+    assert result.tools == ("front_explain",)
+    assert isinstance(result.result, Answered)
+    assert result.result.answer == explained(task.removeprefix("explain the "))
+
+
 def test_words_beside_a_workflow_s_name_are_read_by_the_model_first():
     """Words the name and the filler don't explain, as "without asking Bob", keep the model's
     reading and its answer to the skip question, so code ticks nothing it didn't read."""
@@ -313,6 +337,11 @@ SKIPS: list[tuple[str, str]] = [
     ("explain auto approve it", "auto approve it"),
     ("explain the setup without asking Bob", "without asking Bob"),
     ("explain the setup without Alice", "without Alice"),
+    ("explain the setup without bob", "without bob"),
+    ("explain the setup no Bob", "no Bob"),
+    ("explain the setup minus Bob", "minus Bob"),
+    ("explain the setup without the gate", "without the gate"),
+    ("explain the setup skip the gate", "skip the gate"),
 ]
 """Explain words that try to skip or go around an approval, with a workflow named or with none:
 code reads them as an explanation, so only the model's answer to the skip question refuses

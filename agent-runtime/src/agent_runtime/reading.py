@@ -2739,6 +2739,14 @@ BY_HAND: Final = re.compile(
 which the Portal reads the schedule row with too: any other words for when it runs are asked,
 never guessed. "manually" counts only for running it, so "tickets we triaged manually" is not
 one."""
+WHO_RUNS_IT: Final = re.compile(
+    r"\b(?:I|we)(?:['’]ll|\s+will|\s+can|['’]d\s+rather|\s+would\s+rather|\s+want\s+to)"
+    r"(?:\s+(?:only|just))?(?:\s+run\s+it)?\s+$",
+    re.IGNORECASE,
+)
+"""Words right before them that only say who presses Run now, as "I'll" in "I'll run it
+manually" or "we can run it" in "we can run it on demand". An allow-list: the schedule row holds
+them with its own words, and any other words before them come back."""
 NOT_BY_HAND: Final = re.compile(
     r"\b(?:not|never|nobody|no\s+one|without)\b|n['’]t\b", re.IGNORECASE
 )
@@ -2748,7 +2756,8 @@ NOT_BY_HAND: Final = re.compile(
 def _by_hand(schedule: str | None, text: str) -> Rendered | None:
     """The schedule row of a request that asks to run only by hand, in its own words, whatever
     the model read. None while the request names a schedule besides, which stays the schedule or
-    is asked: Run now starts any workflow. Words beside a no in their clause are not a choice."""
+    is asked: Run now starts any workflow. Words beside a no in their clause are not a choice.
+    The words that say who runs it (`WHO_RUNS_IT`) are the row's too, never crossed beside it."""
     names_one = any(own and _a_schedule_word(raw) for raw, _, _, own in _schedule_tokens(text))
     if names_one or schedule_stretch(schedule, text) is not None or how_often(text) is not None:
         return None
@@ -2763,7 +2772,10 @@ def _by_hand(schedule: str | None, text: str) -> Rendered | None:
             text=plain(said[:1].upper() + said[1:], TEXT_LIMIT),
             state="understood",
         )
-        return Rendered(row, frozenset(_low(t) for t, _, _ in _request_tokens(said)), found.span())
+        who = WHO_RUNS_IT.search(text, a, found.start())
+        start = found.start() if who is None else who.start()
+        held = frozenset(_low(t) for t, _, _ in _request_tokens(text[start : found.end()]))
+        return Rendered(row, held, (start, found.end()))
     return None
 
 

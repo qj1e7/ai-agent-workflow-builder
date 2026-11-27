@@ -6628,5 +6628,28 @@
     "not_kind": [
       "watchlist"
     ]
+  },
+  {
+    "id": "one-off-check-if-new-release",
+    "note": "A one-off question with if asks once: the newest-version answer, never a set-up card. Setting up a workflow takes words such as every, keep track or watch.",
+    "task": "Can you check if n8n has a new release?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "n8n"
+  },
+  {
+    "id": "release-check-i-ll-run-it-manually",
+    "note": "I'll run it manually fills the schedule row, so its words are never crossed as not followed beside it.",
+    "task": "Check n8n for new releases, I'll run it manually",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "understood"
+    ],
+    "not_reasons": [
+      "not_followed"
+    ]
   }
 ]
