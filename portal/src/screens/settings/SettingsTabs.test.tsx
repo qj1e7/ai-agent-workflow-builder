@@ -161,10 +161,12 @@ describe('the Connections tab', () => {
 
   it('says a working connection works, when it was checked, what uses it and the key’s last two characters', () => {
     const jira = text(cardOf(render({ tab: 'connections', connections: withConnection('jira', { key_ends_in: '9c' }) }), 'jira'))
-    expect(jira).toContain('Jira is working.')
+    expect(jira).toContain('Working')
+    expect(jira).not.toContain('Jira is working.')
     expect(jira).toContain('Checked today, 9:00')
     expect(jira).toContain('Practice copy')
-    expect(jira).toContain('What uses it Read Jira tickets; Find tickets by when they were last updated, their type or who owns them; Create a Jira ticket after approval')
+    expect(jira).toContain('What uses it Read Jira tickets Find tickets by when they were last updated, their type or who owns them Create a Jira ticket after approval')
+    expect(cardOf(render({ tab: 'connections', connections: withConnection('jira', { key_ends_in: '9c' }) }), 'jira').match(/<li>/g)).toHaveLength(3)
     expect(jira).toContain('Key Ends in 9c')
     expect(jira).not.toContain('Post messages')
   })
@@ -201,6 +203,12 @@ describe('the Connections tab', () => {
     expect(buttonsIn(forBob).filter((b) => b.startsWith('Check now'))).toEqual([])
     expect(forBob).not.toMatch(/disabled=""|aria-disabled="true"/)
     expect(text(forBob)).toContain(ONLY_OPERATORS_WORDS)
+  })
+
+  it('puts the name over the time it was checked, and the Tell flow in the same grid as the other cards', () => {
+    expect(cardOf(html, 'jira')).toMatch(/<h3>Jira<\/h3><p[^>]*>Checked today, 9:00\.?<\/p>/)
+    expect(html).toMatch(/<div class="[^"]*connections[^"]*">(?:(?!<\/section>)[\s\S])*data-connection="tell"/)
+    expect(html.match(/class="[^"]*connections[^"]*"/g)).toHaveLength(1)
   })
 
   it('shows the Tell flow as a connection fact, read only, and never its address or a claim that it posts yet', () => {
