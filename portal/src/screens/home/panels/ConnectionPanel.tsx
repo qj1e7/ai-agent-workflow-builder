@@ -32,7 +32,7 @@ export function ConnectionPanel({ id, now }: { id: string; now: Date }) {
     <div className={styles['stack']}>
       <div className={styles['head']}>
         <p className={styles['kind']}>Connection</p>
-        <span className={styles['pill']} data-tone={words.health === 'ok' ? 'good' : words.health === 'warn' ? 'wait' : undefined}>
+        <span className={styles['pill']} data-tone={words.note || words.health === 'warn' ? 'wait' : words.health === 'ok' ? 'good' : undefined}>
           {pill}
         </span>
       </div>

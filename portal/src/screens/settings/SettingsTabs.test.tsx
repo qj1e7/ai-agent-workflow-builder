@@ -535,6 +535,12 @@ describe('the Settings tabs, in the taste pass', () => {
     expect(dots).toEqual(['ok', 'ok', 'wait', 'off'])
   })
 
+  it('still mark the Connections tab when an expiring key is the only issue', () => {
+    const calm = { ...CALM, connections: CALM.connections.map((c) => (c.id === 'github' ? { ...c, expires_at: '2026-11-18T09:00:00Z' } : c)) }
+    expect(render({ tab: 'people', connections: calm })).toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
+    expect(text(render({ tab: 'connections', connections: calm }))).toContain('4 of 4 working.')
+  })
+
   it('keep each tab name as a hidden heading, not a visible repeat', () => {
     for (const [tab, name] of [['connections', 'Connections'], ['people', 'People and permissions'], ['model', 'AI model']] as const) {
       const html = render({ tab })
