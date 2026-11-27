@@ -4,7 +4,7 @@ import { useLatch } from '../../api/latch'
 import type { CapabilityView, ConnectionOut, TellSetupOut } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { AlertMark, CheckMark } from './marks'
-import { cardsOf, CHECK_DOWN_WORDS, checkResultWords, connectionWords, GITHUB_KEY_NOTE, keyWords, TEAMS_DOES_WORDS, TELL_CHANGED_BY_WORDS, tellWords, usedBy } from './connections'
+import { cardsOf, CHECK_DOWN_WORDS, type Health, checkResultWords, connectionWords, GITHUB_KEY_NOTE, keyWords, TEAMS_DOES_WORDS, TELL_CHANGED_BY_WORDS, tellWords, usedBy } from './connections'
 import { ONLY_OPERATORS_WORDS } from './settings'
 import styles from './Settings.module.css'
 
@@ -63,6 +63,11 @@ function ConnectionCard({ connection, capabilities, canCheck, now }: CardProps) 
         {says.text}
         {says.checked ? <span className={styles['small']}> {says.checked}.</span> : null}
       </p>
+      {says.note ? (
+        <p className={styles['small']}>
+          <AlertMark /> {says.note}
+        </p>
+      ) : null}
       {connection.id === 'github' && says.checked ? <p className={styles['small']}>{GITHUB_KEY_NOTE}</p> : null}
       <dl className={styles['facts']}>
         {connection.id === 'teams' ? (
@@ -108,17 +113,17 @@ function TellCard({ tell }: { tell: TellSetupOut }) {
   )
 }
 
-const dotTone = (connection: ConnectionOut) =>
-  connection.state === 'working' ? (connection.expires_at ? 'wait' : 'ok') : connection.state === 'not_checked' || connection.state === 'not_set_up' ? 'off' : 'wait'
+const DOT: Record<Health, string> = { ok: 'ok', warn: 'wait', off: 'off' }
 
-/** One finding first: how many of the connections work, with a dot for each. A key that runs out soon still works, so it counts as working but shows amber. */
-function Summary({ connections }: { connections: readonly ConnectionOut[] }) {
-  const working = connections.filter((connection) => connection.state === 'working').length
+/** One finding first: how many of the connections work, with a dot for each. Count, dots and card pills all come from connectionWords. */
+function Summary({ connections, now }: { connections: readonly ConnectionOut[]; now: Date }) {
+  const says = connections.map((connection) => connectionWords(connection, now))
+  const working = says.filter((s) => s.label === 'Working').length
   return (
     <p className={styles['health']}>
       <span className={styles['hdots']} aria-hidden="true">
-        {connections.map((connection) => (
-          <i key={connection.id} data-tone={dotTone(connection)} />
+        {connections.map((connection, index) => (
+          <i key={connection.id} data-tone={DOT[says[index]?.health ?? 'off']} />
         ))}
       </span>
       <span>
@@ -161,11 +166,13 @@ export function ConnectionsTab({ now }: { now: Date }) {
       <h2 id="connections-heading" className="visually-hidden">
         Connections
       </h2>
-      <Summary connections={cardsOf(connections.data.connections)} />
+      <Summary connections={cardsOf(connections.data.connections)} now={now} />
       <div className={styles['connections']}>
         {cardsOf(connections.data.connections).map((connection) => (
           <ConnectionCard key={connection.id} connection={connection} capabilities={capabilities.data?.capabilities} canCheck={canCheck} now={now} />
         ))}
+      </div>
+      <div className={styles['connections']}>
         <TellCard tell={connections.data.tell} />
       </div>
       {canCheck ? null : <p className={styles['note']}>{ONLY_OPERATORS_WORDS}</p>}

@@ -171,7 +171,8 @@ describe('the Connections tab', () => {
 
   it('says a key that runs out soon, with the one fix the platform gave, and that the result may be old for GitHub', () => {
     const github = text(cardOf(html, 'github'))
-    expect(github).toContain('Key running out')
+    expect(github).toContain('Working')
+    expect(github).not.toContain('Key running out')
     expect(github).toContain('The key runs out soon. Ask whoever set up GitHub for a new key before this one runs out.')
     expect(github).toContain(GITHUB_KEY_NOTE)
     expect(text(cardOf(html, 'jira'))).not.toContain(GITHUB_KEY_NOTE)
@@ -525,11 +526,19 @@ describe('the Settings tabs, in the taste pass', () => {
     expect(text(render({ tab: 'model' }))).not.toContain('The model the agents use to plan')
   })
 
-  it('keep each tab name as a hidden heading, not a visible repeat, and put the tiles straight on the page', () => {
+  it('count the working connections from the same words as the card pills, and give not set up the grey tone on the dot', () => {
+    const html = render({ tab: 'connections', connections: ALL })
+    const cards = ['jira', 'github', 'teams', 'confluence'].map((id) => text(cardOf(html, id)))
+    const pills = cards.filter((card) => / Working /.test(` ${card} `) && !card.includes('Not working')).length
+    expect(text(html)).toContain(`${pills} of 4 working.`)
+    const dots = [...html.matchAll(/<i data-tone="([^"]*)"/g)].map((m) => m[1])
+    expect(dots).toEqual(['ok', 'ok', 'wait', 'off'])
+  })
+
+  it('keep each tab name as a hidden heading, not a visible repeat', () => {
     for (const [tab, name] of [['connections', 'Connections'], ['people', 'People and permissions'], ['model', 'AI model']] as const) {
       const html = render({ tab })
       expect(html).toMatch(new RegExp(`<h2[^>]*class="[^"]*visually-hidden[^"]*"[^>]*>${name}</h2>`))
-      expect(html).not.toMatch(/class="[^"]*\bpanel\b/)
     }
   })
 

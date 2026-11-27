@@ -36,7 +36,7 @@ export function ConnectionPanel({ id, now }: { id: string; now: Date }) {
           {pill}
         </span>
       </div>
-      <p className={styles['sent']}>{words.text}</p>
+      <p className={styles['sent']}>{words.note ? `${words.text} ${words.note}` : words.text}</p>
       {words.checked ? <p className="muted">{words.checked}</p> : null}
       <div className={styles['actions']}>
         <ButtonLink to={CONNECTIONS_PATH}>See it in Settings</ButtonLink>
