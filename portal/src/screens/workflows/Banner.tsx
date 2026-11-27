@@ -25,7 +25,7 @@ export function bannerRepeatsThePage(banner: Banner, useCase: { readonly state: 
   return banner.tone === 'off' && useCase.state === 'paused' && !useCase.deleted_in_n8n_at
 }
 
-export const leadsThePage =(action: Banner['action']): boolean => action !== null && PRIMARY.has(action.kind)
+export const leadsThePage = (action: Banner['action']): boolean => action !== null && PRIMARY.has(action.kind)
 
 interface BannerViewProps {
   readonly banner: Banner

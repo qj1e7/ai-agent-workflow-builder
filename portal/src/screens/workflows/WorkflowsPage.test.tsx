@@ -268,6 +268,21 @@ describe('the Workflows table', () => {
   it('says a workflow that never ran has no runs yet and no next run', () => {
     const row = text(rowOf(render({ useCases: [BUGS] }), 'uc_bugs'))
     expect(row).toContain('Last run No runs yet')
+    expect(row, 'a workflow with no schedule has no next run to give').toContain('Next run Not scheduled')
+    expect(row).not.toMatch(/Next run [A-Z][a-z]{2} \d/)
+  })
+
+  it('names each fact for a screen reader: the row link’s description carries Last run, When and Next run, and no label is hidden from it', () => {
+    const row = rowOf(render({ useCases: [SCHEDULED_STOPPED] }), 'uc_bugs')
+    expect(row).not.toMatch(/cellLabel[^"]*"[^>]*aria-hidden/)
+    const described = /<a[^>]*aria-describedby="([^"]+)"/.exec(row)?.[1] ?? ''
+    const said = described
+      .split(' ')
+      .map((id) => text(new RegExp(`<span id="${id}"[^>]*>([\\s\\S]*?)</span></span>|<span id="${id}"[^>]*>([\\s\\S]*?)</span>`).exec(row)?.[0] ?? ''))
+      .join(' ')
+    expect(said).toContain('Last run')
+    expect(said).toContain('When')
+    expect(said).toContain('Next run')
   })
 
   it('gives a workflow with a test run one state mark, not Test run beside it', () => {

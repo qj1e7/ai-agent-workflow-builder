@@ -210,7 +210,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const showBanner = !bannerRepeatsThePage(banner, useCase)
   const runAction = banner.action !== null && titleRowAction(banner.action) ? banner.action : null
 
-  // The control that took the press leaves the page, so focus follows to its replacement: Resume in the banner, or Pause below.
+  // The control that took the press leaves the page, so focus follows to its replacement: Resume or Pause in the title row.
   useEffect(() => {
     if (switchedTo.current !== useCase.state) return
     switchedTo.current = null
@@ -300,6 +300,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
         </div>
         {shownView === 'main' ? (
           <div className={styles['titleActions']}>
+            {draft?.buttons}
             {runAction?.kind === 'resume' ? (
               <Button variant="primary" icon={IconPlay} data-place="switch" loading={move.isPending} onClick={() => pauseOrResume('resume')}>
                 Resume
@@ -309,7 +310,6 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
                 {runAction.kind === 'decide' ? 'Review and decide' : 'Open the run'}
               </ButtonLink>
             ) : null}
-            {draft?.buttons}
             {runNowLeads ? (
               <Button variant={listed || leadsThePage(banner.action) ? 'secondary' : 'primary'} icon={IconPlay} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
                 Run now

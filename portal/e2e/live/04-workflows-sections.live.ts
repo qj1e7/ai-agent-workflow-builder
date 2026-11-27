@@ -363,7 +363,12 @@ for (const user of ['alice', 'bob']) {
       await page.goto('/workflows')
       await expect(watchlist).toBeVisible()
       const pageFacts = new Map<string, string>()
-      for (const row of await rows.all()) pageFacts.set((await row.getAttribute('data-workflow-id')) ?? '', (await row.locator('b').first().innerText()).trim())
+      const pageLast = new Map<string, string>()
+      for (const row of await rows.all()) {
+        const rowId = (await row.getAttribute('data-workflow-id')) ?? ''
+        pageFacts.set(rowId, (await row.locator('b').first().innerText()).trim())
+        pageLast.set(rowId, ((await row.locator('span[class*="sub"]').first().textContent()) ?? '').trim().toLowerCase())
+      }
       for (const width of [1920, 1280, 1050, 900, 390]) {
         await page.setViewportSize({ width, height: 900 })
         await page.goto('/')
@@ -378,6 +383,8 @@ for (const user of ['alice', 'bob']) {
         for (const row of await card.locator('li[data-workflow-id]').all()) {
           const id = (await row.getAttribute('data-workflow-id')) ?? ''
           await expect(row.locator('b').first(), `the check card names the workflow as the Workflows row of ${id} does`).toHaveText(pageFacts.get(id) ?? 'a row on the Workflows page')
+          const said = pageLast.get(id) ?? ''
+          if (said !== '' && said !== 'no runs yet') expect(((await row.textContent()) ?? '').toLowerCase(), `the check card says the last run of ${id} in the page's words`).toContain(said)
         }
         const fit = await lineFits(card.locator('li[data-workflow-id]'))
         expect(fit.rows, 'the card has a link for each workflow').toBe(shown)

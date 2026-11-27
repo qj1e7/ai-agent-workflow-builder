@@ -124,6 +124,20 @@ describe('a list in the chat says what its page says', () => {
     expect(stateRowsIn(panel({ kind: 'workflows' }))).toEqual(page)
   })
 
+  it('says each row’s last run in the same words on the page and in the chat, whatever the case', () => {
+    const lastOf = (html: string) =>
+      new Map(
+        [...html.matchAll(/<li[^>]*data-workflow-id="([^"]+)"[^>]*>([\s\S]*?)<\/li>/g)].map((match) => [match[1] ?? '', text(/<span[^>]*class="[^"]*sub[^"]*"[^>]*>([\s\S]*?)<\/span>/.exec(match[2] ?? '')?.[1] ?? '').toLowerCase()]),
+      )
+    const page = lastOf(render(<WorkflowsPage heading="Workflows" now={NOW} />, { path: '/workflows' }))
+    const chat = rowsIn(panel({ kind: 'workflows' }), 'data-workflow-id')
+    expect(chat.length).toBeGreaterThan(0)
+    for (const [id, said] of chat) {
+      const words = page.get(id) ?? ''
+      if (words !== '' && words !== 'no runs yet') expect(said.toLowerCase(), `${id} says its last run in the page's words`).toContain(words)
+    }
+  })
+
   it('draws the Workflows card’s rows as the Workflows page draws them', () => {
     const page = stateRowsIn(render(<WorkflowsPage heading="Workflows" now={NOW} />, { path: '/workflows' }))
     const card = stateRowsIn(render(<CheckWorkflowsAnswer useCaseId={null} now={NOW} say={() => undefined} />))

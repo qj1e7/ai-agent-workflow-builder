@@ -77,11 +77,9 @@ function TableHead() {
   )
 }
 
-/** A fact's name, drawn only where the table's head is not. */
+/** A fact's name. It is read aloud on every screen, and drawn only where the table's head is not. */
 const Label = ({ children }: { children: string }) => (
-  <span className={styles['cellLabel']} aria-hidden="true">
-    {children}
-  </span>
+  <span className={styles['cellLabel']}>{children}</span>
 )
 
 /**
@@ -205,7 +203,7 @@ function DraftRow({ draft, index, arrive, now }: { draft: DraftView; index: numb
   const ids = useId()
   return (
     <li className={arrive ? `${styles['row']} ${styles['arrive']}` : styles['row']} style={{ '--i': index } as CSSProperties} data-draft={draft.draft_id}>
-      <Link to={draftPath(draft.draft_id)} className={`${styles['rowLink']} ${styles['tableLink']}`}aria-labelledby={`${ids}-name`} aria-describedby={`${ids}-pill ${ids}-sub`}>
+      <Link to={draftPath(draft.draft_id)} className={`${styles['rowLink']} ${styles['tableLink']}`} aria-labelledby={`${ids}-name`} aria-describedby={`${ids}-pill ${ids}-sub`}>
         <span id={`${ids}-pill`} className={`${styles['pills']} ${styles['cState']}`}>
           <span className={styles['pill']}>Draft</span>
         </span>

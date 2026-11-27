@@ -397,6 +397,7 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
     expect(mainOf(html)).not.toMatch(/Needs you<\/span>/)
     noBanner(html)
+    expect(recentOf(html)).toContain('Lost')
     expect(mainOf(html)).toMatch(/<a[^>]*href="\/runs\/run_01JB9"[^>]*>Open the run<\/a>/)
     expect(text(mainOf(html))).not.toContain('On. Next run')
   })
@@ -689,6 +690,11 @@ describe('the page as the sketch lays it out', () => {
     expect(text(html)).not.toMatch(/Done Open/)
   })
 
+  it('puts a draft’s Test run first in the title row, before Open the run', () => {
+    const html = mainOf(render({ useCase: DRAFT, last: { test: true } }))
+    expect(at(html, '>Test run<')).toBeLessThan(at(html, '>Open the run<'))
+  })
+
   it('puts a draft’s Test run in the title row as its one primary button, with Change and More actions beside it', () => {
     const html = mainOf(render({ useCase: DRAFT }))
     expect(mainOf(html).match(/_primary_/g)).toHaveLength(1)
@@ -701,7 +707,7 @@ describe('the page as the sketch lays it out', () => {
     const html = mainOf(render({ useCase: DRAFT, last: { test: true } }))
     expect(html).not.toMatch(/class="[^"]*_banner_/)
     expect(text(/<h1[\s\S]*?<p class="[^"]*sentence/.exec(html)?.[0] ?? '')).not.toContain('Test run Draft')
-    expect((/data-life="draft"/g.exec(html) ?? []).length).toBe(1)
+    expect(html.match(/data-life=/g)).toHaveLength(1)
   })
 })
 
