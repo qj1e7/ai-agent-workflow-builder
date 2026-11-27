@@ -843,7 +843,7 @@ test.describe('with the AI model on', () => {
     await rail.getByRole('link', { name: /^Workflows/ }).click()
     await page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' }).getByRole('link', { name: /^(?!Explain )/ }).click()
     await expect(page.locator('li[data-status]').filter({ hasText: 'node js' }), 'the Watchlist no longer holds it').toHaveCount(0)
-    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await rail.getByRole('link', { name: /^Home/ }).click()
     await expect(answer, 'coming back to the chat keeps the removal and its Undo').toContainText('Removed from the watchlist.')
 
     await undo.click()
@@ -940,7 +940,7 @@ test.describe('with the AI model on', () => {
       const lines = await main(page).getByRole('heading', { level: 1 }).evaluate((h1: HTMLElement) => Math.round(h1.offsetHeight / parseFloat(getComputedStyle(h1).lineHeight)))
       // The team lead's question of 25 Nov, "What can I help you with today?", is longer than the sketch's, so a phone's narrow window balances it on two lines.
       expect(lines, phone ? 'the question takes two lines at most' : 'the question stays on one line').toBeLessThanOrEqual(phone ? 2 : 1)
-      // At 900 px and narrower the practice stack's test controls sit under the page, so the check is that the page itself ends in the window.
+      // At 860 px and narrower the practice stack's test controls sit under the page, so the check is that the page itself ends in the window.
       const mainBottom = await main(page).evaluate((element) => element.getBoundingClientRect().bottom)
       expect(mainBottom, 'the empty Home never makes the page scroll').toBeLessThanOrEqual((await page.evaluate(() => window.innerHeight)) + 1)
       await context.close()
@@ -1104,7 +1104,7 @@ test.describe('the chat after the first message', () => {
     const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
     await rail.getByRole('link', { name: /^Workflows/ }).click()
     await expect(thread(page)).toHaveCount(0)
-    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await rail.getByRole('link', { name: /^Home/ }).click()
     await expect(thread(page)).toContainText('Check my workflows')
     await expect.poll(() => conversation.evaluate((element) => element.scrollTop)).toBe(before)
     await context.close()
@@ -1205,7 +1205,7 @@ test.describe('the chat after the first message', () => {
     const draftId = new URL(page.url()).searchParams.get('draft') ?? ''
     const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
     await rail.getByRole('link', { name: /^Workflows/ }).click()
-    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await rail.getByRole('link', { name: /^Home/ }).click()
     await expect(card.locator('[data-part="When"]'), 'the card comes back as she left it').toContainText('Which day?')
     const before = saves.length
     await page.getByRole('button', { name: 'New chat' }).click()
@@ -1341,7 +1341,7 @@ test.describe('the edit card (spec 6.7)', () => {
     await expect(page).toHaveURL(new RegExp(`/workflows/${morning.id}$`))
     await page.locator('summary', { hasText: 'Details' }).click()
     await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem').first()).toContainText(/Version 3, in use\s*Today, \d{1,2}:\d\d\. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00\./)
-    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await rail.getByRole('link', { name: /^Home/ }).click()
     const kept = newestAnswer(page)
     await expect(editCard(kept), 'the card keeps its Undo across pages').toContainText('Saved as version 3.')
     await editCard(kept).getByRole('button', { name: /^Undo/ }).click()
