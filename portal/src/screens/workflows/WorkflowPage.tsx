@@ -393,7 +393,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             )}
             {useCase.version >= 2 ? <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} /> : null}
           </div>
-          {useCase.state === 'draft' ? <UseCaseSimulation useCaseId={id} /> : null}
+          {useCase.state === 'draft' ? <UseCaseSimulation useCaseId={id} onWorkflowPage testLineShown={draft !== null} /> : null}
         </>
       )}
       {asking ? (

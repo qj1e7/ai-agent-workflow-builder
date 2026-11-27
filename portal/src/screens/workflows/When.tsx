@@ -116,17 +116,19 @@ export function When({ useCase, now, mayChange, held, onSaved }: WhenProps) {
           {mayChange && held ? (
             <span className={styles['small']}>{held}</span>
           ) : mayChange ? (
-            <Button
+            <button
+              type="button"
               ref={opener}
+              className={styles['linkButton']}
               data-place="schedule"
+              aria-label={useCase.schedule ? 'Change when it runs' : 'Set when it runs'}
               onClick={() => {
                 setRefused(null)
                 open()
               }}
             >
-              {useCase.schedule ? 'Change' : 'Set'}
-              <span className="visually-hidden"> when it runs</span>
-            </Button>
+              {useCase.schedule ? 'Change time' : 'Set time'}
+            </button>
           ) : null}
         </div>
       )}

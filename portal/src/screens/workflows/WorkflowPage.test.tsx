@@ -112,7 +112,7 @@ const whenOf = (html: string) =>
     .replace(/ Next run: .*$/, '')
     .replace(/ Not running: .*$/, '')
     .replace(/ Set by \w+\.$/, '')
-    .replace(/ (Change|Set) when it runs/, '')
+    .replace(/ (Change|Set) time/, '')
 /** The next run, the third fact of the strip under the sentence. */
 const nextOf = (html: string) => sectionText(html, 'Next run')
 const sentenceOfHtml = (html: string) => text(/<p class="[^"]*sentence[^"]*">([\s\S]*?)<\/p>/.exec(mainOf(html))?.[1] ?? '')
@@ -281,9 +281,9 @@ describe('a workflow page', () => {
 
   const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
 
-  it('puts the change beside When, as Change, or Set when there is none', () => {
-    expect(buttons(render({ useCase: SCHEDULED }))).toContain('Change when it runs')
-    expect(buttons(render())).toContain('Set when it runs')
+  it('puts the change beside When, as the quiet link Change time, or Set time when there is none', () => {
+    expect(buttons(render({ useCase: SCHEDULED }))).toContain('Change time')
+    expect(buttons(render())).toContain('Set time')
   })
 
   it('says under When who set the schedule', () => {
@@ -294,7 +294,7 @@ describe('a workflow page', () => {
     const inN8n = { ...SCHEDULED, schedule: { ...SCHEDULED.schedule!, owner_name: null } }
     expect(sectionText(render({ useCase: inN8n }), 'When')).toContain('Set in n8n.')
     expect(sectionText(render({ useCase: inN8n }), 'When')).not.toContain('null')
-    expect(buttons(render({ useCase: { ...inN8n, made_in_n8n_by: 'carol' } }))).not.toContain('Change when it runs')
+    expect(buttons(render({ useCase: { ...inN8n, made_in_n8n_by: 'carol' } }))).not.toContain('Change time')
   })
 
   it('shows an Approver who is not an Operator neither control', () => {
@@ -324,7 +324,7 @@ describe('a workflow page', () => {
 
   it('lets an Operator take a held schedule over from When: Change opens on it, the save carries the version read, and the saved view names them and its next run', async () => {
     const held: UseCaseView = { ...AGENTS, version: 3, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed', held_words: CAROL_LEFT } }
-    expect(buttons(render({ me: ALICE, useCase: held }))).toContain('Change when it runs')
+    expect(buttons(render({ me: ALICE, useCase: held }))).toContain('Change time')
     expect(buttons(render({ me: BOB, useCase: held })).filter((label) => /when it runs/i.test(label)), 'only an Operator can take it over').toEqual([])
     const taken: UseCaseView = { ...held, next_run_at: '2026-11-09T01:00:00Z', schedule: { ...held.schedule!, owner_name: 'Alice', held: null, held_words: null } }
     const sent: unknown[] = []
@@ -430,7 +430,7 @@ describe('a workflow page', () => {
     expect(text(html)).toMatch(/Carol has it open in n8n since (Mon 9 Nov, )?10:02\. Ask Carol, or anyone with n8n access, to take it back\./)
     expect(sectionText(html, 'When')).toContain('Can’t change it while Carol has it open in n8n.')
     const pressable = buttons(html)
-    for (const refused of ['Undo', 'Add the approval step back', 'Change when it runs', 'Set when it runs', 'Resume']) expect(pressable, `${refused} would be refused`).not.toContain(refused)
+    for (const refused of ['Undo', 'Add the approval step back', 'Change time', 'Set time', 'Resume']) expect(pressable, `${refused} would be refused`).not.toContain(refused)
     expect(pressable, 'Pause still works, so the safety lever never waits').toContain('Pause')
     expect(text(render({ me: BOB, useCase: held }))).toMatch(/Carol has it open in n8n since/)
   })
@@ -628,7 +628,8 @@ describe('a draft tried on practice systems (ADR 0054)', () => {
     for (const me of [ALICE, BOB]) {
       const words = text(mainOf(render({ me, useCase: DRAFT, simulation: DONE })))
       expect(words).toContain('Tried 5 cases on practice systems: 4 passed.')
-      expect(words).toContain('Turn on still runs the real test, which writes nothing.')
+      if (me === ALICE) expect(words, 'one line says a test run comes first, the draft’s own').not.toContain('Turn on still runs the real test')
+      if (me === ALICE) expect(words).toContain('A draft. It runs only as a test, which writes nothing')
     }
   })
 
@@ -701,5 +702,35 @@ describe('the page as the sketch lays it out', () => {
     expect(html).not.toMatch(/class="[^"]*_banner_/)
     expect(text(/<h1[\s\S]*?<p class="[^"]*sentence/.exec(html)?.[0] ?? '')).not.toContain('Test run Draft')
     expect((/data-life="draft"/g.exec(html) ?? []).length).toBe(1)
+  })
+})
+
+describe('the Change buttons and the Check on a draft', () => {
+  const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
+  const DRAFT: UseCaseView = { ...SCHEDULED, state: 'draft' }
+  const DONE = (simulated as DraftedWorkflowView).simulation as SimulationView
+
+  it('has one Change button, in the title row, and the When row’s is a quiet link named for the schedule', () => {
+    const html = mainOf(render({ useCase: SCHEDULED }))
+    expect(html.match(/>Change<\/a>/g)).toHaveLength(1)
+    expect(buttons(html).filter((label) => label.startsWith('Change'))).toEqual(['Change time'])
+    expect(html).toMatch(/<button[^>]*aria-label="Change when it runs"[^>]*>Change time<\/button>/)
+    expect(html).not.toMatch(/_secondary_[^>]*>Change time/)
+  })
+
+  it('folds the cases that passed under the result and keeps a failed one in view', () => {
+    const html = mainOf(render({ useCase: DRAFT, simulation: DONE }))
+    const fold = /<details[^>]*>\s*<summary>Show cases<\/summary>([\s\S]*?)<\/details>/.exec(html)
+    expect(fold).not.toBeNull()
+    expect(text(fold?.[1] ?? '')).toContain('Passed')
+    expect(text(fold?.[1] ?? '')).not.toContain('Failed')
+    expect(text(html.replace(fold?.[0] ?? '', ''))).toContain('Failed')
+  })
+})
+
+describe('what a reader without a test to press sees of a draft’s Check', () => {
+  it('keeps the line that a test run still comes first, since the draft’s own line is not shown to them', () => {
+    const words = text(mainOf(render({ me: BOB, useCase: { ...AGENTS, state: 'draft' }, simulation: (simulated as DraftedWorkflowView).simulation as SimulationView })))
+    expect(words).toContain('Turn on still runs the real test, which writes nothing.')
   })
 })

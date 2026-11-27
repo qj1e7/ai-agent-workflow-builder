@@ -906,3 +906,23 @@ details.rule > p {
     grid-row: auto;
   }
 }
+
+/* The When row's Change, a quiet text link, so the one Change button is the title row's. */
+.linkButton {
+  min-height: 44px;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.linkButton:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
