@@ -77,6 +77,25 @@ test('Home’s board lists the workflows as tiles under Needs you, each one link
       expect(heights.size, `step lines in one row share a top edge at ${String(width)} px`).toBe(1)
     }
   }
+  const spacing = await page.evaluate(() => {
+    const top = (query: string) => document.querySelector(query)?.getBoundingClientRect().top ?? -1
+    const bottom = (query: string) => document.querySelector(query)?.getBoundingClientRect().bottom ?? -1
+    const needsHead = bottom('section[aria-labelledby] > h2')
+    const boardHead = bottom('section:has(ul[aria-label="Workflows"]) h2')
+    const groups = [...document.querySelectorAll('ul[aria-label="Needs you"] > li > h3')]
+    const firstList = document.querySelector('ul[aria-label="Needs you"] > li > ul')
+    const rows = [...document.querySelectorAll('ul[aria-label="Needs you"] li[data-home-item]')].map((row) => row.getBoundingClientRect())
+    const across = rows.find((row, index) => index > 0 && row.top === rows[0]?.top)
+    return {
+      needsGap: top('ul[aria-label="Needs you"]') - needsHead,
+      boardGap: top('ul[aria-label="Workflows"]') - boardHead,
+      headToList: (firstList?.getBoundingClientRect().top ?? 0) - (groups[0]?.getBoundingClientRect().bottom ?? 0),
+      tileGap: across && rows[0] ? across.left - rows[0].right : 16,
+    }
+  })
+  expect(spacing.boardGap, 'the Needs you heading sits as far above its list as the board’s does above its own').toBeGreaterThan(0)
+  expect(Math.abs(spacing.needsGap - spacing.boardGap), 'heading to list is equal for Needs you and the board').toBeLessThanOrEqual(1)
+  expect(spacing.tileGap, 'tiles are 16 px apart').toBeGreaterThan(0)
   await shot(page, info, 'mc-board-bob-home')
   await context.close()
 })
