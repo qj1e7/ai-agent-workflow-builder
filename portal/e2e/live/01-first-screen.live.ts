@@ -306,3 +306,33 @@ test('wider than 860 px the rail is a column on the left, and at 860 px it becom
     await context.close()
   }
 })
+
+test('at 390 px the rail stays one row that fits, with Home at 12 or more and Teams at 3', async ({ browser }) => {
+  const context = await openContext(browser, { phone: true })
+  const page = await context.newPage()
+  await page.route('**/api/v1/home', async (route) => {
+    const response = await route.fetch()
+    const home = (await response.json()) as Record<string, unknown>
+    await route.fulfill({ response, json: { ...home, approvals_total: 12 } })
+  })
+  await page.goto('/')
+  await expect(heading(page)).toBeVisible()
+  const bar = mainMenu(page)
+  await expect(bar.getByRole('link', { name: /^Home, \d{2,} things need you/ })).toBeVisible()
+  // Teams' own count comes from the approvals it polls, so the badge is drawn by hand to size the bar.
+  await bar.getByRole('button', { name: /^Teams, practice copy/ }).evaluate((button) => {
+    const badge = document.createElement('span')
+    badge.textContent = '3'
+    badge.className = button.querySelector('span:last-child')?.className ?? ''
+    button.append(badge)
+  })
+  const box = await bar.boundingBox()
+  expect(box?.height ?? 999, 'the bar stays on one row').toBeLessThanOrEqual(70)
+  const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }))
+  expect(widths.scroll, 'no sideways scroll').toBeLessThanOrEqual(widths.client)
+  for (const control of [bar.getByRole('link', { name: 'Settings', exact: true }), bar.getByRole('button', { name: /Alice/ })]) {
+    const at = await control.boundingBox()
+    expect((at?.x ?? -1) >= 0 && (at?.x ?? 0) + (at?.width ?? 0) <= 390, 'the gear and the person stay on the screen').toBe(true)
+  }
+  await context.close()
+})

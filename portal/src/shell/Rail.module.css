@@ -205,7 +205,7 @@
   }
 }
 
-/* On a phone the bar keeps one row: the mark shrinks and the items tighten, so Home, Workflows and the foot all fit. */
+/* On a phone the bar keeps one row: the mark shrinks and the items tighten, so the icons, the counts and the foot all fit, whatever the counts are. */
 @media (max-width: 480px) {
   .rail {
     flex-wrap: nowrap;
@@ -233,5 +233,15 @@
 
   .foot {
     gap: 0;
+  }
+
+  /* Home and Workflows keep their icons and their counts, and say their names to a screen reader and on hover, as the foot does. */
+  .items .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }

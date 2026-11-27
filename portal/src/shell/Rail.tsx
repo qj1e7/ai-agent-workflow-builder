@@ -26,7 +26,7 @@ interface RailLinkProps {
 function RailLink({ id, current, count, label, name }: RailLinkProps) {
   const { path, railLabel, icon: Icon } = PAGES[id]
   return (
-    <Link to={path} aria-current={current ? 'page' : undefined} className={styles['item']} aria-label={name} title={name}>
+    <Link to={path} aria-current={current ? 'page' : undefined} className={styles['item']} aria-label={name} title={name ?? label ?? railLabel}>
       <Icon size={22} />
       <span className={styles['label']}>{label ?? railLabel}</span>
       {count ? (
