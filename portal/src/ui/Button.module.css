@@ -66,12 +66,12 @@
 }
 
 .approve {
-  background: var(--green);
+  background: var(--ok-text);
   color: var(--on-status);
 }
 
 .approve:hover:not([aria-disabled='true']) {
-  background: var(--green-ink);
+  background: color-mix(in srgb, var(--ok-text) 82%, black);
 }
 
 .spinner {
