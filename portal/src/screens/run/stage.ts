@@ -122,20 +122,33 @@ const OPENING_START = 0.2
 const OPENING_STEP = 0.8
 
 /**
- * The hand-offs that glow. When the stage opens, every wire the run reached, in order, into a stop too, as the run line first showed the
- * work flowing into a stop. The pace slows down to fit six steps in the opening. After that, only the wires into a step whose state just
- * changed, a retry's flow into the step again included. A stop and a decline that just happened do not glow, since nothing was handed on.
+ * The hand-offs that glow. When the stage opens, every wire the run reached, in order, into a stop or a declined gate too, as the sketch
+ * plays it, and as the run line first showed the work flowing into a stop. The pace slows down to fit six steps in the opening. After that,
+ * only the wires into a step whose state just changed, a retry's flow into the step again included. A stop and a decline that just
+ * happened do not glow, since nothing was handed on.
  */
 export function handoffsOf(stage: StageModel, before: Readonly<Record<string, StepState>> | null): Handoff[] {
   const live = stage.wires.filter((wire) => {
     const node = stage.nodes[wire.to]
-    if (!node || wire.kind === 'todo' || node.state === 'no') return false
+    if (!node || wire.kind === 'todo') return false
     if (before === null) return true
-    return node.state !== 'err' && before[node.key] !== node.state
+    return node.state !== 'err' && node.state !== 'no' && before[node.key] !== node.state
   })
   const step = live.length > 1 ? Math.min(OPENING_STEP, (OPENING - OPENING_START - TRAVEL) / (live.length - 1)) : OPENING_STEP
   const delay = (index: number) => Math.floor((OPENING_START + index * step) * 100) / 100
   return live.map((wire, index) => ({ id: wire.id, delay: before === null ? delay(index) : 0 }))
+}
+
+/** Where the stopped step sits across the stage, as a share of its width: the middle of its column. Null when no step stopped or the stage is not drawn. */
+export function stoppedAt(stations: readonly Station[]): number | null {
+  if (stageOf(stations) === null) return null
+  const index = stations.findIndex((station) => station.state === 'err')
+  return index < 0 ? null : (index + 0.5) / stations.length
+}
+
+/** Where the troubleshooter's notch points: the stopped step on the main view, and nothing in the n8n view, where no stage is drawn. */
+export function stopPointer(view: 'main' | 'n8n', stations: readonly Station[]): number | null {
+  return view === 'n8n' ? null : stoppedAt(stations)
 }
 
 /** When the circle at the end of a wire turns blue on opening: as its own hand-off arrives. */

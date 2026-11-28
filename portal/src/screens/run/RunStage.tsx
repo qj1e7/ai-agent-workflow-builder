@@ -106,8 +106,8 @@ function Node({ node, size, arrives, opening, flash, ring, stopNote }: NodeProps
 interface RunStageProps {
   /** The run's own state, the one its pill says. The Planner's face follows it. */
   readonly phase: Phase['state']
-  /** One sentence on why the run stopped, from the AI troubleshooter, once it has answered. */
-  readonly stopNote: string | null
+  /** One sentence under the stopped step. The run page leaves it out, since the AI troubleshooter's card under the stage says why. */
+  readonly stopNote?: string | null
   readonly stations: readonly Station[]
   /** The step the run reached while the page watched. The plain step line, when the stage falls back to it, lands it. */
   readonly arrivedLive: string | null
@@ -171,7 +171,7 @@ export function RunStage({ stations, arrivedLive, phase, stopNote }: RunStagePro
         <ol className={styles['steps']} aria-label="Steps of this run">
           {stage.nodes.map((node, index) => {
             const into = seen.plays.find((play) => play.id === `track:${index}`)
-            return <Node key={node.key} node={node} size={geometry.node} arrives={into ? into.delay + ARRIVES : 0} opening={moving && seen.opening} flash={moving && seen.changed.has(node.key)} ring={moving} stopNote={stopNote} />
+            return <Node key={node.key} node={node} size={geometry.node} arrives={into ? into.delay + ARRIVES : 0} opening={moving && seen.opening} flash={moving && seen.changed.has(node.key)} ring={moving} stopNote={stopNote ?? null} />
           })}
         </ol>
       </div>

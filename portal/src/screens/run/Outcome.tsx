@@ -88,9 +88,9 @@ export function AnswerList({ answers, children }: { answers: readonly Answer[]; 
 /**
  * The AI troubleshooter's three answers: What happened, Affected and Safe to retry. What happened is its one sentence; the likely
  * cause and the platform's failure text wait behind Details. Until it answers, there is no answer to give, only the note and the failure
- * text. Someone who isn't an Operator reads the answers, and a note where the buttons are.
+ * text. `named` is for a card that already says AI troubleshooter. Someone who isn't an Operator reads the answers, and a note where the buttons are.
  */
-export function StopAnswers({ failure, advice, loading, modelOff = false, safeId }: Pick<TroubleshootingProps, 'failure' | 'advice' | 'loading' | 'modelOff'> & { safeId: string }) {
+export function StopAnswers({ failure, advice, loading, modelOff = false, safeId, named = false }: Pick<TroubleshootingProps, 'failure' | 'advice' | 'loading' | 'modelOff'> & { safeId: string; named?: boolean }) {
   const note = failureText(failure.message)
   const cause = advice ? withCurrentNames(advice.advice.likely_cause) : ''
   const waitsForModel = failure.retryable && modelOff
@@ -107,7 +107,7 @@ export function StopAnswers({ failure, advice, loading, modelOff = false, safeId
         </dl>
       ) : (
         <p className={styles['note']} role="status">
-          {loading ? 'The AI troubleshooter is looking at what happened.' : 'The AI troubleshooter could not explain this one.'}
+          {loading ? `${named ? 'Looking' : 'The AI troubleshooter is looking'} at what happened.` : `${named ? 'Could' : 'The AI troubleshooter could'} not explain this one.`}
         </p>
       )}
       {details.length > 0 ? (

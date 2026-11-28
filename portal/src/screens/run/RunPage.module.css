@@ -133,18 +133,6 @@
   line-height: 1.35;
 }
 
-.trouble {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-card);
-  background: var(--surface);
-  font-size: var(--fs-body);
-}
-
 /* Retry and Report to support sit under the three answers, left, where the answer is. */
 .stopActions {
   display: flex;
@@ -166,6 +154,13 @@
   margin-top: var(--space-5);
 }
 
+.stageCol {
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  min-width: 0;
+}
+
 .side {
   display: grid;
   gap: var(--space-5);
@@ -178,13 +173,6 @@
   }
 }
 
-
-.troubleBody {
-  display: grid;
-  flex: 1;
-  gap: 10px;
-  min-width: 0;
-}
 
 .panelView {
   display: grid;
