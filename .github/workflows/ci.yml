@@ -27,7 +27,8 @@ env:
   SEMGREP_IMAGE: semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b
   GITLEAKS_IMAGE: zricethezav/gitleaks:v8.21.2@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46
 
-# Each job starts its own runner and checks out the repo again, so stages are steps, not jobs.
+# Each job starts its own runner and checks out the repo again, so stages are steps, not jobs. The end to end
+# checks are the exception: they split into jobs that run side by side (see e2e below).
 jobs:
   checks:
     concurrency:
@@ -494,7 +495,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # The step stops before the job does, so the logs, screenshots and video below are still kept. Playwright stops
+      # after ten failures, but ten tests that each time out at 3 minutes already fill the job's 30 minutes.
       - name: Run this part of the browser suite against the whole stack
+        timeout-minutes: ${{ matrix.part == 'grep' && 55 || 25 }}
         env:
           LIVE_GREP: ${{ inputs.live_grep }}
           LIVE_PART: ${{ matrix.part != 'grep' && matrix.part || '' }}
