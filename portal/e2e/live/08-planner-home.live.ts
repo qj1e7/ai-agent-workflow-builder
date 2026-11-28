@@ -1596,6 +1596,8 @@ test.describe('bob asks the Planner questions only', () => {
   test('ROLE-home and ROLE-asks: bob’s Home has the box and his three questions above Needs you, and each answer comes from platform state', async ({ browser, backend }, info) => {
     await bobDeclined(backend, 'Wrong version')
     await backend.waitingRun('alice')
+    // A second workflow beside the watchlist, so the team's answer counts them. With one, the Planner answers about it by name.
+    await backend.post('alice', '/api/v1/agent-use-cases', { name: `Bob counts ${tag()}`, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
     const context = await devContext(browser, 'bob')
     const page = await context.newPage()
     const watch = watchPage(page)
@@ -1621,7 +1623,8 @@ test.describe('bob asks the Planner questions only', () => {
     } else {
       await expect(newest(page).getByRole('heading', { level: 3 }), 'what needs him is his Home heading, as the card’s head').toHaveText(line)
     }
-    await expect(newest(page).locator('[data-opens^="approval:"]').or(page.locator('#side-panel [data-approval-pill]')).first(), 'each request opens beside the chat, or already shows there').toBeVisible()
+    // One request opens beside the chat by itself on a wide screen, and the request's panel has no pill of its own.
+    await expect(newest(page).locator('[data-opens^="approval:"]').or(page.locator('#side-panel[data-panel="approval"]')).first(), 'each request opens beside the chat, or already shows there').toBeVisible()
     await bobAsks(page, 'What did I decide before?')
     await expect(newest(page).getByRole('heading', { level: 3, name: 'Your recent decisions' })).toBeVisible()
     await expect(newest(page).getByRole('list', { name: 'Your decisions' }).locator('[data-decision="decline"]').first()).toContainText(/Today \d+:\d\d · Wrong version\s*Declined/)

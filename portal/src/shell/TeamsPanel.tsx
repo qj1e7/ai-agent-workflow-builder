@@ -7,6 +7,7 @@ import { shortTime } from '../screens/run/words'
 import { Button, ButtonLink } from '../ui/Button'
 import { IconX } from '../ui/icons'
 import { motionAllowed } from '../ui/motion'
+import { wrapTabIn } from '../ui/sidePanel'
 import { ChatIcon, Mark } from './icons'
 import { PRODUCT } from './product'
 import { AdaptiveCardView } from './TeamsCard'
@@ -282,13 +283,15 @@ export function TeamsButton({ person, className, labelClassName, countClassName 
         ) : null}
       </button>
       {/* A press on the dimmed page beside the drawer closes it, as Escape does from the keyboard. */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <dialog
         ref={dialog}
         className={styles['drawer']}
         aria-label={TEAMS_TITLE}
         onCancel={onCancel}
         onClose={onClosed}
+        // Tab goes round inside the drawer, however few messages it holds.
+        onKeyDown={(event) => wrapTabIn(event.currentTarget, document.activeElement, event)}
         onClick={(event) => {
           if (event.target === event.currentTarget) close()
         }}

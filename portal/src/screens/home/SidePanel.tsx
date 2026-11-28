@@ -4,7 +4,7 @@ import { useRun, useUseCase, useWatchlist } from '../../api/queries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { escapeIsFree } from '../../ui/escape'
 import { IconChevronLeft } from '../../ui/icons'
-import { backTitle, InSidePanel, isWide, wrapTab, type PanelHead, type PanelItem } from '../../ui/sidePanel'
+import { backTitle, InSidePanel, isWide, wrapTabIn, type PanelHead, type PanelItem } from '../../ui/sidePanel'
 import { cx } from '../../ui/cx'
 import { SoftwarePanel } from '../software/SoftwarePanel'
 import { softwareInWorkflow } from '../software/software'
@@ -23,8 +23,6 @@ export const PANEL_HEADING = 'side-panel-h'
 /** The run's view brings the run page's line and live feed, which load on demand, as the run page does. So does a request's. */
 const RunPanel = lazy(() => import('../run/RunPanel').then((module) => ({ default: module.RunPanel })))
 const ApprovalPanel = lazy(() => import('../run/RunPanel').then((module) => ({ default: module.ApprovalPanel })))
-
-const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
 
 /**
  * The bar's title and More details, from the same queries the view reads. The bar is drawn once, so the heading that has focus
@@ -96,12 +94,8 @@ export function SidePanel({ item, back = null, now, narrow, onClose, onBack, onO
         onClose()
         return
       }
-      if (event.key !== 'Tab' || event.defaultPrevented || dialogOpen || !narrow || !panel.current) return
-      const stops = [...panel.current.querySelectorAll<HTMLElement>(TAB_STOPS)].filter((stop) => stop.getClientRects().length > 0)
-      const next = wrapTab(stops, document.activeElement, event.shiftKey)
-      if (!next) return
-      event.preventDefault()
-      next.focus()
+      if (event.defaultPrevented || dialogOpen || !narrow || !panel.current) return
+      wrapTabIn(panel.current, document.activeElement, event)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)

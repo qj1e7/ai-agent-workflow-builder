@@ -35,6 +35,8 @@ export E2E_SIMULATION="$simulation"
 
 # Its own project name, so tearing it down never touches a stack that scripts/up.sh started.
 project="${E2E_PROJECT:-$default_project}"
+# A part of the browser suite starts on an empty stack, as it does in CI, so it leaves the API tests out unless asked.
+[ -z "${LIVE_PART:-}" ] || default_suites=ui
 suites="${E2E_SUITES:-$default_suites}"
 out="e2e/out"
 compose=(docker compose -p "$project" -f deploy/compose.yaml -f deploy/compose.e2e.yaml ${files[@]+"${files[@]}"})
@@ -81,6 +83,33 @@ for suite in $suites; do
     *) echo "E2E_SUITES takes api and ui, not '$suite'." >&2; exit 2 ;;
   esac
 done
+
+# LIVE_PART runs one of the four parts CI splits the browser suite into, each on its own runner and stack.
+# Playwright's --shard splits by the count of tests, but fit.live.ts held 70 of the 298 tests and took 15.8 of
+# the 36.8 minutes in run 45977915310. So fit-1 and fit-2 split fit.live.ts test by test, and rest-1 and
+# rest-2 split the other files file by file. One pattern picks fit.live.ts in or out, so every test runs in
+# exactly one part. Playwright matches it against the file's path and the test's title, joined by spaces, so
+# the spaces keep a file such as profit.live.ts out.
+part="${LIVE_PART:-}"
+fit_pattern='(^|\s)fit\.live\.ts\s'
+ui_args=()
+case "$part" in
+  "") ;;
+  rest-1 | rest-2) ui_args=(--grep-invert "$fit_pattern" --shard="${part#rest-}/2") ;;
+  fit-1 | fit-2) ui_args=(--grep "$fit_pattern" --fully-parallel --shard="${part#fit-}/2") ;;
+  *) echo "LIVE_PART takes rest-1, rest-2, fit-1 or fit-2, not '$part'." >&2; exit 2 ;;
+esac
+if [ -n "$part" ] && ! wanted ui; then
+  echo "LIVE_PART picks part of the browser suite, so E2E_SUITES must hold ui." >&2
+  exit 2
+fi
+if [ -n "${LIVE_GREP:-}" ]; then
+  if [ -n "$part" ]; then
+    echo "LIVE_GREP picks its own tests, so it runs without LIVE_PART." >&2
+    exit 2
+  fi
+  ui_args=(--grep "$LIVE_GREP")
+fi
 if [ "$auth" = oidc ] && wanted api; then
   echo "The api suite signs in with X-Dev-User, so it runs only with E2E_AUTH=dev." >&2
   exit 2
@@ -133,8 +162,6 @@ fi
 if wanted ui; then
   portal_container=$("${compose[@]}" ps -q portal)
   set +e
-  ui_args=()
-  [ -z "${LIVE_GREP:-}" ] || ui_args=(--grep "$LIVE_GREP")
   portal/e2e/live/run.sh "$portal_container" ${ui_args[@]+"${ui_args[@]}"} 2>&1 | tee "$out/ui.log"
   ui_status="${PIPESTATUS[0]}"
   set -e

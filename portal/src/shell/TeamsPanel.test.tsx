@@ -12,6 +12,7 @@ import { approvalQuery } from '../api/queries'
 import { authorizedFetch, createDevSession } from '../api/session'
 import type { ApprovalView, RunView, RunViewOf, TeamsStubMessage } from '../api/types'
 import { BADGE_MAX_ASKS, BADGE_POLL_MS, badgeAsks, badgeText, DrawerHead, MessageBody, teamsLabel, TeamsDecide, TEAMS_TITLE, withSetUps } from './TeamsPanel'
+import { wrapTabIn } from '../ui/sidePanel'
 
 const BOB = bob as ApprovalView
 const ALICE_APPROVAL = alice as ApprovalView
@@ -191,5 +192,40 @@ describe('the practice Teams drawer', () => {
     expect(buttonsOf(html)).toEqual([])
     expect(html).toContain('role="alert"')
     expect(text(html)).toBe('Another Approver decided this step first.')
+  })
+})
+
+describe('Tab in the open Teams drawer', () => {
+  /** A stop the drawer shows, or one it hides, which Tab skips. */
+  function stop(name: string, shown = true) {
+    return { name, focus: vi.fn(), getClientRects: () => ({ length: shown ? 1 : 0 }) }
+  }
+  type Stop = ReturnType<typeof stop>
+  const drawer = (stops: readonly Stop[]) => ({ querySelectorAll: () => stops }) as unknown as Pick<ParentNode, 'querySelectorAll'>
+  function press(stops: readonly Stop[], active: Stop, key = 'Tab', shiftKey = false): { stayed: boolean; focused: string[] } {
+    for (const each of stops) each.focus.mockClear()
+    const preventDefault = vi.fn()
+    wrapTabIn(drawer(stops), active, { key, shiftKey, preventDefault })
+    return { stayed: preventDefault.mock.calls.length > 0, focused: stops.filter((each) => each.focus.mock.calls.length > 0).map((each) => each.name) }
+  }
+
+  it('keeps focus on Close when Close is all an empty drawer holds, for Tab and Shift+Tab', () => {
+    const close = stop('Close')
+    expect(press([close], close)).toEqual({ stayed: true, focused: ['Close'] })
+    expect(press([close], close, 'Tab', true)).toEqual({ stayed: true, focused: ['Close'] })
+  })
+
+  it('goes from the last stop back to Close, and from Close back to the last, and moves as usual between', () => {
+    const [close, open, approve] = [stop('Close'), stop('Open in AI Workflow Builder'), stop('Approve')]
+    const stops = [close, open, approve]
+    expect(press(stops, approve)).toEqual({ stayed: true, focused: ['Close'] })
+    expect(press(stops, close, 'Tab', true)).toEqual({ stayed: true, focused: ['Approve'] })
+    expect(press(stops, close)).toEqual({ stayed: false, focused: [] })
+  })
+
+  it('skips a stop it does not show, and leaves every other key alone', () => {
+    const [close, hidden] = [stop('Close'), stop('Hidden', false)]
+    expect(press([close, hidden], close)).toEqual({ stayed: true, focused: ['Close'] })
+    expect(press([close], close, 'Escape')).toEqual({ stayed: false, focused: [] })
   })
 })

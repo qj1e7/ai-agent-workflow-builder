@@ -1418,14 +1418,26 @@ flowchart TB
     daily["Every pull request, every push to main,<br/>and daily at 01:00 UTC"]
 
     subgraph ci["ci.yml"]
-        direction LR
-        checks["<b>job checks</b><br/>matrix: platform-api, agent-runtime, e2e<br/>1. uv sync<br/>2. ruff check and ruff format<br/>3. pyright<br/>4. lint-imports, platform-api only<br/>5. contracts are current<br/>6. unit tests in the image, with PostgreSQL<br/>and, for platform-api, the Cosmos DB emulator<br/>7. the emulator kept its pinned packages<br/>8. build the runtime image<br/>9. mock GitHub, mock model and mock Confluence tests, e2e only"]
-        portaljob["<b>job portal</b><br/>1. npm ci<br/>2. typecheck<br/>3. lint<br/>4. unit tests<br/>5. build<br/>6. nginx render test"]
-        n8npack["<b>job n8n-node-pack</b><br/>1. npm ci, without install scripts<br/>2. typecheck<br/>3. lint<br/>4. unit tests<br/>5. the image builds on the n8n pin<br/>6. pack smoke: n8n loads our blocks and the allow list holds"]
-        scans["<b>job scans</b><br/>1. SAST with Semgrep<br/>2. keep the Semgrep report<br/>3. secret scan with gitleaks"]
-        e2e["<b>job e2e</b>, on a push to main or by hand only<br/>1. scripts/e2e.sh: API tests, then the browser suite<br/>2. keep the logs, screenshots and video<br/>3. DAST: scripts/dast.sh, OWASP ZAP<br/>4. keep the ZAP reports<br/>5. load test: scripts/load.sh, k6<br/>6. keep the k6 summary"]
-        %% Invisible links keep the jobs in the file's order, left to right.
-        checks ~~~ portaljob ~~~ n8npack ~~~ scans ~~~ e2e
+        direction TB
+        subgraph everyrun["On every pull request, every push to main and by hand"]
+            direction LR
+            checks["<b>job checks</b><br/>matrix: platform-api, agent-runtime, e2e<br/>1. uv sync<br/>2. ruff check and ruff format<br/>3. pyright<br/>4. lint-imports, platform-api only<br/>5. contracts are current<br/>6. unit tests in the image, with PostgreSQL<br/>and, for platform-api, the Cosmos DB emulator<br/>7. the emulator kept its pinned packages<br/>8. build the runtime image<br/>9. mock GitHub, mock model and mock Confluence tests, e2e only"]
+            portaljob["<b>job portal</b><br/>1. npm ci<br/>2. typecheck<br/>3. lint<br/>4. unit tests<br/>5. build<br/>6. nginx render test"]
+            n8npack["<b>job n8n-node-pack</b><br/>1. npm ci, without install scripts<br/>2. typecheck<br/>3. lint<br/>4. unit tests<br/>5. the image builds on the n8n pin<br/>6. pack smoke: n8n loads our blocks and the allow list holds"]
+            simulation["<b>job simulation</b><br/>1. make the platform's keys, all made up<br/>2. scripts/simulation.sh test: the simulation n8n<br/>and its gateway hold no real key, reach only<br/>the mocks and play each scenario"]
+            simlink["<b>job simulation-link</b><br/>1. scripts/e2e.sh with E2E_SIMULATION=on:<br/>a drafted workflow is tried on practice systems<br/>through the link only platform-api shares<br/>2. keep the logs of both stacks"]
+            scans["<b>job scans</b><br/>1. SAST with Semgrep<br/>2. keep the Semgrep report<br/>3. secret scan with gitleaks"]
+            %% Invisible links keep the jobs in the file's order, left to right.
+            checks ~~~ portaljob ~~~ n8npack ~~~ simulation ~~~ simlink ~~~ scans
+        end
+        subgraph fullrun["On a push to main or by hand: three jobs side by side, each with its own stack"]
+            direction LR
+            e2e["<b>job e2e</b><br/>1. scripts/e2e.sh: the API tests<br/>2. keep the logs<br/>3. move an old-engine database to the new engine<br/>4. keep the logs of the move<br/>5. load test: scripts/load.sh, k6<br/>6. keep the k6 summary"]
+            e2ebrowser["<b>job e2e-browser</b><br/>matrix: rest-1, rest-2, fit-1, fit-2<br/>1. scripts/e2e.sh with LIVE_PART: one part<br/>of the browser suite, on an empty stack<br/>2. keep the logs<br/>3. keep the screenshots and video"]
+            dast["<b>job dast</b><br/>1. DAST: scripts/dast.sh, OWASP ZAP<br/>2. keep the ZAP reports"]
+            e2e ~~~ e2ebrowser ~~~ dast
+        end
+        everyrun ~~~ fullrun
     end
 
     subgraph deploywf["deploy.yml"]
@@ -1448,28 +1460,36 @@ flowchart TB
         pstack["<b>job pstack-playbooks</b><br/>1. read the locked pstack version<br/>2. fetch it and check it is the reviewed commit<br/>3. check the team's playbooks against it"]
     end
 
+    subgraph gatewf["planner-gate.yml, when the agent runtime or its evals change, or by hand"]
+        direction LR
+        gate["<b>job gate</b><br/>1. check the Anthropic key is set<br/>2. score the gate cases and the red-team set<br/>on the real model<br/>3. hold the run to ADR 0047's bars, report only for now<br/>4. comment the numbers on the pull request<br/>5. keep the results"]
+    end
+
     azure[("Azure: rg-wab-dev")]
-    artifacts[("Run artifacts: Semgrep report, e2e logs,<br/>ZAP reports, k6 summary, infra checks, eval results")]
+    artifacts[("Run artifacts: Semgrep report, e2e and simulation logs,<br/>browser screenshots for each part, ZAP reports,<br/>k6 summary, infra checks, eval and gate results")]
 
     pr --> ci
     pr --> infra
+    pr --> gate
     hand --> deploy
     hand --> evals
+    hand --> gate
     daily --> pstack
     deploy --> azure
     ci -.-> artifacts
     infra -.-> artifacts
     evals -.-> artifacts
+    gate -.-> artifacts
 
     classDef job fill:#ffffff,stroke:#111827,color:#111
     classDef trigger fill:#e8f0fe,stroke:#1a56db,color:#111
     classDef ext fill:#f3f4f6,stroke:#6b7280,color:#111
-    class checks,portaljob,n8npack,scans,e2e,deploy,evals,infra,pstack job
+    class checks,portaljob,n8npack,simulation,simlink,scans,e2e,e2ebrowser,dast,deploy,evals,infra,pstack,gate job
     class pr,hand,daily trigger
     class azure,artifacts ext
 ```
 
-The private repository is billed per job, rounded up to a whole minute, so the stages of `ci.yml` are steps inside five jobs, not one job each. The jobs of `ci.yml` run side by side, and `e2e` runs only on a push to `main` or by hand. The pipeline's results for the rebuilt app are in `docs/evidence/dast/2026-11-rebuild/`, `docs/evidence/load-test/2026-11-rebuild/` and `docs/evidence/unit-tests/2026-11-rebuild/`.
+Each job starts its own runner and builds its images again, so most stages of `ci.yml` are steps inside a job, not one job each. The jobs of `ci.yml` run side by side. The end to end checks run only on a push to `main` or by hand, and they are the exception: `e2e`, the four parts of `e2e-browser` and `dast` each start their own stack at the same time. They took 70 minutes one after the other in one job (run 45977915310), and the whole `ci.yml` run now takes about 21 (run 46093599215). The pipeline's results for the rebuilt app are in `docs/evidence/dast/2026-11-rebuild/`, `docs/evidence/load-test/2026-11-rebuild/` and `docs/evidence/unit-tests/2026-11-rebuild/`.
 
 ## Sequence: set up a workflow in the chat, test it and turn it on
 
