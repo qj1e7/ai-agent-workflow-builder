@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 import { useHome } from '../api/homeQueries'
 import { useApproval, useApprovals, useRuns, useTeamsMessages } from '../api/queries'
 import type { ApprovalView, Me, RunView, TeamsStubMessage } from '../api/types'
@@ -7,6 +7,7 @@ import { shortTime } from '../screens/run/words'
 import { Button, ButtonLink } from '../ui/Button'
 import { IconX } from '../ui/icons'
 import { motionAllowed } from '../ui/motion'
+import { TAB_STOPS, wrapTab } from '../ui/sidePanel'
 import { ChatIcon, Mark } from './icons'
 import { PRODUCT } from './product'
 import { AdaptiveCardView } from './TeamsCard'
@@ -264,6 +265,16 @@ export function TeamsButton({ person, className, labelClassName, countClassName 
     close()
   }
 
+  // The browser lets Tab leave a modal dialog after its last stop, so Tab goes round inside the drawer, however few messages it holds.
+  function onKeyDown(event: KeyboardEvent<HTMLDialogElement>): void {
+    if (event.key !== 'Tab') return
+    const stops = [...event.currentTarget.querySelectorAll<HTMLElement>(TAB_STOPS)].filter((stop) => stop.getClientRects().length > 0)
+    const next = wrapTab(stops, document.activeElement, event.shiftKey)
+    if (!next) return
+    event.preventDefault()
+    next.focus()
+  }
+
   function onClosed(): void {
     setOpen(false)
     if (returnFocus.current) button.current?.focus()
@@ -282,13 +293,14 @@ export function TeamsButton({ person, className, labelClassName, countClassName 
         ) : null}
       </button>
       {/* A press on the dimmed page beside the drawer closes it, as Escape does from the keyboard. */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <dialog
         ref={dialog}
         className={styles['drawer']}
         aria-label={TEAMS_TITLE}
         onCancel={onCancel}
         onClose={onClosed}
+        onKeyDown={onKeyDown}
         onClick={(event) => {
           if (event.target === event.currentTarget) close()
         }}

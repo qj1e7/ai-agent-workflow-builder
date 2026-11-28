@@ -58,6 +58,9 @@ export function useAfterPanelAction(): (() => void) | null {
   return useContext(InSidePanel)
 }
 
+/** What Tab can stop on inside a panel or drawer that covers the window. */
+export const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+
 /** Where Tab goes in a panel that covers the window: round from the last stop to the first, and back. Null lets it move as usual. */
 export function wrapTab<T>(stops: readonly T[], active: unknown, back: boolean): T | null {
   const first = stops[0]
