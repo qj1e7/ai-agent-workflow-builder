@@ -200,8 +200,8 @@ describe('the side panel’s views', () => {
     const shown = text(html)
     expect(links(html)).toEqual([['More details', `/workflows/${WATCHLIST.use_case_id}`]])
     expect(shown).toContain(countLine(WATCHLIST.software) ?? 'a count line')
-    expect(shown).toContain('LangGraph 1.2.14 → 1.2.16 · checked by Software watchlist Newer out')
-    expect(shown).toContain('n8n 2.42.6, the newest · checked by Software watchlist Up to date')
+    expect(shown).toContain('LangGraph checked by Software watchlist You run 1.2.14 Newest 1.2.16 Newer out')
+    expect(shown).toContain('n8n checked by Software watchlist You run 2.42.6 Newest 2.42.6 Up to date')
     expect(html.match(/data-opens="software:/g)).toHaveLength(WATCHLIST.software.length)
   })
 
