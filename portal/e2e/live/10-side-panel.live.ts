@@ -505,7 +505,9 @@ for (const width of [1440, 390]) {
       await page.keyboard.press('Escape')
       await expect(panel(page)).toHaveCount(0, { timeout: 1_000 })
     }, 'Escape closes the panel').toPass({ timeout: 10_000 })
-    await expect(more, 'Escape puts focus back on what opened the panel').toBeFocused()
+    // The count may have moved on while the person was on the run's page, so the slim list's button is found by its words and any number.
+    const opener = width >= 1080 ? page.getByRole('complementary').getByRole('button', { name: /^Needs you \d+$/ }) : more
+    await expect(opener, 'Escape puts focus back on what opened the panel').toBeFocused()
     expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
     assertClean(watch)
     await repair()
