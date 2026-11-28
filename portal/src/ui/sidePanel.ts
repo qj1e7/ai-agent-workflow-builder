@@ -59,7 +59,7 @@ export function useAfterPanelAction(): (() => void) | null {
 }
 
 /** What Tab can stop on inside a panel or drawer that covers the window. */
-export const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
 
 /** Where Tab goes in a panel that covers the window: round from the last stop to the first, and back. Null lets it move as usual. */
 export function wrapTab<T>(stops: readonly T[], active: unknown, back: boolean): T | null {
@@ -69,6 +69,26 @@ export function wrapTab<T>(stops: readonly T[], active: unknown, back: boolean):
   const inside = stops.some((stop) => stop === active)
   if (back) return !inside || active === first ? last : null
   return !inside || active === last ? first : null
+}
+
+/** A key press as the box that holds focus sees it. */
+export interface KeyPress {
+  readonly key: string
+  readonly shiftKey: boolean
+  preventDefault(): void
+}
+
+/**
+ * Tab and Shift+Tab go round inside a box that covers the window, over the stops it shows. The browser would let Tab leave a
+ * modal dialog after its last stop, so this also holds when the box has a single stop.
+ */
+export function wrapTabIn(box: Pick<ParentNode, 'querySelectorAll'>, active: unknown, press: KeyPress): void {
+  if (press.key !== 'Tab') return
+  const stops = [...box.querySelectorAll<HTMLElement>(TAB_STOPS)].filter((stop) => stop.getClientRects().length > 0)
+  const next = wrapTab(stops, active, press.shiftKey)
+  if (!next) return
+  press.preventDefault()
+  next.focus()
 }
 
 interface Closing<T> {

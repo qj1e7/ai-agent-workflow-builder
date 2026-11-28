@@ -4,7 +4,7 @@ import { useRun, useUseCase, useWatchlist } from '../../api/queries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { escapeIsFree } from '../../ui/escape'
 import { IconChevronLeft } from '../../ui/icons'
-import { backTitle, InSidePanel, isWide, TAB_STOPS, wrapTab, type PanelHead, type PanelItem } from '../../ui/sidePanel'
+import { backTitle, InSidePanel, isWide, wrapTabIn, type PanelHead, type PanelItem } from '../../ui/sidePanel'
 import { cx } from '../../ui/cx'
 import { SoftwarePanel } from '../software/SoftwarePanel'
 import { softwareInWorkflow } from '../software/software'
@@ -94,12 +94,8 @@ export function SidePanel({ item, back = null, now, narrow, onClose, onBack, onO
         onClose()
         return
       }
-      if (event.key !== 'Tab' || event.defaultPrevented || dialogOpen || !narrow || !panel.current) return
-      const stops = [...panel.current.querySelectorAll<HTMLElement>(TAB_STOPS)].filter((stop) => stop.getClientRects().length > 0)
-      const next = wrapTab(stops, document.activeElement, event.shiftKey)
-      if (!next) return
-      event.preventDefault()
-      next.focus()
+      if (event.defaultPrevented || dialogOpen || !narrow || !panel.current) return
+      wrapTabIn(panel.current, document.activeElement, event)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
