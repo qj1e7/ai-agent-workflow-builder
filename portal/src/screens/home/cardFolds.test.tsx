@@ -51,7 +51,7 @@ describe('dense text in an answer card sits behind a fold', () => {
     expect(html.match(/<details\b[\s\S]*<\/details>/)?.[0]).not.toContain('Any Approver')
   })
 
-  it('reaches a button, link or fold within 25 words on a card that is not itself a list', () => {
+  it('keeps the refusal’s words before its first button, link or fold to 40, with its rule in view', () => {
     expect(wordsBeforeFirstAction(draw(refused as PlannerReply))).toBeLessThanOrEqual(40)
   })
 })

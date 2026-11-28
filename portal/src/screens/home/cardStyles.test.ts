@@ -27,18 +27,26 @@ const SURFACES = ['.card', '.leftovers', '.starter']
 /** The controls that keep an edge: a chip, a choice, a field and the spinner, by exact selector. A focus or hover state is always allowed. */
 const EDGED = new Set(['.chip', 'button.chip', '.choice', '.value', '.editor input', '.editor select', '.field input', '.field select', '.another input', '.input', '.spin', '.ask textarea'])
 
+const RAW_LENGTH = /(^|[^\w.-])-?(?!0*\.?0+(?:px|rem|em|%|ch|vw|vh|pt)?(?![\w.%]))\d*\.?\d+(px|rem|em|%|ch|vw|vh|pt)(?![\w])/
+
+/** The spacing declarations in a rule body that hold a length of their own. */
+function rawSpacing(body: string): string[] {
+  return [...body.matchAll(/(?:^|[;\s{])((?:grid-)?(?:row-|column-)?gap|padding[a-z-]*|margin[a-z-]*)\s*:\s*([^;}]+)/g)]
+    .filter((match) => RAW_LENGTH.test((match[2] ?? '').replace(/var\([^)]*\)/g, '')))
+    .map((match) => `${match[1] ?? ''}: ${(match[2] ?? '').trim()}`)
+}
+
 const ALIASES = /var\(--(muted|hair|rail|rule|(?:green|red|amber|accent)(?:-[a-z]+)?)\s*[,)]/g
 
 describe('the answer and set-up cards (ADR 0052)', () => {
   it('space only with the spacing tokens, never a length of their own in any unit', () => {
-    const found = sheets.flatMap(({ file, css }) =>
-      rules(css).flatMap((rule) =>
-        [...rule.body.matchAll(/(?:^|[;\s])((?:row-|column-)?gap|padding[a-z-]*|margin[a-z-]*)\s*:\s*([^;]+)/g)]
-          .filter((match) => /(^|[^\w.-])-?(?!0(?:\.0+)?(?:px|rem|em|%|ch|vw|vh)?\b)\d*\.?\d+(px|rem|em|%|ch|vw|vh|pt)\b/.test((match[2] ?? '').replace(/var\([^)]*\)/g, '')))
-          .map((match) => `${match[1] ?? ''}: ${(match[2] ?? '').trim()} in ${file} (${rule.selector})`),
-      ),
-    )
+    const found = sheets.flatMap(({ file, css }) => rules(css).flatMap((rule) => rawSpacing(rule.body).map((raw) => `${raw} in ${file} (${rule.selector})`)))
     expect(found).toEqual([])
+  })
+
+  it('catches a raw length in any unit, and lets 0 and tokens through', () => {
+    for (const bad of ['gap: 0.25rem;', 'gap: 0.5rem;', 'padding: 50%;', 'grid-gap: 8px;', 'row-gap: 1em 2px;', 'padding-inline-start: 10px;', 'margin: 0 auto 4px;']) expect(rawSpacing(bad), bad).not.toEqual([])
+    for (const ok of ['gap: 0;', 'gap: 0px;', 'margin: 0 auto;', 'padding: var(--space-2) var(--space-4);', 'margin-block: calc(var(--space-1) * -1);', 'gap: 0 var(--space-3);']) expect(rawSpacing(ok), ok).toEqual([])
   })
 
   it('use the sketch’s colour names, with no older alias and no raw fallback colour', () => {
