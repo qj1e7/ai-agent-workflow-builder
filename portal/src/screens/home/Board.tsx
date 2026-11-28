@@ -34,7 +34,7 @@ function WorkflowTile({ tile, steps, now, nameOf }: TileProps) {
           </b>
           <StatusPills useCase={useCase} />
         </span>
-        <span className={styles['steps']}>{steps ? <StepLine steps={steps} label="Last run" /> : null}</span>
+        <span className={styles['steps']}>{steps ? <StepLine steps={steps} label="Last run" still /> : null}</span>
         <span id={`${ids}-meta`} className={styles['meta']}>
           {next !== null ? (
             <>
@@ -71,7 +71,7 @@ export function Board({ board, steps, now, heading, nameOf }: BoardProps) {
         </h2>
         {board.total > board.tiles.length ? <Link to="/workflows">See all on Workflows</Link> : null}
       </div>
-      <ul className={styles['tiles']} aria-label={heading}>
+      <ul className={styles['tiles']} data-board>
         {board.tiles.map((tile) => (
           <WorkflowTile key={tile.useCase.use_case_id} tile={tile} steps={steps.get(tile.useCase.use_case_id)} now={now} nameOf={nameOf} />
         ))}

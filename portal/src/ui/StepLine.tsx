@@ -36,14 +36,16 @@ interface StepLineProps {
   readonly label: string
   /** The sketch's two sizes: 28 px circles on a board tile and the Workflows table, and 22 px circles beside a name in a card. */
   readonly size?: 'md' | 'sm'
+  /** No pulsing ring on the waiting step, for a place that shows many lines at once, such as Home's board. The step still reads as waiting. */
+  readonly still?: boolean
 }
 
 /**
  * The small step line: a workflow's steps as circles joined by a link, coloured by its last run. A step not reached is dashed. It is one
  * picture with one name, so a screen reader reads the sentence and not the circles. The waiting step's ring pulses only while motion is allowed.
  */
-export function StepLine({ steps, label, size = 'md' }: StepLineProps) {
-  const ring = motionAllowed()
+export function StepLine({ steps, label, size = 'md', still = false }: StepLineProps) {
+  const ring = motionAllowed() && !still
   return (
     <span className={styles['line']} role="img" aria-label={`${label}: ${steps.map((step) => `${STEP_STATE_WORDS[step.state]}${step.name}`).join(', ')}`} data-size={size === 'sm' ? 'sm' : undefined}>
       {steps.map((step) => {

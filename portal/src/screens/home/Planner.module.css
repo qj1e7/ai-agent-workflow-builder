@@ -120,6 +120,11 @@
   border-radius: 14px;
 }
 
+/* The hero's box is a little taller than its line, so its focus ring sits within 8 px of the text, where a keyboard walk's shot of it catches it. */
+.composer.fresh textarea {
+  padding-block: 12px;
+}
+
 /* The Visor bot at the left of the box. It is for the eye only. */
 .inBox {
   display: grid;

@@ -52,18 +52,19 @@ test('Home’s board lists the workflows as tiles under Needs you, each one link
   const page = await context.newPage()
   await page.goto('/')
   await expect(itemOf(page, approvalId)).toBeVisible()
-  const board = page.getByRole('list', { name: 'Workflows', exact: true })
+  const board = page.locator('ul[data-board]')
   const tile = board.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
   await expect(tile.getByRole('link')).toHaveAttribute('href', /^\/workflows\/.+/)
   await expect(tile, 'its one pill is Needs you').toContainText('Needs you')
   await expect(tile, 'the reason is in Needs you, not on the tile').not.toContainText('needs your approval')
-  await expect(page.getByRole('main').getByText('needs your approval'), 'said once on the page').toHaveCount(1)
-  const edges = await page.evaluate(() => ['form', 'ul[aria-label="Needs you"]', 'ul[aria-label="Workflows"]'].map((query) => document.querySelector(query)?.getBoundingClientRect().left ?? -1))
+  await expect(board.getByText('needs your approval'), 'no tile says it').toHaveCount(0)
+  await expect(itemOf(page, approvalId), 'Needs you says it once').toHaveCount(1)
+  const edges = await page.evaluate(() => ['form', 'ul[aria-label="Needs you"]', 'ul[data-board]'].map((query) => document.querySelector(query)?.getBoundingClientRect().left ?? -1))
   expect(Math.max(...edges) - Math.min(...edges), 'the box, Needs you and the board start at one left edge').toBeLessThanOrEqual(1)
   for (const width of [1280, 800]) {
     await page.setViewportSize({ width, height: 900 })
     const fit = await page.evaluate(() => {
-      const tiles = [...document.querySelectorAll('ul[aria-label="Workflows"] > li[data-workflow-id]')]
+      const tiles = [...document.querySelectorAll('ul[data-board] > li[data-workflow-id]')]
       const pills = tiles.flatMap((item) => [...item.querySelectorAll('[data-life]')]).map((pill) => pill.getBoundingClientRect().height)
       const lines = tiles.flatMap((item) => {
         const line = item.querySelector('[role="img"]')
@@ -81,14 +82,14 @@ test('Home’s board lists the workflows as tiles under Needs you, each one link
     const top = (query: string) => document.querySelector(query)?.getBoundingClientRect().top ?? -1
     const bottom = (query: string) => document.querySelector(query)?.getBoundingClientRect().bottom ?? -1
     const needsHead = bottom('section[aria-labelledby] > h2')
-    const boardHead = bottom('section:has(ul[aria-label="Workflows"]) h2')
+    const boardHead = bottom('section:has(ul[data-board]) h2')
     const groups = [...document.querySelectorAll('ul[aria-label="Needs you"] > li > h3')]
     const firstList = document.querySelector('ul[aria-label="Needs you"] > li > ul')
     const rows = [...document.querySelectorAll('ul[aria-label="Needs you"] li[data-home-item]')].map((row) => row.getBoundingClientRect())
     const across = rows.find((row, index) => index > 0 && row.top === rows[0]?.top)
     return {
       needsGap: top('ul[aria-label="Needs you"]') - needsHead,
-      boardGap: top('ul[aria-label="Workflows"]') - boardHead,
+      boardGap: top('ul[data-board]') - boardHead,
       headToList: (firstList?.getBoundingClientRect().top ?? 0) - (groups[0]?.getBoundingClientRect().bottom ?? 0),
       tileGap: across && rows[0] ? across.left - rows[0].right : 16,
     }

@@ -53,6 +53,11 @@ describe('the small step line', () => {
     expect(draw()).not.toContain('data-ring')
   })
 
+  it('holds the waiting ring still where many lines show at once, as Home’s board does', () => {
+    withReducedMotion(false)
+    expect(draw({ still: true })).not.toContain('data-ring')
+  })
+
   it('says each state in the words the run line says it in, from one map, so no screen says waiting where another says Waiting for approval', () => {
     const html = draw()
     for (const state of ['done', 'wait', 'todo'] as const) expect(html).toContain(STEP_STATE_WORDS[state])
