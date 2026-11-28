@@ -23,9 +23,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   loading?: boolean
   icon?: Icon
+  /** The sketch's small button, 32 px high, for a control that sits at a card's foot. */
+  small?: boolean
 }
 
-export function Button({ variant = 'secondary', loading = false, icon: Leading, onClick, children, ...rest }: ButtonProps) {
+export function Button({ variant = 'secondary', loading = false, small = false, icon: Leading, onClick, children, ...rest }: ButtonProps) {
   // aria-disabled instead of disabled, so focus stays put while the action runs
   const inactive = loading || rest.disabled === true
   function handleClick(event: MouseEvent<HTMLButtonElement>) {
@@ -40,7 +42,7 @@ export function Button({ variant = 'secondary', loading = false, icon: Leading, 
       type="button"
       {...rest}
       disabled={false}
-      className={buttonClassName(variant)}
+      className={cx(buttonClassName(variant), small && styles['small'])}
       aria-disabled={inactive || undefined}
       aria-busy={loading || undefined}
       onClick={handleClick}

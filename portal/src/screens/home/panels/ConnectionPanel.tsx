@@ -30,14 +30,14 @@ export function ConnectionPanel({ id, now }: { id: string; now: Date }) {
   const words = connectionWords(connection, now)
   const pill = connection.state === 'working' && connection.expires_at ? `Expires ${onDay(connection.expires_at, now)}` : words.label
   return (
-    <div className={styles['stack']}>
-      <div className={styles['head']}>
+    <div className={styles['connStack']}>
+      <div className={styles['connHead']}>
         <p className={styles['kind']}>Connection</p>
         <Pill tone={words.note || words.health === 'warn' ? 'wait' : words.health === 'ok' ? 'good' : undefined}>{pill}</Pill>
       </div>
       <p className={styles['sent']}>{words.note ? `${words.text} ${words.note}` : words.text}</p>
       {words.checked ? <p className="muted">{words.checked}</p> : null}
-      <div className={styles['actions']}>
+      <div className={styles['connActions']}>
         <ButtonLink to={CONNECTIONS_PATH}>See it in Settings</ButtonLink>
       </div>
     </div>
