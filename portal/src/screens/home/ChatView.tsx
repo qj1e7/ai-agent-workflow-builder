@@ -6,8 +6,10 @@ import { NARROW, useMediaQuery } from '../../ui/media'
 import { focusAfterClose, isWide, OpensInPanel, panelKey, type PanelItem, type PanelOpener } from '../../ui/sidePanel'
 import type { Page } from './AnswerCards'
 import { useChat, type OpenPanel } from './ChatProvider'
+import { besideChat, SLIM_LIST_FROM } from './chatLayout'
 import { PinnedLine } from './PinnedLine'
 import { PANEL_HEADING, PANEL_ID, SidePanel } from './SidePanel'
+import { ChatSlimList } from './SlimList'
 import { Thread } from './Thread'
 import { isAnswer } from './threadState'
 import styles from './Planner.module.css'
@@ -29,13 +31,13 @@ export const NEWEST = '#thread-h + ol > li:last-child'
 const openersOf = (root: HTMLElement | null, item: PanelItem): HTMLElement[] => [...(root?.querySelectorAll<HTMLElement>(`[data-opens="${panelKey(item)}"]`) ?? [])]
 
 /**
- * Home once the first message is sent (the sketch's chat): the needs strip on top, the conversation scrolling in the middle, and
+ * Home once the first message is sent (the sketch's chat): the needs strip on top in a narrow window, the slim list docked beside it in a wide one, the conversation scrolling in the middle, and
  * the box with its chips and New chat docked at the bottom. The scroll position is kept by the chat, so coming back from another page
  * finds the conversation where it was left. An item opened from a card shows in the side panel beside it (spec 3.3).
  */
 export function ChatView({ home, now, page, box, chips, toast, onNewChat }: ChatViewProps) {
   const chat = useChat()
-  const column = useRef<HTMLDivElement>(null)
+  const layout = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const restored = useRef(false)
   const shownCount = useRef(chat.thread.messages.length)
@@ -111,6 +113,7 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
   }, [])
 
   const narrow = useMediaQuery(NARROW)
+  const beside = besideChat(useMediaQuery(SLIM_LIST_FROM), chat.panel !== null)
   const { panel, openPanel, pushPanel, backPanel, closePanel } = chat
   const opened = useRef(false)
   const closed = useRef<{ readonly panel: OpenPanel; readonly lost: boolean } | null>(null)
@@ -121,7 +124,7 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
       shown,
       open: (item, from) => {
         opened.current = true
-        openPanel(item, Math.max(0, openersOf(column.current, item).indexOf(from)))
+        openPanel(item, Math.max(0, openersOf(layout.current, item).indexOf(from)))
       },
       show: (item) => openPanel(item, null),
     }),
@@ -151,7 +154,7 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
     if (!was || panel) return
     closed.current = null
     const box = document.getElementById('planner-box')
-    focusAfterClose({ openers: openersOf(column.current, was.panel.root), from: was.panel.from, lost: was.lost, box })?.focus({ preventScroll: true })
+    focusAfterClose({ openers: openersOf(layout.current, was.panel.root), from: was.panel.from, lost: was.lost, box })?.focus({ preventScroll: true })
   }, [panel])
 
   const close = () => {
@@ -163,13 +166,13 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
 
   return (
     <InChat.Provider value>
-      <div className={cx(styles['chatLayout'], panel !== null && styles['beside'], panel !== null && isWide(panel.item) && styles['wideSplit'])} data-chat>
-        <div ref={column} className={styles['chat']} inert={(narrow && panel !== null) || undefined}>
+      <div ref={layout} className={cx(styles['chatLayout'], panel !== null && styles['beside'], panel !== null && isWide(panel.item) && styles['wideSplit'])} data-chat>
+        <div className={styles['chat']} inert={(narrow && panel !== null) || undefined}>
           <OpensInPanel.Provider value={opener}>
             <h1 className="visually-hidden" tabIndex={-1}>
               Planner
             </h1>
-            <PinnedLine home={home} now={now} />
+            {beside.pinned ? <PinnedLine home={home} now={now} /> : null}
             {/* While the conversation overflows, its region takes a Tab stop, so the keyboard can scroll it (axe: scrollable-region-focusable). */}
             {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
             <div ref={scroller} className={styles['chatScroll']} role="region" aria-label="Conversation" tabIndex={overflows ? 0 : undefined} onScroll={(event) => restored.current && scroll.set(event.currentTarget.scrollTop)}>
@@ -191,7 +194,11 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
             </div>
           </div>
         </div>
-        {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} back={panel.previous} now={now} narrow={narrow} onClose={close} onBack={back} onOpen={push} /> : null}
+        {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} back={panel.previous} now={now} narrow={narrow} onClose={close} onBack={back} onOpen={push} /> : beside.slim ? (
+          <OpensInPanel.Provider value={opener}>
+            <ChatSlimList home={home} now={now} />
+          </OpensInPanel.Provider>
+        ) : null}
       </div>
     </InChat.Provider>
   )

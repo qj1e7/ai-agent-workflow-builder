@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { UseCaseView } from '../../api/types'
-import { Pill } from '../../ui/Pill'
+import { Pill, type PillTone } from '../../ui/Pill'
 import { runPill, type StageFacts } from '../run/words'
 import { statusOf } from './workflow'
 import styles from './Workflows.module.css'
@@ -15,14 +15,21 @@ export function useChanges(value: string): number {
   return times
 }
 
-/** One status, in the four words ADR 0053 allows: On, Paused, Draft or Needs you. A test run is marked beside it. */
-export function StatusPills({ useCase, test = false, large = false }: { useCase: Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'needs_you'>>; test?: boolean; large?: boolean }) {
+type Statused = Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'needs_you'>>
+
+/** A workflow's one status as its pill draws it: its words and its tone. The pill and the slim list's mark both come from here. */
+export function statusPill(useCase: Statused): { readonly label: string; readonly tone: PillTone } {
   const { four, label, tone } = statusOf(useCase)
+  return { label, tone: tone === 'wait' ? 'wait' : four === 'needs' ? 'bad' : four === 'on' ? 'on' : 'off' }
+}
+
+/** One status, in the four words ADR 0053 allows: On, Paused, Draft or Needs you. A test run is marked beside it. */
+export function StatusPills({ useCase, test = false, large = false }: { useCase: Statused; test?: boolean; large?: boolean }) {
+  const { label, tone } = statusPill(useCase)
   const changes = useChanges(label)
-  const look = tone === 'wait' ? 'wait' : four === 'needs' ? 'bad' : four === 'on' ? 'on' : 'off'
   return (
     <span className={styles['pills']}>
-      <Pill key={changes} large={large} tone={look} className={changes > 0 ? styles['changed'] : undefined} data-life={useCase.state}>
+      <Pill key={changes} large={large} tone={tone} className={changes > 0 ? styles['changed'] : undefined} data-life={useCase.state}>
         {label}
       </Pill>
       {test ? <Pill>Test run</Pill> : null}

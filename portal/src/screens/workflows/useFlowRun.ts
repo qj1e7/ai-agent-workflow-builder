@@ -1,33 +1,20 @@
-import { queryOptions, useQuery } from '@tanstack/react-query'
-import type { ApiClient } from '../../api/client'
+import { useQuery } from '@tanstack/react-query'
 import { useApiClient, useCacheScope } from '../../api/context'
-import { fetchEventPage, keys } from '../../api/queries'
 import type { RunView } from '../../api/types'
+import { runStepsOptions } from '../run/useRunSteps'
 import type { FlowRun } from './flow'
 import { runAt, stageOfRun } from './workflow'
 
-/**
- * How the latest run is read: its events from the endpoint the run page reads, in one request. The key holds the run's last event, so the
- * page reads again when the runs list says the run moved on, and the states of the same run stay on the page while it does. Another run's
- * states never do.
- */
-export function flowRunOptions(client: ApiClient, user: string, run: RunView) {
-  return queryOptions({
-    queryKey: keys.runFlow(user, run.run_id, run.last_seq),
-    queryFn: async (): Promise<FlowRun> => {
-      const { events } = await fetchEventPage(client, run.run_id)
-      return { runId: run.run_id, events, startedAt: runAt(run), stage: stageOfRun(run) }
-    },
-    placeholderData: (before: FlowRun | undefined) => (before?.runId === run.run_id ? before : undefined),
-  })
-}
+const NO_RUN = { runId: '', version: 0 }
 
-/** The latest run's events for the flow diagram. Null while there is no run, or until its events are read: the diagram then draws the steps without states. */
+/**
+ * The latest run's events for the flow diagram, from the one per-run read, at the run's last event. One observer reads it, so while a
+ * live run moves on its states stay on the page, and another run's never do. Null while there is no run, or until its events are read: the
+ * diagram then draws the steps without states.
+ */
 export function useFlowRun(run: RunView | undefined): FlowRun | null {
   const client = useApiClient()
   const user = useCacheScope()
-  const read = useQuery({ ...flowRunOptions(client, user, run ?? NO_RUN), enabled: run !== undefined })
-  return run === undefined ? null : (read.data ?? null)
+  const read = useQuery({ ...runStepsOptions(client, user, run ? { runId: run.run_id, version: run.last_seq } : NO_RUN), enabled: run !== undefined })
+  return run && read.data ? { runId: run.run_id, events: read.data, startedAt: runAt(run), stage: stageOfRun(run) } : null
 }
-
-const NO_RUN = { run_id: '', last_seq: 0 } as unknown as RunView

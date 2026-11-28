@@ -105,7 +105,8 @@ test('Home keeps the design rules in each of its states', async ({ browser, back
   await allRules(page, capabilities, 'the abilities answer')
 
   await ask(page, 'Check my workflows')
-  await expect(main(page).getByRole('list', { name: 'Your workflows' })).toBeVisible()
+  // The slim list has the same name from 1080 px and is there before the answer, so the answer's list is found in the conversation.
+  await expect(main(page).getByRole('region', { name: 'Conversation' }).getByRole('list', { name: 'Your workflows' })).toBeVisible()
   await allRules(page, capabilities, 'the Check my workflows answer')
 
   await ask(page, 'What needs me?')
@@ -193,6 +194,9 @@ test('the Needs you rows on Workflows are the number the Planner’s answer, the
   await rail(page).getByRole('link', { name: /^Home/ }).click()
   await ask(page, 'What needs me?')
   await expect(main(page), 'Principle 7: the Planner’s answer').toContainText(`${String(total)} ${total === 1 ? 'thing needs' : 'things need'} you`)
+  // From 1080 px the slim list says the count beside the chat. Under it, the strip does.
+  await expect(page.getByRole('complementary', { name: 'Needs you and your workflows' }).getByRole('button', { name: `Needs you ${String(total)}`, exact: true }), 'Principle 7: the slim list shows the count while something needs her').toBeVisible()
+  await page.setViewportSize({ width: 1000, height: 900 })
   const strip = main(page).getByRole('region', { name: 'Needs you', exact: true })
   await expect(strip, 'Principle 7: the strip is there while something needs her').toBeVisible()
   const more = (await strip.getByRole('button', { name: /more that need you/ }).count()) === 0 ? 0 : Number((await strip.getByRole('button', { name: /more that need you/ }).innerText()).replace(/\D/g, ''))
@@ -225,6 +229,7 @@ test('an Approver who is not an Operator has his Needs you count in his heading 
   expect(await railCount(page, 'Home'), 'Principle 7: Home’s count on the rail is the number in his heading').toBe(onHome)
   expect(await railCount(page, 'Workflows'), 'Principle 7: the rail shows the team’s workflows').toBeGreaterThan(0)
   await rail(page).getByRole('link', { name: /^Workflows/ }).click()
+  await expect(page).toHaveURL(/\/workflows$/)
   expect(await needsOnWorkflows(page), 'Principle 7: his heading and the Needs you rows on Workflows, with the rest its note counts, agree').toBe(onHome)
   await context.close()
 })

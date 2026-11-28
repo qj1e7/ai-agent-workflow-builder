@@ -6,8 +6,7 @@ import { createApiClient } from '../../api/client'
 import { keys } from '../../api/queries'
 import { authorizedFetch, createDevSession } from '../../api/session'
 import type { RunView } from '../../api/types'
-import { flowRunOptions } from './useFlowRun'
-import { runAt } from './workflow'
+import { runStepsOptions } from './useRunSteps'
 
 const RUN = failed as unknown as RunView
 const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
@@ -28,33 +27,37 @@ function setup() {
   return { urls, client, queryClient, hold: (on: boolean) => (hold = on), release: () => release() }
 }
 
-describe('the latest run read for the flow diagram', () => {
-  it('reads the run once, from the events endpoint, and names it by the time the app gives a run', async () => {
+describe('a run read as steps, for the board, the slim list and the workflow page', () => {
+  it('reads the run once, from the events endpoint, in one request', async () => {
     const { urls, client, queryClient } = setup()
-    const read = await queryClient.fetchQuery(flowRunOptions(client, 'alice', RUN))
+    const events = await queryClient.fetchQuery(runStepsOptions(client, 'alice', { runId: RUN.run_id, version: RUN.last_seq }))
     expect(urls).toEqual([`http://portal.test/api/v1/runs/${RUN.run_id}/events?after=0`])
-    expect(read.runId).toBe(RUN.run_id)
-    expect(read.events).toHaveLength(success.length)
-    expect(read.startedAt).toBe(runAt(RUN))
-    expect(read.startedAt).not.toBe(RUN.started_at)
+    expect(events).toHaveLength(success.length)
   })
 
-  it('is cached under its own key, which holds the run and its last event', () => {
+  it('has one key, which holds the run and the version it was read at, a state or a last event', () => {
     const { client } = setup()
-    expect(flowRunOptions(client, 'alice', RUN).queryKey).toEqual(keys.runFlow('alice', RUN.run_id, RUN.last_seq))
+    expect(runStepsOptions(client, 'alice', { runId: 'run_1', version: 7 }).queryKey).toEqual(keys.runSteps('alice', 'run_1', 7))
+    expect(keys.runSteps('alice', 'run_1', 'awaiting_approval')).not.toEqual(keys.runSteps('alice', 'run_1', 'succeeded'))
+    expect(keys.runSteps('alice', 'run_1', 7)).not.toEqual(keys.runSteps('alice', 'run_2', 7))
   })
 
-  it('keeps the states on the page while the run moves on and is read again, but never another run\'s', async () => {
+  it('takes the app’s own retry, as the workflow page did, so one failed read does not leave a finished run without states', () => {
+    const { client } = setup()
+    expect(runStepsOptions(client, 'alice', { runId: 'run_1', version: 1 }).retry).toBeUndefined()
+  })
+
+  it('keeps the states on the page while the same run moves on and is read again, but never another run\'s', async () => {
     const { client, queryClient, hold, release } = setup()
-    await queryClient.fetchQuery(flowRunOptions(client, 'alice', RUN))
+    const read = { runId: RUN.run_id, version: RUN.last_seq }
+    await queryClient.fetchQuery(runStepsOptions(client, 'alice', read))
     hold(true)
-    const moved = { ...RUN, last_seq: RUN.last_seq + 1 }
-    const watch = new QueryObserver(queryClient, flowRunOptions(client, 'alice', RUN))
+    const watch = new QueryObserver(queryClient, runStepsOptions(client, 'alice', read))
     const stop = watch.subscribe(() => undefined)
-    watch.setOptions(flowRunOptions(client, 'alice', moved))
+    watch.setOptions(runStepsOptions(client, 'alice', { ...read, version: read.version + 1 }))
     expect(watch.getCurrentResult().isPlaceholderData).toBe(true)
-    expect(watch.getCurrentResult().data?.runId).toBe(RUN.run_id)
-    watch.setOptions(flowRunOptions(client, 'alice', { ...RUN, run_id: 'run_other', last_seq: 1 }))
+    expect(watch.getCurrentResult().data).toHaveLength(success.length)
+    watch.setOptions(runStepsOptions(client, 'alice', { runId: 'run_other', version: 1 }))
     expect(watch.getCurrentResult().data).toBeUndefined()
     release()
     stop()
