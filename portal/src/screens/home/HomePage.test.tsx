@@ -89,9 +89,9 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
     expect(html.indexOf('Good afternoon, Alice')).toBeLessThan(html.indexOf('What can I help you with today?'))
   })
 
-  it('has the Planner’s face at 32 px inside the box, at its left, as the sketch draws it', () => {
+  it('has the Planner’s face at 38 px inside the box, at its left, as the sketch draws it', () => {
     const face = /<svg[^>]*width="(\d+)"/.exec(html)
-    expect(face?.[1]).toBe('32')
+    expect(face?.[1]).toBe('38')
     expect(html.indexOf(face?.[0] ?? '-')).toBeGreaterThan(html.indexOf('<form'))
     expect(html.indexOf(face?.[0] ?? '-')).toBeLessThan(html.indexOf('<textarea'))
     expect(html.indexOf('Good afternoon, Alice')).toBeLessThan(html.indexOf('<form'))

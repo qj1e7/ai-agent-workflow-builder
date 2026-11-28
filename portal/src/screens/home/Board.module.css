@@ -25,6 +25,9 @@
 }
 
 .head a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--ink);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);

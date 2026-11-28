@@ -347,7 +347,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
         <h1 tabIndex={-1}>{operator ? OPERATOR_HEADING : approverHeading(home)}</h1>
         <div className={styles['dock']}>
           {toast}
-          {box(<PlannerBot state={hero} size={32} keys={keys} look={look} />)}
+          {box(<PlannerBot state={hero} size={38} keys={keys} look={look} />)}
           {chips}
         </div>
       </div>

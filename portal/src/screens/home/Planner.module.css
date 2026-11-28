@@ -116,13 +116,14 @@
 }
 
 .composer.fresh {
-  min-height: 60px;
+  min-height: 68px;
   border-radius: 14px;
 }
 
 /* The hero's box is a little taller than its line, so its focus ring sits within 8 px of the text, where a keyboard walk's shot of it catches it. */
 .composer.fresh textarea {
-  padding-block: 12px;
+  padding-block: 14px;
+  font-size: var(--fs-head);
 }
 
 /* The Visor bot at the left of the box. It is for the eye only. */
@@ -130,8 +131,8 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
 }
 
 .composer:focus-within {
@@ -215,7 +216,7 @@
 }
 
 .chip {
-  min-height: 36px;
+  min-height: 34px;
   padding: 5px 13px;
   border: 1px solid var(--rail);
   border-radius: 999px;
