@@ -145,14 +145,16 @@ test('Teams closes with its Close button, or with a click outside it, and focus 
   await expect(teams).toBeFocused()
 })
 
-test('Tab stays inside the open Teams drawer', async ({ page }) => {
+test('Tab and Shift+Tab stay inside the open Teams drawer', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
   const dialog = page.getByRole('dialog', { name: 'Teams, practice copy' })
   await expect(dialog.getByRole('button', { name: 'Close Teams' })).toBeFocused()
-  for (let press = 0; press < 12; press += 1) {
-    await page.keyboard.press('Tab')
-    expect(await dialog.evaluate((node) => node.contains(document.activeElement)), `focus after ${String(press + 1)} Tab presses`).toBe(true)
+  for (const key of ['Tab', 'Shift+Tab']) {
+    for (let press = 0; press < 12; press += 1) {
+      await page.keyboard.press(key)
+      expect(await dialog.evaluate((node) => node.contains(document.activeElement)), `focus after ${String(press + 1)} ${key} presses`).toBe(true)
+    }
   }
 })
 
