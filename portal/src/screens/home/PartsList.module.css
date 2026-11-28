@@ -1,3 +1,4 @@
+/* The rows of a request, in the sketch's `.pt`: a mark, a short key and the words. They sit on the card's own padding edge. */
 .parts {
   container: parts / inline-size;
   display: grid;
@@ -8,19 +9,18 @@
 
 .part {
   display: grid;
-  grid-template-columns: 22px 8.5rem minmax(0, 1fr);
-  gap: 6px 12px;
+  grid-template-columns: var(--space-5) 8.5rem minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
   align-items: start;
-  padding: 10px 16px;
-  border-top: 1px solid var(--rule);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
 }
 
 .mark {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  margin-top: 4px;
+  width: var(--space-5);
+  height: var(--space-5);
   border-radius: 50%;
   font-size: var(--fs-tiny);
   font-weight: var(--fw-bold);
@@ -28,33 +28,28 @@
 }
 
 .part[data-mark='ok'] .mark {
-  background: var(--green-soft);
-  color: var(--green-ink);
+  background: var(--ok-bg);
+  color: var(--ok-text);
 }
 
 .part[data-mark='no'] .mark {
-  background: var(--red-soft);
-  color: var(--red-ink);
-}
-
-.part[data-mark='ask'] {
-  background: color-mix(in srgb, var(--amber-soft) 45%, var(--surface));
+  background: var(--stop-bg);
+  color: var(--stop-text);
 }
 
 .part[data-mark='ask'] .mark {
-  background: var(--amber-soft);
-  box-shadow: inset 0 0 0 1px var(--amber);
-  color: var(--amber-ink);
+  background: var(--wait);
+  color: var(--on-wait);
 }
 
 .part[data-mark='later'] .mark {
-  box-shadow: inset 0 0 0 1px var(--hair);
-  color: var(--muted);
+  background: var(--sunk);
+  color: var(--text-2);
 }
 
 .label {
-  padding-top: 5px;
-  color: var(--muted);
+  padding-top: var(--space-1);
+  color: var(--text-2);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);
   overflow-wrap: anywhere;
@@ -64,9 +59,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
+  gap: var(--space-2) var(--space-3);
   min-width: 0;
-  min-height: 30px;
+  min-height: var(--space-5);
   overflow-wrap: anywhere;
 }
 
@@ -81,18 +76,19 @@
 
 .part[data-mark='no'] .body,
 .part[data-mark='later'] .body {
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
 }
 
+/* Words the Planner left out, above the card they belong to: a card of its own, in the one surface. */
 .leftovers {
-  overflow: hidden;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
+  padding: 0 var(--space-5);
+  border-radius: var(--r-lg);
   background: var(--surface);
+  box-shadow: var(--shadow-2);
 }
 
-.leftovers .part:first-child {
+.part:first-child {
   border-top: 0;
 }
 
@@ -103,19 +99,14 @@
   white-space: normal;
 }
 
-/* The sketch's card: its three short keys, Watch, When and Then, in a narrow column, with no rule above the first part. */
+/* The sketch's card: its three short keys, Watch, When and Then, in a narrow column. */
 .parts[data-short] .part {
-  grid-template-columns: 22px 3.75rem minmax(0, 1fr);
-  padding: 10px 0;
-}
-
-.parts[data-short] .part:first-child {
-  border-top: 0;
+  grid-template-columns: var(--space-5) 3.75rem minmax(0, 1fr);
 }
 
 @container parts (max-width: 520px) {
   .part {
-    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-columns: var(--space-5) minmax(0, 1fr);
   }
 
   .body {
@@ -124,7 +115,7 @@
 
   /* The sketch's keys are short enough to keep their column at any width. */
   .parts[data-short] .part:not([data-mark='no']) {
-    grid-template-columns: 22px 3.75rem minmax(0, 1fr);
+    grid-template-columns: var(--space-5) 3.75rem minmax(0, 1fr);
   }
 
   .parts[data-short] .part:not([data-mark='no']) .body {
@@ -137,11 +128,10 @@
   display: grid;
   justify-items: start;
   flex: 1 1 100%;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .next:empty {
   display: none;
 }
-

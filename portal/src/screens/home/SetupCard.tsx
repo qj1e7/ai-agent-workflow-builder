@@ -13,6 +13,7 @@ import { Button, buttonClassName } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { AskTheTeam } from './AskTheTeam'
 import { AlreadyHave } from './AlreadyHave'
+import { Pill } from '../../ui/Pill'
 import { Building, DraftPill } from './Building'
 import {
   afterPartCheck,
@@ -862,7 +863,7 @@ function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode 
       body: (
         <>
           {chipOf(row, index)}
-          {row.state === 'changed' ? <span className={styles['guess']}>I guessed</span> : null}
+          {row.state === 'changed' ? <Pill tone="quiet">I guessed</Pill> : null}
           {note ? <span className={styles['pnote']}>{note}</span> : null}
           {row.state === 'cant_do' && canDrop(form.rows, index) ? (
             <button type="button" className={styles['link']} onClick={() => leaveOut(index)}>

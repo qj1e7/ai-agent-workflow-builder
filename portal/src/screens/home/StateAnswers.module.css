@@ -1,0 +1,24 @@
+/* Needs you inside the chat's card: rows flush on the card, a hairline between them, with no box or surface of their own. */
+.flat ul ul {
+  gap: 0;
+}
+
+.flat ul ul > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.flat ul ul > li > a,
+.flat ul ul > li > button {
+  min-height: var(--space-7);
+  padding-inline: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .flat ul ul > li > a:hover,
+  .flat ul ul > li > button:hover {
+    background: var(--sunk);
+  }
+}

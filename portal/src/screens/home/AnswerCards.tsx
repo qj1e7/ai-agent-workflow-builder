@@ -7,7 +7,7 @@ import { useMoveWorkflow } from '../../api/workflowQueries'
 import { Button, ButtonLink, buttonClassName } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { Pill } from '../../ui/Pill'
-import { Card } from '../../ui/Card'
+import { Card, CardFold } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
 import { useWatchlist } from '../../api/queries'
 import { sentenceFor, softwarePath, stateOf } from '../software/software'
@@ -307,9 +307,12 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
       }
     >
       <p>
-        You asked me to skip approval: <q>{reply.said}</q>. Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.
+        You asked me to skip approval: <q>{reply.said}</q>.
       </p>
-      <p className="muted">{SAY_ANOTHER_WAY}</p>
+      <p>Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.</p>
+      <CardFold summary="Details">
+        <p className="muted">{SAY_ANOTHER_WAY}</p>
+      </CardFold>
     </Card>
   )
 }

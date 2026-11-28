@@ -7,29 +7,29 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 8px;
+  gap: var(--space-1) var(--space-2);
 }
 
 .was {
-  color: var(--muted);
+  color: var(--text-2);
   font-weight: var(--fw-regular);
-  text-decoration-color: var(--rail);
+  text-decoration-color: var(--line-strong);
 }
 
 .arrow::before {
   content: '→' / '';
-  color: var(--muted);
+  color: var(--text-2);
 }
 
 .saved {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--green-ink);
+  gap: var(--space-2);
+  color: var(--ok-text);
 }
 
 .note {
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
 }
 
@@ -37,22 +37,21 @@
   display: inline-flex;
   flex: 1 1 14rem;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   margin: 0;
-  color: var(--muted);
+  color: var(--text-2);
 }
 
 .another {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding: 0 16px 12px;
+  gap: var(--space-2) var(--space-3);
 }
 
 .another input {
   min-height: 44px;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--edge);
   border-radius: var(--r-ctl);
   font: inherit;
@@ -61,11 +60,10 @@
 .next {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: var(--space-2) var(--space-3);
 }
 
 .problem {
   margin: 0;
-  padding: 0 16px 14px;
-  color: var(--red-ink);
+  color: var(--stop-text);
 }

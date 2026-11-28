@@ -6,7 +6,7 @@ import { useUseCase } from '../../api/queries'
 import type { DraftedWorkflowView, SimulationView, UseCaseState } from '../../api/types'
 import { useHoldTurnOn, useSetUp } from '../../api/workflowQueries'
 import { Button, ButtonAnchor, ButtonLink } from '../../ui/Button'
-import { Card } from '../../ui/Card'
+import { Card, CardFold } from '../../ui/Card'
 import { AskTheTeam } from '../home/AskTheTeam'
 import { Building, DraftPill } from '../home/Building'
 import { useAskForChange, useShowRevision } from '../home/ChatProvider'
@@ -58,10 +58,10 @@ function Elapsed({ since }: { since: string | null }) {
 function Head({ view, revision, life }: { view: Pick<DraftedWorkflowView, 'state'> & { in_n8n?: DraftedWorkflowView['in_n8n'] }; revision: number; life?: UseCaseState | undefined }) {
   const pill = draftedPill(view.state, view.in_n8n != null, life)
   return (
-    <>
+    <span className={styles['headEnd']}>
       <span className={styles['revision']}>{revisionWords(revision)}</span>
       {pill ? <DraftPill label={pill.label} tone={pill.tone} /> : null}
-    </>
+    </span>
   )
 }
 
@@ -231,7 +231,7 @@ function Foot({ view, life, onProblem }: { view: DraftedWorkflowView; life: UseC
 /** The newest revision tried on practice systems. Try again asks for this revision, so a newer one is never tried by it. */
 function DraftedSimulation({ view, simulation }: { view: DraftedWorkflowView; simulation: SimulationView }) {
   const again = useSimulateAgain(view.drafted_id)
-  return <SimulationResult simulation={simulation} tryAgain={{ pending: again.isPending, press: (outcome) => again.mutate(view.revision, outcome) }} />
+  return <SimulationResult simulation={simulation} fold tryAgain={{ pending: again.isPending, press: (outcome) => again.mutate(view.revision, outcome) }} />
 }
 
 /** A revision that has been read: the step line, In short, what was added, the flags, and where it stands. */
@@ -262,16 +262,13 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
       {added ? <p className={styles['note']}>{added}</p> : null}
       {view.flags > 0 ? (
         report && report.flags.length > 0 ? (
-          <details className={styles['flags']}>
-            <summary>
-              {flagsWords(view.flags)} <span className={styles['see']}>See them</span>
-            </summary>
+          <CardFold summary={`${flagsWords(view.flags)} See them`}>
             <ul className={styles['rows']}>
               {report.flags.map((flag, index) => (
                 <Flag key={index} flag={flag} />
               ))}
             </ul>
-          </details>
+          </CardFold>
         ) : (
           <p className={styles['said']}>{flagsWords(view.flags)}</p>
         )

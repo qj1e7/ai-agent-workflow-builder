@@ -3,6 +3,7 @@ import { useErrorWords } from '../../api/context'
 import { pressOnce, useLatch, type Outcome } from '../../api/latch'
 import type { SimulatedCaseView, SimulationView } from '../../api/types'
 import { Button } from '../../ui/Button'
+import { CardFold } from '../../ui/Card'
 import { IconCheck, IconX } from '../../ui/icons'
 import { AI_NOTE, caseLimitWords, casesInOrder, EXPECTED, HAPPENED, KIND_WORDS, NOT_AVAILABLE, NOT_FINISHED, NOT_STARTED, NOT_TRIED_ANYWHERE, SIMULATING, simulationLead, STILL_TESTS, VERDICT_WORDS, WAITING, YOU_DECIDE } from './simulation'
 import styles from './Drafted.module.css'
@@ -34,9 +35,11 @@ function Case({ found }: { found: SimulatedCaseView }) {
             {HAPPENED} {found.happened}
           </span>
           {found.note ? (
-            <span className={styles['note']}>
-              {AI_NOTE} {found.note}
-            </span>
+            <CardFold summary="Details">
+              <span className={styles['note']}>
+                {AI_NOTE} {found.note}
+              </span>
+            </CardFold>
           ) : null}
         </>
       ) : null}
@@ -60,10 +63,7 @@ function Cases({ cases, fold }: { cases: readonly SimulatedCaseView[]; fold: boo
   return (
     <>
       {others.length > 0 ? list(others) : null}
-      <details className={styles['foldedCases']}>
-        <summary>Show cases</summary>
-        {list(passed)}
-      </details>
+      <CardFold summary="Show cases">{list(passed)}</CardFold>
     </>
   )
 }
@@ -97,10 +97,10 @@ function TryAgainButton({ tryAgain, label }: { tryAgain: TryAgain; label: string
 /**
  * A version tried on practice systems (ADR 0054): a drafted revision, or a workflow the Planner built from our blocks. The result
  * leads, then what failed and why. A failed case never blocks Turn on, and a pass never stands in for the real test run Turn on
- * starts. It never claims a result it doesn't have. On a workflow's page the cases that passed fold under the result, a failed one
+ * starts. It never claims a result it doesn't have. On a workflow's page, and on the draft's card in the chat, the cases that passed fold under the result, a failed one
  * stays in view, and the draft's own line already says a test run still comes first, so this one does not say it again.
  */
-export function SimulationResult({ simulation, tryAgain, onWorkflowPage = false, testLineShown = false }: { simulation: SimulationView; tryAgain: TryAgain; onWorkflowPage?: boolean; testLineShown?: boolean }) {
+export function SimulationResult({ simulation, tryAgain, onWorkflowPage = false, fold = onWorkflowPage, testLineShown = false }: { simulation: SimulationView; tryAgain: TryAgain; onWorkflowPage?: boolean; fold?: boolean; testLineShown?: boolean }) {
   const again = (label: string) => (simulation.can_try_again ? <TryAgainButton tryAgain={tryAgain} label={label} /> : null)
   switch (simulation.state) {
     case 'unavailable':
@@ -143,7 +143,7 @@ export function SimulationResult({ simulation, tryAgain, onWorkflowPage = false,
           <p className={styles['said']}>
             <b>{simulationLead(simulation)}</b>
           </p>
-          {simulation.cases.length > 0 ? <Cases cases={casesInOrder(simulation.cases)} fold={onWorkflowPage} /> : null}
+          {simulation.cases.length > 0 ? <Cases cases={casesInOrder(simulation.cases)} fold={fold} /> : null}
           {simulation.not_tried.map((block) => (
             <p key={block.block} className={styles['note']}>
               {`${NOT_TRIED_ANYWHERE} “${block.block}”. ${block.why}`}

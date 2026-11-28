@@ -1,11 +1,14 @@
+/* The one card surface in the chat (the sketch's `.card`): the soft shadow and the big radius, no border. Other card sheets compose it. */
 .card {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
-  padding: 16px 18px;
-  border: 1px solid var(--rail);
-  border-radius: 10px;
+  padding: calc(var(--space-4) + var(--space-1) / 2) calc(var(--space-4) + var(--space-1));
+  border-radius: var(--r-lg);
+  /* Cards have no border, so forced-colors mode keeps an edge. */
+  outline: 1px solid transparent;
   background: var(--surface);
+  box-shadow: var(--shadow-2);
 }
 
 .card > * {
@@ -17,13 +20,14 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 6px 10px;
+  gap: var(--space-2) var(--space-3);
 }
 
 .head h3 {
   min-width: 0;
-  font-size: var(--fs-body);
-  font-weight: var(--fw-bold);
+  font-size: var(--fs-head);
+  font-weight: var(--fw-semi);
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
@@ -32,16 +36,16 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
 }
 
 .status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--muted);
+  gap: var(--space-2);
+  color: var(--text-2);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);
 }
@@ -50,7 +54,7 @@
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-3);
   margin-left: auto;
 }
 
@@ -72,4 +76,35 @@
 .actions:empty,
 .foot:has(> .actions:empty:only-child) {
   display: none;
+}
+
+/* Dense words fold under a plain summary, so a card reaches its first button within about 25 words. */
+.fold {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.fold > summary {
+  width: fit-content;
+  min-height: var(--space-6);
+  color: var(--ink);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.fold > summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.fold:not([open]) {
+  gap: 0;
+}
+
+.fold[open] {
+  gap: var(--space-3);
 }
