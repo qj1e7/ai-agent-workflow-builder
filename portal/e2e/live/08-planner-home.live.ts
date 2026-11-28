@@ -888,6 +888,8 @@ test.describe('with the AI model on', () => {
     await expect(box(page)).toBeVisible()
     // The suggestions draw once the watchlist and the registry have loaded, so the walk waits for the ones it checks.
     await expect(page.getByRole('group', { name: 'Suggestions' }).getByRole('button')).toHaveCount(3)
+    // The board under Needs you draws once the workflows have loaded, and its links are stops of the walk.
+    await expect(page.locator('ul[data-board] > li').first()).toBeVisible()
     const walk = await walkTabs(page)
     const labels = walk.stops.map((stop) => stop.label)
     for (const name of ['Ask, or describe a task', 'Send', 'Which software is behind?']) {
