@@ -480,9 +480,11 @@ for (const width of [1440, 390]) {
     await expect(heading(page), 'focus goes to the panel’s heading').toBeFocused()
     const first = await panel(page).locator('li[data-home-item]').count()
     expect(first, 'the panel lists the first page of needs').toBeGreaterThan(1)
-    if (first < total) await showMoreByKeyboard(page, total)
+    // The platform's count as the panel opened, since a retry elsewhere can move it while the page loads.
+    const held = await platformNeeds(backend, 'alice')
+    if (first < held) await showMoreByKeyboard(page, held)
     const rows = await panel(page).locator('li[data-home-item]').count()
-    expect(rows, 'the panel holds every need, and the strip’s N more plus one is the count').toBe(total)
+    expect(rows, 'the panel holds every need, and the strip’s N more plus one is the count').toBe(held)
     await expect(panel(page).getByRole('heading', { name: 'Do now' })).toBeVisible()
     await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/workflows')
     await expectBesideOrCovering(page, width)
