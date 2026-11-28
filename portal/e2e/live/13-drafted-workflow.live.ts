@@ -54,16 +54,18 @@ test.describe('Drafted workflow', () => {
     await expectAccessible(alice, path.join(OUT, 'axe'), 'drafted-card')
     await shot(alice, info, 'drafted-card')
 
+    const setUpPosts = async () => (await backend.teamsMessages()).filter((message) => message.link.startsWith('/setup-approvals/'))
+    const postedBefore = new Set((await setUpPosts()).map((message) => message.id))
+    const postedNow = async () => (await setUpPosts()).find((message) => !postedBefore.has(message.id))
     await card.getByRole('button', { name: 'Turn on' }).click()
     await expect(card.getByText('Waiting for an Approver to check it.'), 'Turn on asks for the check instead of turning it on').toBeVisible({ timeout: 20_000 })
     await expect(card.locator('[data-draft-pill]'), 'it stays a Draft').toHaveText('Draft')
     await expect(card.getByRole('button', { name: 'Turn on' })).toHaveCount(0)
     await shot(alice, info, 'drafted-waiting')
 
-    const messages = await backend.teamsMessages()
-    const posted = messages.findLast((message) => message.link.startsWith('/setup-approvals/'))
-    expect(posted, 'the set-up approval is posted in Teams with a link to its page').toBeDefined()
-    const link = posted?.link ?? ''
+    // The platform posts the request in Teams as a job of its own, so it can land a moment after the card says it waits.
+    await expect.poll(postedNow, { message: 'the set-up approval is posted in Teams with a link to its page', timeout: 30_000 }).toBeDefined()
+    const link = (await postedNow())?.link ?? ''
 
     // A second tab, so the chat that holds her card stays as it is.
     const aliceTab = await aliceContext.newPage()
