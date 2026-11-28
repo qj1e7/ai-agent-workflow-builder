@@ -56,7 +56,7 @@ export function SlimList({ board, needs, operator, problem }: SlimListProps) {
 function WorkflowRow({ useCase }: { useCase: Board['tiles'][number]['useCase'] }) {
   const { label, tone } = statusPill(useCase)
   return (
-    <li data-workflow-id={useCase.use_case_id}>
+    <li>
       <OpenLink item={{ kind: 'workflow', id: useCase.use_case_id }} to={workflowPath(useCase)} state={FROM_LIST} className={styles['row']}>
         <StateMark tone={tone} label={label} />
         <b className={styles['name']}>{useCase.name}</b>

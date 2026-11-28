@@ -374,7 +374,8 @@ for (const user of ['alice', 'bob']) {
         await page.goto('/')
         await page.getByRole('textbox').fill('Check my workflows')
         await page.keyboard.press('Enter')
-        const card = page.getByRole('main').getByRole('list', { name: 'Your workflows' })
+        // From 1080 px the slim list has the same name, so the card's list is found in the conversation.
+        const card = page.getByRole('main').getByRole('region', { name: 'Conversation' }).getByRole('list', { name: 'Your workflows' })
         await expect(card).toBeVisible()
         const shown = await card.locator('li[data-workflow-id]').count()
         expect(shown, 'the check card shows a few workflows, at most five').toBeGreaterThan(0)
