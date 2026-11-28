@@ -154,6 +154,13 @@
   margin-top: var(--space-5);
 }
 
+.stageCol {
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  min-width: 0;
+}
+
 .side {
   display: grid;
   gap: var(--space-5);

@@ -172,7 +172,8 @@ describe('the note before the troubleshooter answers, inside its own named card'
   const inCard = (loading: boolean) => text(renderToStaticMarkup(<StopAnswers failure={failed()} advice={undefined} loading={loading} safeId="s" named />))
 
   it('does not say the name again', () => {
-    expect(inCard(true)).toBe('Looking at what happened.')
-    expect(inCard(false)).toBe('Could not explain this one.')
+    expect(inCard(true)).toMatch(/^Looking at what happened\. /)
+    expect(inCard(false)).toMatch(/^Could not explain this one\. /)
+    expect(inCard(true)).not.toContain('AI troubleshooter')
   })
 })

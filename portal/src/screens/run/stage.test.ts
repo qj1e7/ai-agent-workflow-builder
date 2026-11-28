@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StepState } from '../../ui/StepLine'
 import type { Station } from './runModel'
-import { geometryOf, handoffsOf, MAX_STAGE_STEPS, plannerFaceOf, stageOf, stoppedAt, stopPointer } from './stage'
+import { geometryOf, handoffsOf, MAX_STAGE_STEPS, plannerFaceOf, stageOf, stoppedAt } from './stage'
 
 const agent = { id: 'version_checker', display: 'Version checker' }
 

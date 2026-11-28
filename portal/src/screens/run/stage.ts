@@ -146,6 +146,11 @@ export function stoppedAt(stations: readonly Station[]): number | null {
   return index < 0 ? null : (index + 0.5) / stations.length
 }
 
+/** Where the troubleshooter's notch points: the stopped step on the main view, and nothing in the n8n view, where no stage is drawn. */
+export function stopPointer(view: 'main' | 'n8n', stations: readonly Station[]): number | null {
+  return view === 'n8n' ? null : stoppedAt(stations)
+}
+
 /** When the circle at the end of a wire turns blue on opening: as its own hand-off arrives. */
 export const ARRIVES = TRAVEL
 

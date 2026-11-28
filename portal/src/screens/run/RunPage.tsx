@@ -8,7 +8,6 @@ import type { RunView, UseCaseView } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
-import { cx } from '../../ui/cx'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useFromChat } from '../../ui/fromChat'
 import { useView, ViewTabs } from '../../ui/ViewTabs'
@@ -26,7 +25,8 @@ import { Outcome, StopAnswers, StopNext } from './Outcome'
 import { useQuestions } from './questions'
 import { RunDecision } from './RunDecision'
 import { RunStage } from './RunStage'
-import { stoppedAt } from './stage'
+import { RunBody } from './RunBody'
+import { stopPointer } from './stage'
 import { TroubleCard } from './TroubleCard'
 import { RunPill } from './RunPill'
 import { RunPlaceContext, type RunPlace } from './place'
@@ -240,12 +240,13 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const troubleFace = troubleFaceOf(facts.state, shown.fix, now)
   const tense = tenseOf(shown.phase.state)
   const requested = story.approvalId !== null && tense !== undefined
-  /** A stop puts the AI troubleshooter's card under the stage, as the sketch does, so the stage keeps the whole width. */
-  const stoppedBelow = failure !== null && stoppedAt(stations) !== null
+  /** A stop puts the AI troubleshooter's card under the stage, in the stage's column, as the sketch does. Without a drawn stage it stays in the side column. */
+  const at = stopPointer(shownView, stations)
+  const stoppedBelow = failure !== null && at !== null
   const main = failure ? (
     <DecisionArea label="Why it stopped">
-      <TroubleCard face={troubleFace} at={stoppedAt(stations)}>
-        <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
+      <TroubleCard face={troubleFace} at={at}>
+        <StopAnswers failure={failure} {...story.stopped} safeId={safeId} named />
         <RunPlaceContext.Provider value={place}>
           <div className={styles['stopActions']}>
             <StopNext runId={run.run_id} failure={failure} {...story.stopped} quiet={fixLeading} safeId={safeId} />
@@ -310,13 +311,17 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
           <RunInN8n runId={run.run_id} name={run.use_case_name} seq={shown.seq} ended={modelFinished} />
         </div>
       ) : null}
-      <div className={cx(styles['body'], shownView !== 'n8n' && !stoppedBelow && styles['withStage'])}>
-        {shownView === 'n8n' ? null : <RunStage stations={stations} arrivedLive={arrivedLive} phase={shown.phase.state} />}
-        <div className={styles['side']}>
-          {main}
-          <History rows={rows} messages={messages} loadedUpTo={loadedUpTo} open={open} onToggle={detail.choose} listRef={logList} />
-        </div>
-      </div>
+      <RunBody
+        view={shownView}
+        stage={<RunStage stations={stations} arrivedLive={arrivedLive} phase={shown.phase.state} />}
+        below={stoppedBelow ? main : null}
+        side={
+          <>
+            {stoppedBelow ? null : main}
+            <History rows={rows} messages={messages} loadedUpTo={loadedUpTo} open={open} onToggle={detail.choose} listRef={logList} />
+          </>
+        }
+      />
       <div className="visually-hidden" aria-live="polite">
         {announce ?? ''}
       </div>
