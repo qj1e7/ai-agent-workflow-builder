@@ -3,7 +3,7 @@ import missingRepo from '@contracts/fixtures/troubleshooting/missing-repo.json'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { TroubleshootingOut } from '../../api/types'
-import { NOT_YET_NO_MODEL, OPERATORS_REPORT, OPERATORS_RETRY, Troubleshooting } from './Outcome'
+import { NOT_YET_NO_MODEL, OPERATORS_REPORT, OPERATORS_RETRY, StopAnswers, Troubleshooting } from './Outcome'
 import type { Phase } from './runModel'
 
 vi.mock('../home/HomeItem', () => ({ RetryButton: ({ label }: { label: string }) => <button type="button">{label}</button> }))
@@ -165,5 +165,14 @@ describe('a repository GitHub does not have', () => {
 
   it('holds Retry back before the troubleshooter answers too', () => {
     expect(draw(stop, undefined, OPERATOR, true)).not.toContain('>Retry<')
+  })
+})
+
+describe('the note before the troubleshooter answers, inside its own named card', () => {
+  const inCard = (loading: boolean) => text(renderToStaticMarkup(<StopAnswers failure={failed()} advice={undefined} loading={loading} safeId="s" named />))
+
+  it('does not say the name again', () => {
+    expect(inCard(true)).toBe('Looking at what happened.')
+    expect(inCard(false)).toBe('Could not explain this one.')
   })
 })

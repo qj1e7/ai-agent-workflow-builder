@@ -1,6 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { MemoryRouter } from 'react-router'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { RunStage } from './RunStage'
+import type { Station } from './runModel'
 import { TroubleCard } from './TroubleCard'
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
@@ -35,8 +37,16 @@ describe("the AI troubleshooter's card under a stop", () => {
 })
 
 describe('the stop is said once', () => {
-  it('leaves the reason to the card: the run page does not hand the stage a note of its own', () => {
-    const page = readFileSync(new URL('./RunPage.tsx', import.meta.url), 'utf8')
-    expect(page).not.toMatch(/stopNote/)
+  it('leaves the reason to the card: a stopped step has no note of its own unless one is handed to the stage', () => {
+    const stations: Station[] = [
+      { key: 'trigger', spot: { at: 'started' }, label: 'Started', icon: 'schedule', agent: null, state: 'done', face: 'idle', under: null },
+      { key: 'agent:0', spot: { at: 'gate' }, label: 'Ask', icon: 'gate', agent: null, state: 'err', face: 'idle', under: null },
+    ]
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <RunStage stations={stations} arrivedLive={null} phase="failed" />
+      </MemoryRouter>,
+    )
+    expect(html).not.toMatch(/class="[^"]*why/)
   })
 })
