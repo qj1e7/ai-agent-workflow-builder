@@ -1,0 +1,268 @@
+/* A workflow page's steps as the sketch's flow diagram (.flow-card, .flow, .fn). A box per step, a link between boxes, a note under a stop or a wait. */
+.card {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-bottom: var(--space-5);
+  padding: var(--space-5);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.head h2 {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
+}
+
+.when {
+  color: var(--text-2);
+  font-weight: var(--fw-regular);
+}
+
+.key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-small);
+}
+
+.key > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.key i {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line-strong);
+  border-radius: 4px;
+}
+
+.kd-done {
+  border-color: var(--ok);
+}
+
+.kd-now {
+  border-color: var(--run);
+}
+
+.kd-wait {
+  border-color: var(--wait-line);
+  background: var(--wait-bg);
+}
+
+.kd-err {
+  border-color: var(--stop);
+  background: var(--stop);
+}
+
+.kd-no {
+  border-style: dashed;
+  border-color: var(--muted);
+}
+
+.kd-todo {
+  border-style: dashed;
+}
+
+.scroll {
+  overflow-x: auto;
+  padding: var(--space-3) var(--space-3) var(--space-1) 0;
+}
+
+/* Equal boxes in a row. A note hangs under its box, so the row keeps room for it. */
+.flow {
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(9rem, 1fr));
+  align-items: stretch;
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hasNote {
+  padding-bottom: calc(var(--space-7) + var(--space-6));
+}
+
+.box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 6rem;
+  padding: var(--space-3);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  transition:
+    border-color var(--dur-small) ease,
+    box-shadow var(--dur-small) ease;
+}
+
+/* The link to the box before it: dashed, solid and green once that step is done. It runs on the box's top line. */
+.box + .box::before {
+  position: absolute;
+  inset-inline-end: calc(100% + 1.5px);
+  top: calc(var(--space-3) + 14px);
+  width: var(--space-6);
+  border-top: 2px dashed var(--line-strong);
+  content: '';
+}
+
+.done + :is(.done, .err, .wait, .now, .no)::before {
+  border-top-style: solid;
+  border-color: var(--ok);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ico {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--sunk);
+  color: var(--text-2);
+}
+
+.agent {
+  background: none;
+}
+
+.ico > svg:not([data-face]) {
+  width: 16px;
+  height: 16px;
+}
+
+.name {
+  font-weight: var(--fw-semi);
+  line-height: 1.25;
+}
+
+.tag {
+  margin-top: auto;
+  color: var(--text-2);
+  font-size: var(--fs-small);
+}
+
+.done {
+  border: 1.5px solid var(--ok);
+}
+
+.now {
+  border: 2px solid var(--run);
+  box-shadow: 0 0 0 5px var(--run-bg);
+}
+
+.wait {
+  border: 2px solid var(--wait-line);
+  box-shadow: 0 0 0 5px var(--wait-bg);
+}
+
+.err {
+  border: 2px solid var(--stop);
+  background: var(--stop-bg);
+}
+
+.no {
+  border: 1.5px dashed var(--muted);
+}
+
+.badge {
+  position: absolute;
+  top: -11px;
+  inset-inline-end: -11px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--ok);
+  color: var(--on-status);
+}
+
+.wait .badge {
+  background: var(--wait-line);
+}
+
+.err .badge {
+  background: var(--stop);
+}
+
+.badge > svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* The note under a stop or a wait, as wide as two boxes' worth of words, starting at its box's left edge. */
+.note {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  inset-inline-start: -2px;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 15rem;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
+  line-height: 1.4;
+}
+
+.note::before {
+  position: absolute;
+  top: -6px;
+  inset-inline-start: var(--space-5);
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  rotate: 45deg;
+  content: '';
+}
+
+.note[data-note='err'] {
+  background: var(--stop-bg);
+  color: var(--stop-text);
+}
+
+.note[data-note='wait'] {
+  background: var(--wait-bg);
+  color: var(--wait-text);
+}
+
+.note > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .box {
+    transition: none;
+  }
+}

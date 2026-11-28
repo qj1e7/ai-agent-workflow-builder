@@ -19,11 +19,12 @@ import { openedFromList } from '../../ui/fromList'
 import { IconChevronLeft, IconPause, IconPlay, IconTrash } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useView, ViewTabs } from '../../ui/ViewTabs'
-import { RunLine } from '../run/RunLine'
 import { SoftwareRoute } from '../software/SoftwarePage'
 import { bannerRepeatsThePage, leadsThePage, StatusBanner, titleRowAction } from './Banner'
 import { useArrivalScroll } from './arrival'
-import { templateLine } from './line'
+import { FlowDiagram } from './FlowDiagram'
+import { flowOf } from './flow'
+import { useFlowRun } from './useFlowRun'
 import { RecentRuns } from './RecentRuns'
 import { backToVersionToast, yesBackToast } from './n8nChange'
 import { StatusPills } from './Status'
@@ -194,6 +195,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   useSweepOnFocus(viewer.operator, id)
 
   const recent = runsOf(runs.data ?? [], id)
+  const flow = flowOf(useCase, useFlowRun(recent[0]), now)
   const paused = useCase.state === 'paused'
   const controls = controlsOf(useCase, viewer)
   const menuActions = menuActionsOf(useCase, viewer)
@@ -372,7 +374,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             ) : null}
             {listed ? null : <NextRun useCase={useCase} now={now} />}
           </div>
-          <RunLine stations={templateLine(useCase)} arrivedLive={null} settled={null} />
+          <FlowDiagram flow={flow} />
           {listed ? <SoftwareRoute now={now} rowId={null} held={held !== null} /> : null}
           <div className={useCase.version >= 2 ? styles['duo'] : undefined}>
             {runs.data ? (

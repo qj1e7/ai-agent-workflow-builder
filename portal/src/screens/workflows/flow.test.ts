@@ -36,6 +36,8 @@ describe('the flow of the latest run', () => {
     expect(at).toBeGreaterThan(0)
     expect(flow.note).toMatchObject({ key: flow.steps[at]?.key, tone: 'err' })
     expect(flow.note?.text.length).toBeGreaterThan(0)
+    const said = flowOf(UC, { ...run(failure), stage: { state: 'failed', count: 0, tickets: true, approvedBy: [], declinedBy: null, whyStopped: 'An agent could not finish its work.', test: false } }, NOW)
+    expect(said.note?.text).toBe('An agent could not finish its work')
     expect(flowKeyOf(flow)).toContain('err')
   })
 

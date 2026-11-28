@@ -25,7 +25,7 @@ describe('the flow diagram with no run', () => {
     expect(html).toMatch(/<h2[^>]*>Steps<\/h2>/)
     expect(html).toContain('aria-label="Steps"')
     expect(html.match(/<li /g)).toHaveLength(4)
-    expect(html).not.toContain('data-state=')
+    expect(html).not.toMatch(/<li [^>]*data-state=/)
     expect(html).not.toMatch(/Not reached|with today/)
     expect(html).not.toContain('visually-hidden')
   })
