@@ -60,7 +60,7 @@ test('alice adds software by its name: Find it, a checked guess with where it ca
   await backend.waitForState(runId, ['succeeded'])
   await page.goto('/software')
   await expect(row).not.toContainText('Added today', { timeout: 30_000 })
-  await expect(row).toContainText('Newest is 1.2.16')
+  await expect(row).toContainText('Newest 1.2.16')
   await expect(row).toContainText('Watching')
   await expect(row).not.toContainText('Up to date')
   await expect(countLine(page), 'with no version to be up to date with, the count line never says up to date').toHaveText('1 watching')

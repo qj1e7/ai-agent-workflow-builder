@@ -3,7 +3,8 @@ import { useDisplayName } from '../../../api/people'
 import type { PastDecisionView, UseCaseView, WatchedSoftwareView, WatchlistView } from '../../../api/types'
 import { OpenLink } from '../../../ui/OpenItem'
 import type { PanelItem } from '../../../ui/sidePanel'
-import { CHECKER, checksOnItsOwn, softwareLine, softwarePath, stateOf, watchRank } from '../../software/software'
+import { SoftwareList } from '../../software/SoftwareList'
+import { CHECKER, checksOnItsOwn, softwarePath } from '../../software/software'
 import { StatusPills } from '../../workflows/Status'
 import { isWatchlist, rowLine, workflowPath } from '../../workflows/workflow'
 import type { NameOf } from '../../run/words'
@@ -49,29 +50,20 @@ export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseC
   )
 }
 
-/** Software rows in the words and order of the Watchlist page's rows: urgent first, the name, "1.2.14 → 1.2.16 · checked by …", and the same pill. */
+/** Software rows drawn by the Watchlist page's own list, so the chat and the page say the same words in the same order. Each opens beside the chat. */
 export function SoftwareRows({ rows, view, label, now }: { rows: readonly WatchedSoftwareView[]; view: Pick<WatchlistView, 'schedule' | 'state'>; label: string; now: Date }): ReactNode {
-  const checkedBy = checksOnItsOwn(view) ? CHECKER : null
-  const sorted = [...rows].sort((a, b) => watchRank(a) - watchRank(b))
   return (
-    <ul className={styles['wl']} aria-label={label}>
-      {sorted.map((row) => {
-        const state = stateOf(row)
-        return (
-          <Row
-            key={row.id}
-            item={{ kind: 'software', id: row.id }}
-            to={softwarePath(row.id)}
-            name={row.name}
-            line={softwareLine(row, now, checkedBy)}
-            state={
-              <Pill tone={state.tone}>{state.words}</Pill>
-            }
-            data={{ 'data-software-id': row.id }}
-          />
-        )
-      })}
-    </ul>
+    <SoftwareList
+      rows={rows}
+      checkedBy={checksOnItsOwn(view) ? CHECKER : null}
+      label={label}
+      now={now}
+      open={(row, className, cells) => (
+        <OpenLink item={{ kind: 'software', id: row.id }} to={softwarePath(row.id)} className={className}>
+          {cells}
+        </OpenLink>
+      )}
+    />
   )
 }
 

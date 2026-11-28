@@ -6,7 +6,6 @@ import { useDisplayName } from '../../api/people'
 import { useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useUseNewAddress, useWatchlist } from '../../api/queries'
 import type { WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { Button } from '../../ui/Button'
-import { IconChevronRight } from '../../ui/icons'
 import { AddSoftware } from './AddSoftware'
 import { FindSoftware } from './FindSoftware'
 import { askButtonId } from './NewAddress'
@@ -29,6 +28,7 @@ import {
 } from './removal'
 import { declinedNext, declinedOfSteps, declinedWithNext } from '../run/words'
 import { BackToWatchlist, SoftwareItem } from './SoftwareItem'
+import { SoftwareList } from './SoftwareList'
 import {
   CHECKER,
   checksOnItsOwn,
@@ -38,14 +38,10 @@ import {
   REFRESH_MS,
   rowsMatching,
   scheduleRuns,
-  softwareLine,
   softwareInWorkflow,
   softwarePath,
-  stateOf,
-  watchRank,
 } from './software'
 import styles from './Software.module.css'
-import { Pill } from '../../ui/Pill'
 
 function useFocusOnceRendered(feedback: ChangeFeedback) {
   const focusedFor = useRef<ChangeFeedback | null>(null)
@@ -58,35 +54,21 @@ function useFocusOnceRendered(feedback: ChangeFeedback) {
   })
 }
 
-interface RowsProps {
-  readonly rows: readonly WatchedSoftwareView[]
-  readonly checkedBy: string | null
-  readonly now: Date
-  readonly pathOf: (id: string) => string
-}
-
-/** One link of 44 px or more for each software: its name, "1.2.14 → 1.2.16 · checked by Software watchlist", and its pill. Urgent first. */
-function Rows({ rows, checkedBy, now, pathOf }: RowsProps) {
-  if (rows.length === 0) return null
-  const sorted = [...rows].sort((a, b) => watchRank(a) - watchRank(b))
+/** The watchlist's rows: each one links to its software's page. */
+function Rows({ rows, checkedBy, now, pathOf }: { readonly rows: readonly WatchedSoftwareView[]; readonly checkedBy: string | null; readonly now: Date; readonly pathOf: (id: string) => string }) {
   return (
-    <ul className={styles['list']} aria-label="Software on the watchlist">
-      {sorted.map((row) => {
-        const state = stateOf(row)
-        return (
-          <li key={row.id} data-status={row.status} data-software-id={row.id}>
-            <Link to={pathOf(row.id)} className={styles['rowLink']}>
-              <span className={styles['who']}>
-                <b>{row.name}</b>
-                <span className={styles['src']}>{softwareLine(row, now, checkedBy)}</span>
-              </span>
-              <Pill tone={state.tone}>{state.words}</Pill>
-              <IconChevronRight size={16} />
-            </Link>
-          </li>
-        )
-      })}
-    </ul>
+    <SoftwareList
+      rows={rows}
+      checkedBy={checkedBy}
+      label="Software on the watchlist"
+      now={now}
+      surface
+      open={(row, className, cells) => (
+        <Link to={pathOf(row.id)} className={className}>
+          {cells}
+        </Link>
+      )}
+    />
   )
 }
 

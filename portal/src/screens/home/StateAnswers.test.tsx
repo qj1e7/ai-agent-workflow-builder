@@ -110,7 +110,7 @@ describe('the behind card (Which software is behind?)', () => {
     const html = draw(behind)
     expect(text(html)).toContain('3 have a newer version')
     expect(html.match(/data-opens="software:/g)).toHaveLength(3)
-    expect(text(html)).toContain('LangGraph 1.2.14 → 1.2.16 · checked by Software watchlist Newer out')
+    expect(text(html)).toContain('LangGraph checked by Software watchlist You run 1.2.14 Newest 1.2.16 Newer out')
     expect(text(html)).not.toContain('n8n')
   })
 

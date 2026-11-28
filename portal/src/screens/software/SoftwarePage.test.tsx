@@ -22,6 +22,7 @@ import { AddSoftwareForm } from './AddSoftware'
 import { addReducer, chooseWords, clearMatch, PICK_ONE, readyToAdd, START, type AddAction, type AddState } from './addByName'
 import { FindSoftware } from './FindSoftware'
 import { MovedNote } from './NewAddress'
+import { SoftwareList } from './SoftwareList'
 import { SoftwareRoute } from './SoftwarePage'
 import { SoftwarePanel } from './SoftwarePanel'
 import { SoftwareHistory } from './SoftwareHistory'
@@ -124,9 +125,65 @@ describe('the Software watchlist page', () => {
     const words = text(html)
     for (const row of (statuses as WatchlistView).software) expect(words).toContain(row.name)
     expect(html.match(/data-software-id="/g)).toHaveLength(6)
-    expect(words).toContain('1.2.14 → 1.2.16 · checked by Software watchlist')
+    expect(words).toContain('checked by Software watchlist')
     expect(words).toContain('Newer out')
     expect(html).toContain(`href="/workflows/${WATCHLIST_ID}?software=${idOf('behind')}"`)
+  })
+
+  const listRows = (html: string) => [...html.matchAll(/<li[^>]*data-software-id="[^"]*"[^>]*>([\s\S]*?)<\/li>/g)].map((match) => match[1] ?? '')
+  const cell = (row: string, col: 'ours' | 'newest') => text(new RegExp(`data-col="${col}"[^>]*><span[^>]*>[^<]*</span>([^<]*)</span>`).exec(row)?.[1] ?? '')
+
+  it('gives each software its own columns: name, the version you run, the newest, and the pill, in that order on every row', () => {
+    const rows = listRows(render(statuses, ALICE))
+    expect(rows).toHaveLength(6)
+    for (const row of rows) {
+      const order = ['class="[^"]*who', 'data-col="ours"', 'data-col="newest"', 'class="[^"]*pill'].map((pattern) => row.search(new RegExp(pattern)))
+      expect(order.every((at) => at >= 0), row).toBe(true)
+      expect([...order].sort((a, b) => a - b)).toEqual(order)
+    }
+    const langgraph = rows.find((row) => row.includes('LangGraph')) ?? ''
+    expect(cell(langgraph, 'ours')).toContain('1.2.14')
+    expect(cell(langgraph, 'newest')).toContain('1.2.16')
+    expect(langgraph).not.toContain('→')
+  })
+
+  it('says what is not known in its column, and never puts the newest where the version you run belongs', () => {
+    const redis = listRows(render(statuses, ALICE)).find((row) => row.includes('Redis')) ?? ''
+    expect(cell(redis, 'ours')).toContain('Not known')
+    expect(cell(redis, 'ours')).not.toContain('8.2.1')
+    expect(cell(redis, 'newest')).toContain('8.2.1')
+  })
+
+  it('names the two columns once above the rows, hidden from a screen reader, and each cell for it', () => {
+    const html = render(statuses, ALICE)
+    expect(html).toMatch(/aria-hidden="true"[^>]*><span[^>]*>You run<\/span><span[^>]*>Newest<\/span>/)
+    expect(listRows(html).every((row) => row.includes('You run') && row.includes('Newest'))).toBe(true)
+  })
+
+  it('keeps a space after each cell label, so the words read "You run 1.2.14" with the styles stripped, as a narrow list shows them', () => {
+    const langgraph = listRows(render(statuses, ALICE)).find((row) => row.includes('LangGraph')) ?? ''
+    const raw = langgraph.replace(/<[^>]*>/g, '')
+    expect(raw).toContain('You run 1.2.14')
+    expect(raw).toContain('Newest 1.2.16')
+    expect(raw).not.toMatch(/(You run|Newest)\d/)
+  })
+
+  it('says when software was added, until a check has read a version for it', () => {
+    const terraform = listRows(render(statuses, ALICE)).find((row) => row.includes('Terraform')) ?? ''
+    expect(terraform).toMatch(/<span[^>]*>Added (today|[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}) · checked by Software watchlist<\/span>/)
+    const langgraph = listRows(render(statuses, ALICE)).find((row) => row.includes('LangGraph')) ?? ''
+    expect(langgraph).not.toContain('Added')
+  })
+
+  it('draws its own surface on the page and none in a card, where the rows start on the card’s edge', () => {
+    expect(render(statuses, ALICE)).toMatch(/class="[^"]*surface/)
+    const inCard = renderToStaticMarkup(<SoftwareList rows={ROW} checkedBy="Software watchlist" label="x" now={NOW} open={(_row, className, cells) => <button type="button" className={className}>{cells}</button>} />)
+    expect(inCard).not.toMatch(/class="[^"]*surface/)
+    expect(inCard).toContain('data-software-id')
+  })
+
+  it('draws no chevron on a row', () => {
+    expect(listRows(render(statuses, ALICE)).some((row) => row.includes('<svg'))).toBe(false)
   })
 
   it('sorts what needs a person first: Can’t find, Can’t check, Newer out, Watching, then Up to date', () => {
@@ -135,7 +192,7 @@ describe('the Software watchlist page', () => {
   })
 
   it('says not checked automatically while no schedule checks the list', () => {
-    expect(text(render({ ...statuses, schedule: null }, ALICE))).toContain('1.2.14 → 1.2.16 · not checked automatically')
+    expect(text(render({ ...statuses, schedule: null }, ALICE))).toContain('not checked automatically')
   })
 
   it('says on the software’s page why a check could not read the source, and that it will try at the next check', () => {
@@ -687,7 +744,7 @@ describe('what checks each row', () => {
 
   it('says not checked automatically on the row, the page and the panel while it is paused or has no schedule', () => {
     for (const view of [{ ...statuses, schedule: null }, { ...statuses, state: 'paused' }]) {
-      expect(text(render(view, ALICE))).toContain('· not checked automatically')
+      expect(text(render(view, ALICE))).toContain('not checked automatically')
       expect(text(renderItem(view, ALICE, idOf('behind')))).toContain('Checked by Not checked automatically')
       expect(text(panel(view, idOf('behind')))).toContain('Checked by Not checked automatically')
     }

@@ -160,8 +160,19 @@ export function softwareLine(row: WatchedSoftwareView, now: Date, checkedBy: str
             : row.newest_version !== null
               ? `Newest is ${row.newest_version}`
               : `Added ${dayOf(row.added_at, now)}`
-  return `${version} · ${checkedBy ? `checked by ${checkedBy}` : NOT_AUTOMATIC.toLowerCase()}`
+  return `${version} · ${checkedByWords(checkedBy)}`
 }
+
+/** "Added today" or "Added Thu 12 Nov", only for software nothing has been read for yet: a first check puts a version on the row. */
+export function addedWords(row: WatchedSoftwareView, now: Date): string | null {
+  return stateOf(row).part === 'watching' && row.newest_version === null ? `Added ${dayOf(row.added_at, now)}` : null
+}
+
+/** A row's small line: when it was added, if nothing is known yet, then what checks it. */
+export const rowNote = (row: WatchedSoftwareView, now: Date, checkedBy: string | null): string => [addedWords(row, now), checkedByWords(checkedBy)].filter(Boolean).join(' · ')
+
+/** What checks a row: "checked by Software watchlist", or "not checked automatically" while nothing checks the list. */
+export const checkedByWords = (checkedBy: string | null): string => (checkedBy ? `checked by ${checkedBy}` : NOT_AUTOMATIC.toLowerCase())
 
 /** The side panel's one sentence on where the software stands. Nothing here is guessed: a version nobody knows is said to be unknown. */
 export function sentenceFor(row: WatchedSoftwareView): string {
