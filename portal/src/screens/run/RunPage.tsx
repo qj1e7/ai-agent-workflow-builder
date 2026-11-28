@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Link, useParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useSession } from '../../api/context'
@@ -7,7 +7,6 @@ import { useNow } from '../../api/ticking'
 import type { RunView, UseCaseView } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
-import { AgentFace, type FaceState } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { Toast, type ToastMessage } from '../../ui/Toast'
@@ -27,6 +26,8 @@ import { Outcome, StopAnswers, StopNext } from './Outcome'
 import { useQuestions } from './questions'
 import { RunDecision } from './RunDecision'
 import { RunStage } from './RunStage'
+import { stoppedAt } from './stage'
+import { TroubleCard } from './TroubleCard'
 import { RunPill } from './RunPill'
 import { RunPlaceContext, type RunPlace } from './place'
 import { isFinished } from './runModel'
@@ -36,7 +37,7 @@ import { historyOpen, WORKING } from './historyOpen'
 import { landingOf, scrollsToDecision } from './landing'
 import { useRunStory } from './useRunStory'
 import { testAgainOf } from './testAgain'
-import { announcementOf, declinedNext, declinedNowWords, feedTroubleOf, logRowsOf, messageRowsOf, RUN_MISSING, RUN_PROBLEM, stageWords, withCurrentNames } from './words'
+import { announcementOf, declinedNext, declinedNowWords, feedTroubleOf, logRowsOf, messageRowsOf, RUN_MISSING, RUN_PROBLEM, stageWords } from './words'
 import styles from './RunPage.module.css'
 
 function notFound(error: unknown): boolean {
@@ -165,16 +166,6 @@ interface RunViewProps {
   readonly detail: { readonly choice: boolean | null; readonly choose: (open: boolean) => void }
 }
 
-/** The troubleshooter's face beside its words, as the sketch's `tr big`. Its mood follows the run, and a fix while one runs. */
-function TroubleshooterBlock({ face, children }: { face: FaceState; children: ReactNode }) {
-  return (
-    <div className={styles['trouble']}>
-      <AgentFace id="troubleshooter" size={34} state={face} />
-      <div className={styles['troubleBody']}>{children}</div>
-    </div>
-  )
-}
-
 function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const { shown, loadedUpTo } = live
   const story = useRunStory(run, live)
@@ -249,9 +240,11 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const troubleFace = troubleFaceOf(facts.state, shown.fix, now)
   const tense = tenseOf(shown.phase.state)
   const requested = story.approvalId !== null && tense !== undefined
+  /** A stop puts the AI troubleshooter's card under the stage, as the sketch does, so the stage keeps the whole width. */
+  const stoppedBelow = failure !== null && stoppedAt(stations) !== null
   const main = failure ? (
     <DecisionArea label="Why it stopped">
-      <TroubleshooterBlock face={troubleFace}>
+      <TroubleCard face={troubleFace} at={stoppedAt(stations)}>
         <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
         <RunPlaceContext.Provider value={place}>
           <div className={styles['stopActions']}>
@@ -259,7 +252,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
           </div>
         </RunPlaceContext.Provider>
         <FixSection {...fixAsk} fix={shown.fix} loadedUpTo={loadedUpTo} />
-      </TroubleshooterBlock>
+      </TroubleCard>
     </DecisionArea>
   ) : requested ? (
     <DecisionArea label="Approval">
@@ -317,8 +310,8 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
           <RunInN8n runId={run.run_id} name={run.use_case_name} seq={shown.seq} ended={modelFinished} />
         </div>
       ) : null}
-      <div className={cx(styles['body'], shownView !== 'n8n' && styles['withStage'])}>
-        {shownView === 'n8n' ? null : <RunStage stations={stations} arrivedLive={arrivedLive} phase={shown.phase.state} stopNote={failure && story.stopped.advice ? withCurrentNames(story.stopped.advice.answers.what_happened) : null} />}
+      <div className={cx(styles['body'], shownView !== 'n8n' && !stoppedBelow && styles['withStage'])}>
+        {shownView === 'n8n' ? null : <RunStage stations={stations} arrivedLive={arrivedLive} phase={shown.phase.state} />}
         <div className={styles['side']}>
           {main}
           <History rows={rows} messages={messages} loadedUpTo={loadedUpTo} open={open} onToggle={detail.choose} listRef={logList} />

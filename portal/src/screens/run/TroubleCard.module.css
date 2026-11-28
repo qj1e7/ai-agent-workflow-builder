@@ -1,0 +1,39 @@
+/* The AI troubleshooter's white card (the sketch's .fix). Its notch points up at the step that stopped, across the full width of the
+   stage above, which has the stage's own padding. */
+.card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  font-size: var(--fs-body);
+}
+
+.notch {
+  position: absolute;
+  top: -8px;
+  left: calc(var(--space-5) + (100% - 2 * var(--space-5)) * var(--at) - 8px);
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--surface);
+  box-shadow: -1px -1px 0 var(--line);
+  rotate: 45deg;
+}
+
+.body {
+  display: grid;
+  flex: 1;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.who {
+  margin: 0;
+  font-weight: var(--fw-semi);
+}

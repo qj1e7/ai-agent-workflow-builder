@@ -99,7 +99,7 @@ describe('the hand-offs that glow', () => {
 
   it('opens a declined run with the work flowing into the gate, as the sketch does', () => {
     const plays = handoffsOf(stageOf(line('done', 'done', 'no'))!, null)
-    expect(plays.map((play) => play.id)).toEqual(['track:1', 'track:2', 'plan:2'])
+    expect(plays.map((play) => play.id)).toEqual(['track:1', 'plan:1', 'track:2', 'plan:2'])
     expect(plays.every((play) => play.delay >= 0)).toBe(true)
   })
 
