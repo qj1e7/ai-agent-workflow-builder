@@ -58,10 +58,10 @@ function Elapsed({ since }: { since: string | null }) {
 function Head({ view, revision, life }: { view: Pick<DraftedWorkflowView, 'state'> & { in_n8n?: DraftedWorkflowView['in_n8n'] }; revision: number; life?: UseCaseState | undefined }) {
   const pill = draftedPill(view.state, view.in_n8n != null, life)
   return (
-    <>
+    <span className={styles['headEnd']}>
       <span className={styles['revision']}>{revisionWords(revision)}</span>
       {pill ? <DraftPill label={pill.label} tone={pill.tone} /> : null}
-    </>
+    </span>
   )
 }
 
@@ -231,7 +231,7 @@ function Foot({ view, life, onProblem }: { view: DraftedWorkflowView; life: UseC
 /** The newest revision tried on practice systems. Try again asks for this revision, so a newer one is never tried by it. */
 function DraftedSimulation({ view, simulation }: { view: DraftedWorkflowView; simulation: SimulationView }) {
   const again = useSimulateAgain(view.drafted_id)
-  return <SimulationResult simulation={simulation} tryAgain={{ pending: again.isPending, press: (outcome) => again.mutate(view.revision, outcome) }} />
+  return <SimulationResult simulation={simulation} fold tryAgain={{ pending: again.isPending, press: (outcome) => again.mutate(view.revision, outcome) }} />
 }
 
 /** A revision that has been read: the step line, In short, what was added, the flags, and where it stands. */

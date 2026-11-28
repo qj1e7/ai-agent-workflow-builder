@@ -37,6 +37,12 @@
   font-weight: var(--fw-semi);
 }
 
+.headEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .revision {
   color: var(--text-2);
   font-size: var(--fs-small);
@@ -151,7 +157,7 @@
 
 .part {
   display: grid;
-  grid-template-columns: 22px minmax(56px, auto) 1fr;
+  grid-template-columns: var(--space-5) minmax(56px, auto) 1fr;
   align-items: start;
   gap: var(--space-1) var(--space-3);
 }
@@ -171,7 +177,7 @@
   color: var(--text-2);
   font-size: var(--fs-small);
   font-weight: var(--fw-bold);
-  line-height: 22px;
+  line-height: var(--space-5);
 }
 
 .value {
