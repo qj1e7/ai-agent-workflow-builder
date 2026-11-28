@@ -27,8 +27,8 @@ export const keys = {
   runs: (user: string) => ['runs', user] as const,
   run: (user: string, runId: string) => ['run', user, runId] as const,
   useCases: (user: string) => ['use-cases', user] as const,
-  /** A tile's last run read as steps. Under the run's own key, and per state, so a run that moves on is read again. */
-  runSteps: (user: string, runId: string, state: string) => ['run', user, runId, 'steps', state] as const,
+  /** A run's events read as steps, for the board, the slim list and the workflow page. Under the run's own key, and per version (a state or the run's last event), so a run that moves on is read again. */
+  runSteps: (user: string, runId: string, version: string | number) => ['run', user, runId, 'steps', version] as const,
   useCase: (user: string, useCaseId: string) => ['use-case', user, useCaseId] as const,
   /** Under the workflow's own key, so whatever reads the workflow again reads this again too. */
   useCaseInN8n: (user: string, useCaseId: string) => ['use-case', user, useCaseId, 'n8n'] as const,
@@ -36,8 +36,6 @@ export const keys = {
   useCaseSimulation: (user: string, useCaseId: string) => ['use-case', user, useCaseId, 'simulation'] as const,
   /** One per event of the run, so each new event reads the blocks' states again. */
   runInN8n: (user: string, runId: string, seq: number) => ['run', user, runId, 'n8n', seq] as const,
-  /** The latest run's events as the workflow page draws them on its steps, one per event of the run. */
-  runFlow: (user: string, runId: string, seq: number) => ['run', user, runId, 'flow', seq] as const,
   versions: (user: string, useCaseId: string, version: number) => ['versions', user, useCaseId, version] as const,
   setUp: (user: string, useCaseId: string) => ['set-up', user, useCaseId] as const,
   made: (user: string, press: string) => ['set-up-made', user, press] as const,
