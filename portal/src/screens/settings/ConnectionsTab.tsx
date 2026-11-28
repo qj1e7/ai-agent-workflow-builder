@@ -3,13 +3,13 @@ import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import type { CapabilityView, ConnectionOut, TellSetupOut } from '../../api/types'
 import { Button } from '../../ui/Button'
-import { AlertMark } from './marks'
+import { Pill, type PillTone } from '../../ui/Pill'
+import { AlertMark, SystemMark } from './marks'
 import { cardsOf, CHECK_DOWN_WORDS, type Health, checkResultWords, connectionWords, GITHUB_KEY_NOTE, keyWords, TEAMS_DOES_WORDS, TELL_CHANGED_BY_WORDS, tellWords, usedBy } from './connections'
 import { ONLY_OPERATORS_WORDS } from './settings'
 import styles from './Settings.module.css'
-import { Pill } from '../../ui/Pill'
 
-function CheckNow({ connection, describedBy }: { connection: ConnectionOut; describedBy: string }) {
+function CheckNow({ connection, describedBy }: { connection: ConnectionOut; describedBy: string | undefined }) {
   const check = useCheckConnection(connection.id)
   const latch = useLatch()
   const words = useErrorWords()
@@ -17,7 +17,7 @@ function CheckNow({ connection, describedBy }: { connection: ConnectionOut; desc
   return (
     <>
       <div className={styles['buttons']}>
-        <Button variant={connection.state === 'working' ? 'secondary' : 'primary'} loading={check.isPending} onClick={press} aria-describedby={describedBy}>
+        <Button small loading={check.isPending} onClick={press} aria-describedby={describedBy}>
           Check now
           <span className="visually-hidden"> for {connection.name}</span>
         </Button>
@@ -50,40 +50,62 @@ function ConnectionCard({ connection, capabilities, canCheck, now }: CardProps) 
   const used = capabilities ? usedBy(connection.id, capabilities) : null
   const key = keyWords(connection)
   const textId = `connection-${connection.id}-says`
+  // A connection that works says so in its pill. Its sentence is only for one that has something to say.
+  const sentence = connection.state === 'working' ? null : says.text
   return (
     <article className={styles['connection']} data-connection={connection.id} data-state={connection.state}>
       <div className={styles['connectionTop']}>
-        <h3>{connection.name}</h3>
-        {connection.practice ? <span className={styles['tag']}>Practice copy</span> : null}
-        <Pill tone={says.health === 'warn' ? 'wait' : says.health}>{says.label}</Pill>
+        <span className={styles['sys']} aria-hidden="true">
+          <SystemMark id={connection.id} />
+        </span>
+        <div className={styles['connectionName']}>
+          <h3>{connection.name}</h3>
+          {says.checked ? <p className={styles['when']}>{says.checked}</p> : null}
+        </div>
+        <span className={styles['tags']}>
+          {connection.practice ? <span className={styles['tag']}>Practice copy</span> : null}
+          <Pill tone={DOT[says.health]}>{says.label}</Pill>
+        </span>
       </div>
-      <p id={textId}>
-        {says.text}
-        {says.checked ? <span className={styles['small']}> {says.checked}.</span> : null}
-      </p>
-      {says.note ? (
-        <p className={styles['small']}>
-          <AlertMark /> {says.note}
-        </p>
-      ) : null}
+      {sentence ? <p id={textId}>{sentence}</p> : null}
       {connection.id === 'github' && says.checked ? <p className={styles['small']}>{GITHUB_KEY_NOTE}</p> : null}
       <dl className={styles['facts']}>
         {connection.id === 'teams' ? (
-          <>
+          <div>
             <dt>What it does</dt>
             <dd>{TEAMS_DOES_WORDS}</dd>
-          </>
+          </div>
         ) : null}
-        <dt>What uses it</dt>
-        <dd>{used === null ? 'Not available right now' : used.length > 0 ? used.join('; ') : 'Nothing yet'}</dd>
+        <div>
+          <dt>What uses it</dt>
+          <dd>
+            {used === null ? (
+              'Not available right now'
+            ) : used.length > 0 ? (
+              <ul>
+                {used.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            ) : (
+              'Nothing yet'
+            )}
+          </dd>
+        </div>
         {key ? (
-          <>
+          <div>
             <dt>Key</dt>
             <dd>{key}</dd>
-          </>
+          </div>
         ) : null}
       </dl>
-      {canCheck && connection.state !== 'not_set_up' ? <CheckNow connection={connection} describedBy={textId} /> : null}
+      {says.note ? (
+        <p className={styles['callout']}>
+          <AlertMark />
+          <span>{says.note}</span>
+        </p>
+      ) : null}
+      {canCheck && connection.state !== 'not_set_up' ? <CheckNow connection={connection} describedBy={sentence ? textId : undefined} /> : null}
     </article>
   )
 }
@@ -93,23 +115,36 @@ function TellCard({ tell }: { tell: TellSetupOut }) {
   return (
     <article className={styles['connection']} data-connection="tell">
       <div className={styles['connectionTop']}>
-        <h3>Tell flow</h3>
-        <Pill tone="off">{says.label}</Pill>
+        <span className={styles['sys']} aria-hidden="true">
+          <SystemMark id="tell" />
+        </span>
+        <div className={styles['connectionName']}>
+          <h3>Tell flow</h3>
+        </div>
+        <span className={styles['tags']}>
+          <Pill tone="off">{says.label}</Pill>
+        </span>
       </div>
       <p>{says.text}</p>
       <dl className={styles['facts']}>
-        <dt>Posts in</dt>
-        <dd>{tell.channel}</dd>
-        <dt>Emails</dt>
-        <dd>{says.emails}</dd>
-        <dt>Who changes these</dt>
-        <dd>{TELL_CHANGED_BY_WORDS}</dd>
+        <div>
+          <dt>Posts in</dt>
+          <dd>{tell.channel}</dd>
+        </div>
+        <div>
+          <dt>Emails</dt>
+          <dd>{says.emails}</dd>
+        </div>
+        <div>
+          <dt>Who changes these</dt>
+          <dd>{TELL_CHANGED_BY_WORDS}</dd>
+        </div>
       </dl>
     </article>
   )
 }
 
-const DOT: Record<Health, string> = { ok: 'ok', warn: 'wait', off: 'off' }
+const DOT: Record<Health, PillTone> = { ok: 'ok', warn: 'wait', off: 'off' }
 
 /** One finding first: how many of the connections work, with a dot for each. Count, dots and card pills all come from connectionWords. */
 function Summary({ connections, now }: { connections: readonly ConnectionOut[]; now: Date }) {
@@ -158,7 +193,7 @@ export function ConnectionsTab({ now }: { now: Date }) {
   }
   const { you_can_check: canCheck } = connections.data
   return (
-    <section className={styles['panel']} aria-labelledby="connections-heading">
+    <section className={`${styles['panel']} ${styles['connectionsPanel']}`} aria-labelledby="connections-heading">
       <h2 id="connections-heading" className="visually-hidden">
         Connections
       </h2>
@@ -167,8 +202,6 @@ export function ConnectionsTab({ now }: { now: Date }) {
         {cardsOf(connections.data.connections).map((connection) => (
           <ConnectionCard key={connection.id} connection={connection} capabilities={capabilities.data?.capabilities} canCheck={canCheck} now={now} />
         ))}
-      </div>
-      <div className={styles['connections']}>
         <TellCard tell={connections.data.tell} />
       </div>
       {canCheck ? null : <p className={styles['note']}>{ONLY_OPERATORS_WORDS}</p>}

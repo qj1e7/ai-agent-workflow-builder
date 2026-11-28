@@ -100,3 +100,28 @@
   font-size: var(--fs-small);
   font-weight: var(--fw-bold);
 }
+
+/* A connection beside the chat, as the sketch's key view: the kind and the pill on one line, the sentence, then the button, with no rule above it. */
+.connStack {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.connHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+}
+
+.connHead .kind {
+  font-weight: var(--fw-semi);
+}
+
+.connActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
