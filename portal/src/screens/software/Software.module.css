@@ -81,7 +81,6 @@
   display: grid;
   gap: 6px;
   max-width: 420px;
-  margin-top: var(--space-5);
 }
 
 .find label,
@@ -124,6 +123,8 @@
 }
 
 .section {
+  display: grid;
+  gap: var(--space-5);
   margin-top: var(--space-5);
 }
 
@@ -143,18 +144,27 @@
 /* The sketch's list: one surface on a shadow, rows divided by a hairline, four columns that every row shares. */
 .table {
   container-type: inline-size;
+  --cols: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) 8rem;
+}
+
+/* On the page the list is its own surface. Inside a card the rows draw flush, on the card's own edge. */
+.surface {
   border-radius: var(--r-card);
   background: var(--surface);
   box-shadow: var(--shadow-2);
   overflow: hidden;
-  --cols: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) 8rem;
+}
+
+.surface .cols,
+.surface .rowLink {
+  padding-inline: var(--space-5);
 }
 
 .cols {
   display: grid;
   grid-template-columns: var(--cols);
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-5) var(--space-2);
+  padding: var(--space-3) 0 var(--space-2);
   color: var(--muted);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);
@@ -179,7 +189,7 @@
   gap: var(--space-4);
   align-items: center;
   min-height: 56px;
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-3) 0;
   width: 100%;
   border: 0;
   background: none;
@@ -222,13 +232,13 @@
   }
 }
 
-@container (max-width: 34rem) {
+@container (max-width: 40rem) {
   .cols {
     display: none;
   }
 
   .rowLink {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: var(--space-1) var(--space-4);
   }
 
@@ -244,7 +254,7 @@
   }
 
   .ver {
-    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .cellLabel {
@@ -412,7 +422,6 @@ a.src {
   display: grid;
   justify-items: start;
   gap: 4px;
-  margin-top: var(--space-5);
   padding: var(--space-4);
   border: 1px dashed var(--edge);
   border-radius: var(--r-card);
@@ -426,7 +435,6 @@ a.src {
 .addForm {
   display: grid;
   gap: var(--space-3);
-  margin-top: var(--space-6);
   padding: var(--space-4);
   border: 1px solid var(--hair);
   border-radius: var(--r-card);

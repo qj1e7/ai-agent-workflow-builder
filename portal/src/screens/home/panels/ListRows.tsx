@@ -51,12 +51,13 @@ export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseC
 }
 
 /** Software rows drawn by the Watchlist page's own list, so the chat and the page say the same words in the same order. Each opens beside the chat. */
-export function SoftwareRows({ rows, view, label }: { rows: readonly WatchedSoftwareView[]; view: Pick<WatchlistView, 'schedule' | 'state'>; label: string; now: Date }): ReactNode {
+export function SoftwareRows({ rows, view, label, now }: { rows: readonly WatchedSoftwareView[]; view: Pick<WatchlistView, 'schedule' | 'state'>; label: string; now: Date }): ReactNode {
   return (
     <SoftwareList
       rows={rows}
       checkedBy={checksOnItsOwn(view) ? CHECKER : null}
       label={label}
+      now={now}
       open={(row, className, cells) => (
         <OpenLink item={{ kind: 'software', id: row.id }} to={softwarePath(row.id)} className={className}>
           {cells}

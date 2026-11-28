@@ -55,12 +55,14 @@ function useFocusOnceRendered(feedback: ChangeFeedback) {
 }
 
 /** The watchlist's rows: each one links to its software's page. */
-function Rows({ rows, checkedBy, pathOf }: { readonly rows: readonly WatchedSoftwareView[]; readonly checkedBy: string | null; readonly pathOf: (id: string) => string }) {
+function Rows({ rows, checkedBy, now, pathOf }: { readonly rows: readonly WatchedSoftwareView[]; readonly checkedBy: string | null; readonly now: Date; readonly pathOf: (id: string) => string }) {
   return (
     <SoftwareList
       rows={rows}
       checkedBy={checkedBy}
       label="Software on the watchlist"
+      now={now}
+      surface
       open={(row, className, cells) => (
         <Link to={pathOf(row.id)} className={className}>
           {cells}
@@ -129,11 +131,12 @@ interface LoadedProps {
   readonly operator: boolean
   /** Someone has the watchlist open in n8n, so the platform would refuse a schedule change. The page says who, once. */
   readonly held: boolean
+  readonly now: Date
   /** Set on a software's own page. The Watchlist itself has none. */
   readonly rowId: string | null
 }
 
-function Loaded({ view, operator, held, rowId }: LoadedProps) {
+function Loaded({ view, operator, held, now, rowId }: LoadedProps) {
   const [query, setQuery] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -264,7 +267,7 @@ function Loaded({ view, operator, held, rowId }: LoadedProps) {
             </div>
           </div>
         ) : null}
-        <Rows rows={rows} checkedBy={checkedBy} pathOf={pathOf} />
+        <Rows rows={rows} checkedBy={checkedBy} now={now} pathOf={pathOf} />
         {operator ? (
           <AddSoftware software={software} onShowRow={(id) => void navigate(pathOf(id))} onAdded={(name) => dispatch({ type: 'added', name })} />
         ) : null}
@@ -285,7 +288,7 @@ interface RouteProps {
 }
 
 /** The watchlist's list, its add form and its schedule. The workflow page around it holds the name, status, Run now, Pause and Resume. */
-export function SoftwareRoute({ rowId, held = false }: RouteProps) {
+export function SoftwareRoute({ now, rowId, held = false }: RouteProps) {
   const me = useMe()
   const watchlist = useWatchlist({ poll: REFRESH_MS })
   const { softwareId: fromAddress = null } = useParams()
@@ -306,5 +309,5 @@ export function SoftwareRoute({ rowId, held = false }: RouteProps) {
       </p>
     )
   }
-  return <Loaded view={watchlist.data} operator={operator} held={held} rowId={softwareId} />
+  return <Loaded view={watchlist.data} operator={operator} held={held} now={now} rowId={softwareId} />
 }

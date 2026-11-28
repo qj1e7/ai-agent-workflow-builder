@@ -22,6 +22,7 @@ import { AddSoftwareForm } from './AddSoftware'
 import { addReducer, chooseWords, clearMatch, PICK_ONE, readyToAdd, START, type AddAction, type AddState } from './addByName'
 import { FindSoftware } from './FindSoftware'
 import { MovedNote } from './NewAddress'
+import { SoftwareList } from './SoftwareList'
 import { SoftwareRoute } from './SoftwarePage'
 import { SoftwarePanel } from './SoftwarePanel'
 import { SoftwareHistory } from './SoftwareHistory'
@@ -157,6 +158,28 @@ describe('the Software watchlist page', () => {
     const html = render(statuses, ALICE)
     expect(html).toMatch(/aria-hidden="true"[^>]*><span[^>]*>You run<\/span><span[^>]*>Newest<\/span>/)
     expect(listRows(html).every((row) => row.includes('You run') && row.includes('Newest'))).toBe(true)
+  })
+
+  it('keeps a space after each cell label, so the words read "You run 1.2.14" with the styles stripped, as a narrow list shows them', () => {
+    const langgraph = listRows(render(statuses, ALICE)).find((row) => row.includes('LangGraph')) ?? ''
+    const raw = langgraph.replace(/<[^>]*>/g, '')
+    expect(raw).toContain('You run 1.2.14')
+    expect(raw).toContain('Newest 1.2.16')
+    expect(raw).not.toMatch(/(You run|Newest)\d/)
+  })
+
+  it('says when software was added, until a check has read a version for it', () => {
+    const terraform = listRows(render(statuses, ALICE)).find((row) => row.includes('Terraform')) ?? ''
+    expect(terraform).toMatch(/<span[^>]*>Added (today|[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}) · checked by Software watchlist<\/span>/)
+    const langgraph = listRows(render(statuses, ALICE)).find((row) => row.includes('LangGraph')) ?? ''
+    expect(langgraph).not.toContain('Added')
+  })
+
+  it('draws its own surface on the page and none in a card, where the rows start on the card’s edge', () => {
+    expect(render(statuses, ALICE)).toMatch(/class="[^"]*surface/)
+    const inCard = renderToStaticMarkup(<SoftwareList rows={ROW} checkedBy="Software watchlist" label="x" now={NOW} open={(_row, className, cells) => <a className={className}>{cells}</a>} />)
+    expect(inCard).not.toMatch(/class="[^"]*surface/)
+    expect(inCard).toContain('data-software-id')
   })
 
   it('draws no chevron on a row', () => {
