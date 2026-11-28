@@ -42,9 +42,9 @@ describe('a run read as steps, for the board, the slim list and the workflow pag
     expect(keys.runSteps('alice', 'run_1', 7)).not.toEqual(keys.runSteps('alice', 'run_2', 7))
   })
 
-  it('does not read a failed read again, so a line is never drawn from a guess', () => {
+  it('takes the app’s own retry, as the workflow page did, so one failed read does not leave a finished run without states', () => {
     const { client } = setup()
-    expect(runStepsOptions(client, 'alice', { runId: 'run_1', version: 1 }).retry).toBe(false)
+    expect(runStepsOptions(client, 'alice', { runId: 'run_1', version: 1 }).retry).toBeUndefined()
   })
 
   it('keeps the states on the page while the same run moves on and is read again, but never another run\'s', async () => {

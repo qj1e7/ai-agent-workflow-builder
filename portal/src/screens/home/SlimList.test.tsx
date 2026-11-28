@@ -3,47 +3,37 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import watchlist from '../../../../contracts/fixtures/builder/use-case.json'
 import type { UseCaseView } from '../../api/types'
-import type { StepDraw } from '../../ui/StepLine'
 import { boardOf } from './boardTiles'
 import { SlimList } from './SlimList'
 
 const NOW = new Date('2026-11-27T01:00:00Z')
 const base = watchlist as unknown as UseCaseView
 const made = (id: string, over: Partial<UseCaseView> = {}): UseCaseView => ({ ...base, use_case_id: id, name: `Workflow ${id}`, last_run: null, needs_you: null, next_run_at: '2026-11-30T01:00:00Z', ...over })
-const STEPS: StepDraw[] = [
-  { key: 'a', name: 'Read versions', icon: 'read', state: 'done' },
-  { key: 'b', name: 'Ask for approval', icon: 'gate', state: 'wait' },
-]
-
-const draw = (useCases: UseCaseView[], over: { needs?: number; operator?: boolean; steps?: Map<string, readonly StepDraw[]> } = {}) =>
+const draw = (useCases: UseCaseView[], over: { needs?: number; operator?: boolean } = {}) =>
   renderToStaticMarkup(
     <MemoryRouter>
-      <SlimList board={boardOf(useCases, NOW)} steps={over.steps ?? new Map()} needs={over.needs ?? 0} operator={over.operator ?? true} />
+      <SlimList board={boardOf(useCases, NOW)} needs={over.needs ?? 0} operator={over.operator ?? true} />
     </MemoryRouter>,
   )
 
 describe('the slim list beside the chat', () => {
-  it('is one list named like the board, with a row per workflow: its name and its one pill', () => {
+  it('is one landmark for the glance, with a list named like the board and a row per workflow: a state mark and its name', () => {
     const html = draw([made('a'), made('b', { state: 'paused' })])
-    expect(html).toContain('aria-label="Your workflows"')
+    expect(html).toContain('aria-label="Needs you and your workflows"')
+    expect(html).toMatch(/<ul[^>]*aria-label="Your workflows"/)
     expect(html.match(/<li/g)).toHaveLength(2)
-    expect(html.match(/data-tone="/g)).toHaveLength(2)
     expect(html).toContain('Workflow a')
   })
 
-  it('is named Workflows for someone who only approves', () => {
-    expect(draw([made('a')], { operator: false })).toContain('aria-label="Workflows"')
+  it('names the list Workflows for someone who only approves', () => {
+    expect(draw([made('a')], { operator: false })).toMatch(/<ul[^>]*aria-label="Workflows"/)
   })
 
-  it('draws the small step line for a run that could be read, and no line for one that could not', () => {
-    const html = draw([made('a'), made('b')], { steps: new Map([['a', STEPS]]) })
-    expect(html.match(/role="img"/g)).toHaveLength(1)
-    expect(html).toContain('aria-label="Last run: Done: Read versions, Waiting for approval: Ask for approval"')
-  })
-
-  it('says nothing about next runs or last runs: the board has those', () => {
-    const html = draw([made('a', { state: 'on' })])
-    expect(html).not.toMatch(/Next run|Last run|No runs yet/)
+  it('says each state with a mark that is one picture with the pill’s words, and no pill, no step line and no words of its own', () => {
+    const html = draw([made('a', { needs_you: 'stopped' }), made('b', { state: 'paused' }), made('c', { state: 'draft' }), made('d', { state: 'on' })])
+    expect([...html.matchAll(/role="img"[^>]*aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(['Needs you', 'Paused', 'Draft', 'On'])
+    expect(html).not.toContain('data-tone=')
+    expect(html).not.toMatch(/Last run|Next run|No runs yet/)
   })
 
   it('shows the Needs you count first, as a link that opens Needs you when something needs the person', () => {
