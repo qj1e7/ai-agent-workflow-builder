@@ -28,6 +28,8 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  /* The target is 44 px high but takes no more room than the heading's line, so the heading sits as far above its list as Needs you's does. */
+  margin-block: calc((var(--fs-head) * 1.3 - 44px) / 2);
   color: var(--ink);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);
