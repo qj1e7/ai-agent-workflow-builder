@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StepState } from '../../ui/StepLine'
 import type { Station } from './runModel'
-import { geometryOf, handoffsOf, MAX_STAGE_STEPS, plannerFaceOf, stageOf } from './stage'
+import { geometryOf, handoffsOf, MAX_STAGE_STEPS, plannerFaceOf, stageOf, stoppedAt } from './stage'
 
 const agent = { id: 'version_checker', display: 'Version checker' }
 
@@ -97,6 +97,12 @@ describe('the hand-offs that glow', () => {
     expect(plays.map((play) => play.id)).toEqual(['track:1', 'plan:1'])
   })
 
+  it('opens a declined run with the work flowing into the gate, as the sketch does', () => {
+    const plays = handoffsOf(stageOf(line('done', 'done', 'no'))!, null)
+    expect(plays.map((play) => play.id)).toEqual(['track:1', 'track:2', 'plan:2'])
+    expect(plays.every((play) => play.delay >= 0)).toBe(true)
+  })
+
   it('after that, glows into each step that changed, so a retry flows into the step again', () => {
     const plays = handoffsOf(stageOf(line('done', 'done', 'wait'))!, statesOf(line('done', 'now', 'todo')))
     expect(plays.map((play) => play.id)).toEqual(['track:1', 'plan:1', 'track:2', 'plan:2'])
@@ -108,6 +114,21 @@ describe('the hand-offs that glow', () => {
     const same = line('done', 'now')
     expect(handoffsOf(stageOf(same)!, statesOf(same))).toEqual([])
     expect(handoffsOf(stageOf(line('done', 'err'))!, statesOf(line('done', 'now')))).toEqual([])
+    expect(handoffsOf(stageOf(line('done', 'done', 'no'))!, statesOf(line('done', 'done', 'wait')))).toEqual([])
+  })
+})
+
+describe('where the stop is', () => {
+  it("is the middle of the stopped step's column, as a share of the stage's width, for the card that points at it", () => {
+    expect(stoppedAt(line('done', 'err', 'todo', 'todo'))).toBeCloseTo(0.375, 5)
+    expect(stoppedAt(line('err', 'todo', 'todo', 'todo'))).toBeCloseTo(0.125, 5)
+  })
+
+  it('is nothing when no step stopped, or when the stage is not drawn', () => {
+    expect(stoppedAt(line('done', 'done', 'no', 'skip'))).toBeNull()
+    expect(stoppedAt(line('done', 'now'))).toBeNull()
+    const long = Array.from({ length: MAX_STAGE_STEPS + 1 }, (_, i) => station(`s${i}`, i === 2 ? 'err' : 'done', 'agent', agent))
+    expect(stoppedAt(long)).toBeNull()
   })
 })
 
