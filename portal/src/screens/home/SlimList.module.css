@@ -49,11 +49,11 @@ a.needs:active {
 .alert {
   min-width: 24px;
   height: 24px;
-  padding: 0 7px;
-  border-radius: 12px;
+  padding-inline: var(--space-2);
+  border-radius: var(--space-3);
   background: var(--sunk);
   color: var(--ink);
-  font-size: var(--fs-tiny);
+  font-size: var(--fs-small);
   font-weight: var(--fw-semi);
   line-height: 24px;
   text-align: center;
@@ -69,7 +69,7 @@ a.needs:active {
 .rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -77,9 +77,8 @@ a.needs:active {
 
 .row {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-3);
   width: 100%;
   padding: var(--space-3) var(--space-4);
   border: 0;
@@ -100,17 +99,8 @@ a.needs:active {
   scale: 0.99;
 }
 
-/* A long name wraps inside its own box, and the pill drops below it rather than wrap inside itself. */
-.top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  width: 100%;
-}
-
+/* A long name wraps inside its own box. */
 .name {
-  flex: 1 1 8rem;
   min-width: 0;
   font-weight: var(--fw-semi);
   line-height: 1.3;

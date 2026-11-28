@@ -13,20 +13,21 @@ export interface RunRead {
 
 /**
  * How a run is read as steps: its events from the endpoint the run page reads, in one request, under one key. The states of the same
- * run stay on the page while a new version is read, and another run's never do. A read that failed is not tried again, so nothing is drawn from a guess.
+ * run stay on the page while a new version is read, and another run's never do. The app's own retry applies.
  */
 export function runStepsOptions(client: ApiClient, user: string, { runId, version }: RunRead) {
   return queryOptions({
     queryKey: keys.runSteps(user, runId, version),
     queryFn: async (): Promise<readonly unknown[]> => (await fetchEventPage(client, runId)).events,
     staleTime: STALE_MS,
-    retry: false,
     placeholderData: (before: readonly unknown[] | undefined, query) => (query?.queryKey[2] === runId ? before : undefined),
   })
 }
 
 /**
- * The events of each run asked for, by run id, read through the query client so a run another screen already read costs nothing. A run that
+ * The events of each run asked for, for a caller that reads many runs at once (the board). A caller that follows one run as it moves on
+ * reads it with `useQuery(runStepsOptions(...))`, since only a single observer keeps a run's last data while its next version is read.
+ * Here: the events of each run asked for, by run id, read through the query client so a run another screen already read costs nothing. A run that
  * could not be read, or is not read yet, has no entry. The caller bounds the list: the board reads one run per tile it draws.
  */
 export function useRunSteps(reads: readonly RunRead[]): ReadonlyMap<string, readonly unknown[]> {

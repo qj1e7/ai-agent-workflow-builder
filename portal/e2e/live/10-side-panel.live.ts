@@ -194,6 +194,8 @@ test('a stopped run: SHELL-more, RUN-retry-from-chat and RUN-retry-panel, at 128
   await expect(heading(page), 'focus is on the panel’s heading').toBeFocused()
   expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
   assertClean(watch)
+  // Both retried runs settle before the next test starts, so a retry that is still running cannot leave Needs you under it.
+  for (const run of [first, second]) await backend.waitForState(run, ['succeeded', 'awaiting_approval'], 60_000).catch(() => undefined)
   await context.close()
 })
 
@@ -454,7 +456,7 @@ async function showMoreByKeyboard(page: Page, total: number): Promise<void> {
 }
 
 for (const width of [1440, 390]) {
-  test(`PANEL-needs at ${String(width)} px: N more opens Needs you beside the chat, a row opens beside it with Back, More details is the full page, and Escape puts focus on N more`, async ({ browser, backend }, info) => {
+  test(`PANEL-needs at ${String(width)} px: its way to Needs you (the slim list’s count, or the strip’s N more) opens it beside the chat, a row opens beside it with Back, More details is the full page, and Escape puts focus back on it`, async ({ browser, backend }, info) => {
     const tag = randomUUID().slice(0, 6)
     const [stop] = await stoppedRuns(backend, [`Needs panel ${tag}`])
     if (!stop) throw new Error('a stopped run')
@@ -467,10 +469,12 @@ for (const width of [1440, 390]) {
     await ask(page, 'What can you do?')
     const total = await platformNeeds(backend, 'alice')
     expect(total).toBeGreaterThan(1)
-    // From 1080 px the slim list's Needs you count opens the panel. Narrower, the strip's N more does.
-    const more = width >= 1080 ? page.getByRole('complementary').getByRole('button', { name: `Needs you ${String(total)}`, exact: true }) : strip(page).getByRole('button', { name: `${String(total - 1)} more that need you` })
-    await expect(more, 'the way to Needs you beside the chat is a button that opens the panel').toBeVisible()
-
+    // From 1080 px the slim list's Needs you count opens the panel. Narrower, the strip's N more does. The count is read from the platform each time.
+    const opener = (now: number) => (width >= 1080 ? page.getByRole('complementary', { name: 'Needs you and your workflows' }).getByRole('button', { name: `Needs you ${String(now)}`, exact: true }) : strip(page).getByRole('button', { name: `${String(now - 1)} more that need you` }))
+    await expect(async () => {
+      await expect(opener(await platformNeeds(backend, 'alice')), 'the way to Needs you beside the chat is a button that opens the panel').toBeVisible({ timeout: 2_000 })
+    }).toPass({ timeout: 20_000 })
+    const more = opener(await platformNeeds(backend, 'alice'))
     await more.click()
     await expect(heading(page)).toHaveText('Needs you')
     await expect(heading(page), 'focus goes to the panel’s heading').toBeFocused()
@@ -505,9 +509,9 @@ for (const width of [1440, 390]) {
       await page.keyboard.press('Escape')
       await expect(panel(page)).toHaveCount(0, { timeout: 1_000 })
     }, 'Escape closes the panel').toPass({ timeout: 10_000 })
-    // The count may have moved on while the person was on the run's page, so the slim list's button is found by its words and any number.
-    const opener = width >= 1080 ? page.getByRole('complementary').getByRole('button', { name: /^Needs you \d+$/ }) : more
-    await expect(opener, 'Escape puts focus back on what opened the panel').toBeFocused()
+    await expect(async () => {
+      await expect(opener(await platformNeeds(backend, 'alice')), 'Escape puts focus back on what opened the panel').toBeFocused({ timeout: 2_000 })
+    }).toPass({ timeout: 20_000 })
     expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
     assertClean(watch)
     await repair()

@@ -119,7 +119,7 @@ for (const user of USERS) {
 }
 
 for (const width of WIDTHS) {
-  test(`the chat with the docked box and the pinned line fits, and the box stays on screen, as an Operator at ${String(width)} px`, async ({ browser, backend }) => {
+  test(`the chat with the docked box and its glance (the pinned line, or from 1080 px the slim list) fits, and the box stays on screen, as an Operator at ${String(width)} px`, async ({ browser, backend }) => {
     const answering = (on: boolean) => backend.post('alice', '/api/v1/dev/practice-jira/answering', { answering: on })
     await answering(false)
     await backend.post('alice', '/api/v1/settings/connections/jira/check')
@@ -133,7 +133,7 @@ for (const width of WIDTHS) {
       await box.fill('Check my workflows')
       await box.press('Enter')
       // From 1080 px the slim list is the glance beside the chat, and the pinned line is dropped. Narrower, the line is.
-      if (width >= 1080) await expect(page.getByRole('complementary', { name: 'Your workflows' })).toBeVisible()
+      if (width >= 1080) await expect(page.getByRole('complementary', { name: 'Needs you and your workflows' })).toBeVisible()
       else await expect(page.getByRole('region', { name: 'Needs you', exact: true })).toBeVisible()
       await expect(page.getByRole('list', { name: 'Your workflows' }).first()).toBeVisible()
       await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)

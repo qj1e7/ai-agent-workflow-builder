@@ -1,0 +1,31 @@
+/* The state mark, as the sketch's `.dstate`: the pill's picture in the state's own colour, drawn as a mask. */
+.mark {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+  display: block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: var(--off);
+  mask: var(--pi) center / contain no-repeat;
+}
+
+.mark[data-look='on'],
+.mark[data-look='ok'] {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='5'/%3E%3C/svg%3E");
+  background: var(--ok);
+}
+
+.mark[data-look='run'] {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='5'/%3E%3C/svg%3E");
+  background: var(--run);
+}
+
+.mark[data-look='wait'] {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4.8' fill='none' stroke='black' stroke-width='1.8'/%3E%3Cpath d='M6 3.4v2.8l1.8 1.1' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+  background: var(--wait-line);
+}
+
+.mark[data-look='err'] {
+  --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  background: var(--stop);
+}
