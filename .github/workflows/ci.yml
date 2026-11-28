@@ -415,25 +415,27 @@ jobs:
           HEAD: ${{ steps.range.outputs.head }}
         run: scripts/gitleaks-commits.sh "$BASE" "$HEAD"
 
+  # The end to end checks run as three jobs side by side, each on its own runner and stack: the API tests
+  # with the old-engine move and the load test, the browser suite in four parts, and DAST. In run
+  # 45977915310 they took 70 minutes one after the other in a single job.
+  # Merges tell a full run by the old-engine step of the job named e2e, so keep that step in this job.
   e2e:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (inputs.live_grep == '' || inputs.api_k != '')
     concurrency:
       group: ci-e2e-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
-    # The browser suite alone took 27 minutes on 13 Nov 2026, then ZAP and k6 need about 8 more,
-    # and the move from an old-engine database about 8.
-    timeout-minutes: 75
+    # In run 45977915310 the stack took 4 minutes to build and start, the API tests 7, the move 2 and k6 2.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
 
-      - name: Run the API tests, then the browser suite, against the whole stack
+      - name: Run the API tests against the whole stack
         env:
-          LIVE_GREP: ${{ inputs.live_grep }}
           API_K: ${{ inputs.api_k }}
-          E2E_SUITES: ${{ inputs.api_k != '' && inputs.live_grep != '' && 'api ui' || inputs.api_k != '' && 'api' || inputs.live_grep != '' && 'ui' || '' }}
+          E2E_SUITES: api
         run: scripts/e2e.sh
 
       - name: Keep the stack and test logs
@@ -442,14 +444,6 @@ jobs:
         with:
           name: e2e-logs
           path: e2e/out/
-          if-no-files-found: ignore
-
-      - name: Keep the browser screenshots and video
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: portal-live-evidence
-          path: portal/e2e/out/live/
           if-no-files-found: ignore
 
       # A run that picks tests runs the move only when api_k names it, as in -f api_k=old_engine.
@@ -467,19 +461,7 @@ jobs:
           path: e2e/out/
           if-no-files-found: ignore
 
-      # DAST and the load test share this job and its Docker layer cache. A failed e2e run does not hide them.
-      - name: DAST with OWASP ZAP against the whole stack
-        if: ${{ !cancelled() && inputs.live_grep == '' && inputs.api_k == '' }}
-        run: scripts/dast.sh
-
-      - name: Keep the ZAP reports
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: zap-reports
-          path: dast/out/
-          if-no-files-found: ignore
-
+      # The load test reuses the images the API tests built. A failed API run does not hide it.
       - name: Load test with k6 against the whole stack
         if: ${{ !cancelled() && inputs.live_grep == '' && inputs.api_k == '' }}
         run: scripts/load.sh
@@ -490,4 +472,71 @@ jobs:
         with:
           name: k6-summary
           path: load/out/
+          if-no-files-found: ignore
+
+  # Each part of the browser suite starts on a fresh stack (LIVE_PART in scripts/e2e.sh). A run with
+  # live_grep runs the specs it names on one runner, so a pattern that matches nothing still fails.
+  e2e-browser:
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (inputs.api_k == '' || inputs.live_grep != '')
+    concurrency:
+      group: ci-e2e-browser-${{ matrix.part }}-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    # In run 45977915310 the tests of each part took 7 to 11 minutes, and the stack about 5 to build and
+    # start. A live_grep run can pick the whole suite, which took 37 minutes there.
+    timeout-minutes: ${{ matrix.part == 'grep' && 60 || 30 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ${{ fromJSON(inputs.live_grep != '' && '["grep"]' || '["rest-1", "rest-2", "fit-1", "fit-2"]') }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Run this part of the browser suite against the whole stack
+        env:
+          LIVE_GREP: ${{ inputs.live_grep }}
+          LIVE_PART: ${{ matrix.part != 'grep' && matrix.part || '' }}
+          E2E_SUITES: ui
+        run: scripts/e2e.sh
+
+      - name: Keep the stack and test logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-browser-logs-${{ matrix.part }}
+          path: e2e/out/
+          if-no-files-found: ignore
+
+      - name: Keep the browser screenshots and video
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: portal-live-evidence-${{ matrix.part }}
+          path: portal/e2e/out/live/
+          if-no-files-found: ignore
+
+  dast:
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && inputs.live_grep == '' && inputs.api_k == ''
+    concurrency:
+      group: ci-dast-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    # scripts/dast.sh counts on 35 minutes. Its step took 17 in run 45977915310, with the images already built.
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: DAST with OWASP ZAP against the whole stack
+        run: scripts/dast.sh
+
+      - name: Keep the ZAP reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zap-reports
+          path: dast/out/
           if-no-files-found: ignore
