@@ -4,7 +4,7 @@ import type { Browser, BrowserContext, Locator, Page, TestInfo } from '@playwrig
 import { expectAccessible } from '../support/axe'
 import { tabTo } from '../support/keyboard'
 import { assertClean, watchPage } from '../support/test'
-import { holdRunAtWork, linkAnimations, marchReadings, runLinks } from './support/runLine'
+import { glowsStarted, holdRunAtWork, linkAnimations, ringState, runLinks, watchGlows } from './support/runLine'
 import { connectMockModel } from './support/settings'
 import { setMockGithubMode, type Backend, type WaitingRun } from './support/stack'
 import { expect, test } from './support/test'
@@ -75,7 +75,7 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   await expect(bob.locator('#decision'), 'when the Approver was asked, and who decides').toContainText(/An Approver decides in Teams \(asked [^)]+\)\./)
   await showHistory(bob)
   await expect(bob.locator('li[aria-current="step"]')).toContainText('Waiting for approval')
-  expect(await runLinks(bob), 'slow amber dashes march into the yes that waits, and the links into the steps done are solid').toEqual(['solid', 'wait+', 'todo'])
+  expect(await runLinks(bob), 'amber dashes lead into the yes that waits, and the links into the steps done are solid').toEqual(['solid', 'wait', 'todo'])
   await expect(steps(bob), 'the line is the workflow’s blocks and nothing else').toHaveText([/Started by Alice$/, /Read every source$/, /Ask for approval\s*Sent to .+ in Teams$/, /Create Jira tickets$/])
   await expect(sentLine(bob), 'the gate says who the request went to in Teams, and never Alice, whose run it is').toHaveText(SENT_TO_BOB)
   expect(await faceTick(steps(bob).nth(1)), 'the agent that finished looks done when the page opens').toBe('1')
@@ -248,46 +248,55 @@ test('scenario C: the agents’ words are never a summary on the page, before or
   await context.close()
 })
 
-test('the run line marches into the step at work by moving its dashes only, stops while the tab is hidden, and holds still with reduced motion', async ({ browser, backend }, info) => {
+test('the stage plays each hand-off once as a glowing dot, holds the dashes still, and holds still with reduced motion', async ({ browser, backend }, info) => {
   const { runId } = await backend.waitingRun('alice')
   const frames = path.join(OUT, 'shots')
   for (const reducedMotion of [false, true]) {
     const context = await devContext(browser, 'alice', { reducedMotion })
     const page = await context.newPage()
     await holdRunAtWork(page, runId)
+    await watchGlows(page)
     await page.goto(`/runs/${runId}`)
     await expect(state(page)).toHaveText('Running')
     const line = page.getByRole('list', { name: 'Steps of this run' })
-    const [before, after] = await marchReadings(page)
     await expect(line.locator('li[aria-current="step"]'), 'the step at work says how long it has worked').toContainText(/Read every source\s*Working, \d+ (s|min|h)$/)
+    expect(await runLinks(page), 'the same dashes into the step at work, holding still').toEqual(['flow', 'todo', 'todo'])
     if (reducedMotion) {
-      expect(await runLinks(page), 'the same dashes into the step at work, holding still').toEqual(['flow', 'todo', 'todo'])
-      expect(after, 'the dashes do not move').toBe(before)
-      expect(await linkAnimations(page), 'no animation runs on the links').toEqual([])
+      await expect(page.locator('[data-glow]'), 'no glowing dot is drawn').toHaveCount(0)
+      expect(await glowsStarted(page), 'no dot ever ran').toBe(0)
+      expect(await linkAnimations(page), 'no animation runs on the links or the hand-offs').toEqual([])
       await shot(page, info, 'r11-02-at-work-reduced')
       for (const frame of [1, 2]) {
         await line.screenshot({ path: path.join(frames, `r11-march-reduced-${String(frame)}.png`) })
         await page.waitForTimeout(200)
       }
     } else {
-      expect(await runLinks(page), 'dashes march into the step at work').toEqual(['flow+', 'todo', 'todo'])
-      expect(after, 'the dashes move').not.toBe(before)
-      expect(await linkAnimations(page), 'the march moves the dashes by transform, and nothing else animates on the links').toEqual([['transform']])
+      await expect.poll(() => glowsStarted(page), { message: 'a dot runs along the hand-off into the step at work' }).toBeGreaterThan(0)
       await shot(page, info, 'r11-02-at-work')
       for (const frame of [1, 2, 3]) {
         await line.screenshot({ path: path.join(frames, `r11-march-${String(frame)}.png`) })
         await page.waitForTimeout(200)
       }
-      await page.evaluate(() => {
-        Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
-        document.dispatchEvent(new Event('visibilitychange'))
-      })
-      const paused = await page.locator('[data-link="flow"]').evaluate((link) => getComputedStyle(link, '::before').animationPlayState)
-      expect(paused, 'the march stops while the tab is hidden').toBe('paused')
+      await expect.poll(() => linkAnimations(page), { message: 'once the dot has run, nothing animates on the links or the hand-offs', timeout: 10_000 }).toEqual([])
     }
     await page.unrouteAll({ behavior: 'ignoreErrors' })
     await context.close()
   }
+})
+
+test('the waiting gate pulses while the page is in view and pauses while the tab is hidden', async ({ browser, backend }) => {
+  const { runId } = await backend.waitingRun('alice')
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto(`/runs/${runId}`)
+  await expect(page.locator('li[data-state="wait"]')).toBeVisible()
+  await expect.poll(() => ringState(page), { message: 'the ring around the gate that waits runs' }).toEqual(['running'])
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect.poll(() => ringState(page), { message: 'the ring pauses while the tab is hidden' }).toEqual(['paused'])
+  await context.close()
 })
 
 test('scenario B: a stopped run opens on the three answers, an Operator retries it on the page, and an Approver is told who can', async ({ browser, backend }, info) => {
@@ -315,10 +324,11 @@ test('scenario B: a stopped run opens on the three answers, an Operator retries 
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   const watch = watchPage(page)
+  await watchGlows(page)
   await page.goto(`/runs/${runId}`)
   const stop = page.getByRole('list', { name: 'Steps of this run' }).locator('li[data-state="err"]')
-  await stop.and(page.locator('[data-replay]')).waitFor({ timeout: 5_000 })
-  await expect(stop, 'the line first replays the work flowing into the stop, then stops').not.toHaveAttribute('data-replay', { timeout: 3_000 })
+  await expect.poll(() => glowsStarted(page), { message: 'the stage first plays the work flowing into the stop' }).toBeGreaterThan(0)
+  await expect.poll(() => linkAnimations(page), { message: 'then the dots rest and the stop is still', timeout: 10_000 }).toEqual([])
   await expect(stop, 'the stop is named in words for a screen reader').toContainText('Stopped here: Read every source')
   await expect(state(page)).toHaveText('Stopped')
   await expect(page.locator('#decision')).toBeFocused()
@@ -334,10 +344,12 @@ test('scenario B: a stopped run opens on the three answers, an Operator retries 
   await expect(page.getByRole('region', { name: 'Why it stopped' }).getByRole('button', { name: 'Retry', exact: true }), 'Retry sits under the answers').toBeVisible()
   await shot(page, info, 'n15-b-stopped')
 
+  const glowsBefore = await glowsStarted(page)
   await page.getByRole('button', { name: 'Retry', exact: true }).click()
   await expect
-    .poll(() => runLinks(page), { message: 'mid-run, dashes march into the step at work and the links before it are solid', intervals: [100], timeout: 90_000 })
-    .toEqual(['flow+', 'todo', 'todo'])
+    .poll(() => runLinks(page), { message: 'mid-run, dashes lead into the step at work and the links before it are solid', intervals: [100], timeout: 90_000 })
+    .toEqual(['flow', 'todo', 'todo'])
+  await expect.poll(() => glowsStarted(page), { message: 'the work flows into the step again as a glowing dot' }).toBeGreaterThan(glowsBefore)
   await expect(state(page)).toHaveText('Waiting for approval', { timeout: 90_000 })
   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0)
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId), 'a retry writes nothing before a yes').toEqual([])

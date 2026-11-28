@@ -1,0 +1,338 @@
+/* The light stage (ADR 0052, the sketch's .stage). The wires are drawn in px from the stage's measured width, and the steps sit in equal
+   columns, so the wires meet the circles. --hub, --rise and --node come from stage.ts, the one place the numbers live. */
+.wrap {
+  min-width: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background-color: var(--stage);
+  background-image: radial-gradient(circle, var(--stage-grid) 1px, transparent 1.3px);
+  background-size: 22px 22px;
+  box-shadow: var(--shadow-2);
+}
+
+.stage {
+  position: relative;
+  min-width: 0;
+}
+
+.wires {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.hub {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--hub);
+  margin: 0;
+  text-align: center;
+}
+
+.hub > span {
+  filter: drop-shadow(0 6px 14px rgb(62 91 216 / 0.25));
+}
+
+.hubWho {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semi);
+}
+
+.steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: 0;
+  margin: var(--rise) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One step: the circle, its name, the state in a word, and the note under. */
+.st {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  text-align: center;
+}
+
+.node {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--node);
+  height: var(--node);
+  margin-bottom: var(--space-2);
+  border: 3px dashed var(--stage-dim);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+  transition:
+    border-color var(--dur-panel) ease,
+    box-shadow var(--dur-panel) ease;
+}
+
+.gate .node {
+  border-radius: var(--r-lg);
+}
+
+.node > svg:not([data-face]) {
+  width: 30px;
+  height: 30px;
+}
+
+.todo .node > svg:not([data-face]),
+.skip .node > svg:not([data-face]) {
+  opacity: 0.6;
+}
+
+.badge {
+  position: absolute;
+  top: -6px;
+  inset-inline-end: -6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  color: var(--on-status);
+}
+
+.badge > svg {
+  width: 12px;
+  height: 12px;
+}
+
+.done .node {
+  border: 3px solid var(--ok);
+}
+
+.done .badge {
+  background: var(--ok);
+}
+
+.now .node {
+  border: 3px solid var(--run);
+  box-shadow: 0 0 0 8px rgb(62 111 246 / 0.18);
+}
+
+.wait .node {
+  border: 3px solid var(--wait-line);
+  box-shadow: 0 0 0 7px var(--wait-bg);
+}
+
+/* The waiting gate pulses, and is the only thing that keeps moving. */
+.node[data-ring]::after {
+  position: absolute;
+  inset: -12px;
+  border-radius: inherit;
+  border: 2px solid var(--wait-line);
+  background: rgb(240 162 27 / 0.2);
+  content: '';
+  animation: ring var(--dur-pulse) ease-out infinite;
+  z-index: -1;
+}
+
+.err .node {
+  border: 3px solid var(--stop);
+  background: var(--stop-bg);
+  box-shadow: 0 0 0 7px var(--stop-bg);
+}
+
+.err .badge {
+  background: var(--stop);
+}
+
+.no .node,
+.skip .node {
+  border-color: var(--muted);
+  background: var(--sunk);
+}
+
+.name {
+  order: 1;
+  max-width: 100%;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+.under {
+  order: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+}
+
+.wire {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+/* A track takes the state of the step it leads into, as the step line's links do. Dashes mark a step at work, a gate that waits and a stop. */
+.wire[data-link='solid'] {
+  stroke: var(--stage-wire);
+}
+
+.wire[data-link='flow'] {
+  stroke: var(--run);
+  stroke-dasharray: 8 6;
+}
+
+.wire[data-link='wait'] {
+  stroke: var(--wait-line);
+  stroke-dasharray: 8 6;
+}
+
+.wire[data-link='stop'] {
+  stroke: var(--stop);
+  stroke-dasharray: 6 6;
+}
+
+.wire[data-link='todo'],
+.wire[data-link='dead'] {
+  stroke: var(--stage-dim);
+  stroke-dasharray: 5 6;
+  stroke-width: 2;
+}
+
+.wire[data-link='dead'] {
+  stroke-dasharray: 2 7;
+}
+
+.ai {
+  stroke: var(--ai);
+}
+
+.wire.gate {
+  stroke: var(--wait-line);
+}
+
+/* The reason a run stopped, under the step it stopped at. */
+.why {
+  color: var(--stop-text);
+}
+
+/* A face works a couple of times and then rests: after the opening only the waiting gate keeps moving (ADR 0052). */
+.stage :global([data-face]),
+.stage :global([data-face]) * {
+  animation-iteration-count: 2 !important;
+}
+
+/* A hand-off: a glowing dot runs along its wire once. It is invisible at rest. */
+.pk {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 6 200;
+  stroke-dashoffset: 7;
+  opacity: 0;
+  animation: pk 800ms cubic-bezier(0.45, 0, 0.55, 1) var(--dl, 0s) backwards;
+}
+
+.pk-ai {
+  stroke: var(--ai-text);
+  filter: drop-shadow(0 0 5px rgb(123 92 255 / 0.6));
+}
+
+.pk-track {
+  stroke: var(--ink);
+  filter: drop-shadow(0 0 4px rgb(15 26 43 / 0.35));
+}
+
+.pk-gate {
+  stroke: var(--wait-line);
+  filter: drop-shadow(0 0 6px rgb(240 162 27 / 0.75));
+}
+
+/* On opening, each step turns blue as the glow reaches it. After that, a step flashes once when it is reached. */
+.st[data-play]:is(.done, .wait, .err, .no) .node {
+  animation: reach 1s linear var(--dl) backwards;
+}
+
+.st[data-flash] .node {
+  animation: flash 700ms ease-out;
+}
+
+:global([data-paused]) .node::after {
+  animation-play-state: paused;
+}
+
+@keyframes pk {
+  0% {
+    stroke-dashoffset: 7;
+    opacity: 1;
+  }
+
+  95% {
+    opacity: 1;
+  }
+
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+
+@keyframes reach {
+  0% {
+    border-color: var(--stage-dim);
+    box-shadow: none;
+  }
+
+  12%,
+  80% {
+    border-color: var(--run);
+    box-shadow: 0 0 0 8px rgb(62 111 246 / 0.18);
+  }
+}
+
+@keyframes flash {
+  from {
+    box-shadow: 0 0 0 0 rgb(62 111 246 / 0.35);
+  }
+
+  to {
+    box-shadow: 0 0 0 14px rgb(62 111 246 / 0);
+  }
+}
+
+@keyframes ring {
+  from {
+    opacity: 1;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pk,
+  .node,
+  .node::after,
+  .st .node {
+    animation: none !important;
+    transition: none !important;
+  }
+}
