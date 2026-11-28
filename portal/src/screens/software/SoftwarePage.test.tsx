@@ -177,7 +177,7 @@ describe('the Software watchlist page', () => {
 
   it('draws its own surface on the page and none in a card, where the rows start on the card’s edge', () => {
     expect(render(statuses, ALICE)).toMatch(/class="[^"]*surface/)
-    const inCard = renderToStaticMarkup(<SoftwareList rows={ROW} checkedBy="Software watchlist" label="x" now={NOW} open={(_row, className, cells) => <a className={className}>{cells}</a>} />)
+    const inCard = renderToStaticMarkup(<SoftwareList rows={ROW} checkedBy="Software watchlist" label="x" now={NOW} open={(_row, className, cells) => <button type="button" className={className}>{cells}</button>} />)
     expect(inCard).not.toMatch(/class="[^"]*surface/)
     expect(inCard).toContain('data-software-id')
   })
