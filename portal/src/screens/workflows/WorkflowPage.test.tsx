@@ -145,8 +145,10 @@ describe('a workflow page', () => {
     expect(sentenceOfHtml(html)).toBe('Every day at 8:00, check langchain-ai/langgraph on GitHub for a new release. If there is one, create an upgrade ticket in Jira project MOCK, after approval.')
   })
 
-  it('draws its steps as the run line, large, with a tag under each', () => {
-    const line = text(/<div[^>]*class="[^"]*large[^"]*"[\s\S]*?<\/ol>/.exec(mainOf(render()))?.[0] ?? '')
+  it('draws its steps as the flow diagram, with a tag under each, and no state until a run is read', () => {
+    const line = text(/<ol[^>]*aria-label="Steps"[\s\S]*?<\/ol>/.exec(mainOf(render()))?.[0] ?? '')
+    expect(mainOf(render())).not.toMatch(/<li [^>]*data-state=/)
+    expect(mainOf(render())).toMatch(/<h2 id="flow-steps">Steps<\/h2>/)
     expect(line).toContain('Run now No system access')
     expect(line).toContain('Check release Reads only')
     expect(line).toContain('Ask for approval Waits for approval')
