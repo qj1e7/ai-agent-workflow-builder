@@ -41,19 +41,20 @@ describe('the latest run read for the flow diagram', () => {
 
   it('is cached under its own key, which holds the run and its last event', () => {
     const { client } = setup()
-    expect(flowRunOptions(client, 'alice', RUN).queryKey).toEqual(keys.runFlow('alice', RUN.run_id, 'last_seq' in RUN ? RUN.last_seq : 0))
+    expect(flowRunOptions(client, 'alice', RUN).queryKey).toEqual(keys.runFlow('alice', RUN.run_id, RUN.last_seq))
   })
 
   it('keeps the states on the page while the run moves on and is read again, but never another run\'s', async () => {
     const { client, queryClient, hold, release } = setup()
     await queryClient.fetchQuery(flowRunOptions(client, 'alice', RUN))
     hold(true)
-    const moved = { ...RUN, last_seq: ('last_seq' in RUN ? RUN.last_seq : 0) + 1 } as RunView
-    const watch = new QueryObserver(queryClient, flowRunOptions(client, 'alice', moved))
+    const moved = { ...RUN, last_seq: RUN.last_seq + 1 }
+    const watch = new QueryObserver(queryClient, flowRunOptions(client, 'alice', RUN))
     const stop = watch.subscribe(() => undefined)
+    watch.setOptions(flowRunOptions(client, 'alice', moved))
     expect(watch.getCurrentResult().isPlaceholderData).toBe(true)
     expect(watch.getCurrentResult().data?.runId).toBe(RUN.run_id)
-    watch.setOptions(flowRunOptions(client, 'alice', { ...RUN, run_id: 'run_other', last_seq: 1 } as RunView))
+    watch.setOptions(flowRunOptions(client, 'alice', { ...RUN, run_id: 'run_other', last_seq: 1 }))
     expect(watch.getCurrentResult().data).toBeUndefined()
     release()
     stop()

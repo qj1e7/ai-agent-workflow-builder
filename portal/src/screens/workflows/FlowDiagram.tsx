@@ -33,7 +33,7 @@ export function FlowDiagram({ flow }: { flow: Flow }) {
           <p className={styles['key']}>
             {key.map((state) => (
               <span key={state} data-key={state}>
-                <i className={styles[`kd-${state}`]} aria-hidden="true" />
+                <i className={cx(styles['kd'], styles[`kd-${state}`])} aria-hidden="true" />
                 {stateWord(state)}
               </span>
             ))}
@@ -43,23 +43,25 @@ export function FlowDiagram({ flow }: { flow: Flow }) {
       {/* The boxes scroll sideways when they do not fit, so the keyboard can reach them (axe: scrollable-region-focusable). */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
       <div className={styles['scroll']} tabIndex={0} role="group" aria-label="Steps">
-        <ol className={cx(styles['flow'], flow.note && styles['hasNote'])} style={{ '--n': flow.steps.length } as CSSProperties} aria-label="Steps">
+        <ol className={styles['flow']} style={{ '--n': flow.steps.length } as CSSProperties} aria-label="Steps">
           {flow.steps.map((step) => {
             const Picture = STEP_ICON[step.icon]
             const note = flow.note?.key === step.key ? flow.note : null
             return (
-              <li key={step.key} className={cx(styles['box'], step.state && styles[step.state])} data-state={step.state ?? undefined} aria-current={step.state === 'now' || step.state === 'wait' ? 'step' : undefined}>
+              <li key={step.key} className={cx(styles['item'], step.state && styles[step.state])} data-state={step.state ?? undefined} aria-current={step.state === 'now' || step.state === 'wait' ? 'step' : undefined}>
                 {step.state ? <span className="visually-hidden">{STEP_STATE_WORDS[step.state]}</span> : null}
-                <span className={styles['top']}>
-                  <span className={cx(styles['ico'], step.agent && styles['agent'])}>{step.agent ? <AgentFace id={step.agent.id} display={step.agent.display} size={28} state="idle" /> : <Picture />}</span>
-                  <span className={styles['name']}>{step.label}</span>
-                </span>
-                <span className={styles['tag']}>{step.tag}</span>
-                {step.state && MARKED.has(step.state) ? (
-                  <span className={styles['badge']} aria-hidden="true">
-                    <Badge state={step.state} />
+                <div className={styles['box']}>
+                  <span className={styles['top']}>
+                    <span className={cx(styles['ico'], step.agent && styles['agent'])}>{step.agent ? <AgentFace id={step.agent.id} display={step.agent.display} size={28} state="idle" /> : <Picture />}</span>
+                    <span className={styles['name']}>{step.label}</span>
                   </span>
-                ) : null}
+                  <span className={styles['tag']}>{step.tag}</span>
+                  {step.state && MARKED.has(step.state) ? (
+                    <span className={styles['badge']} aria-hidden="true">
+                      <Badge state={step.state} />
+                    </span>
+                  ) : null}
+                </div>
                 {note ? (
                   <p className={styles['note']} data-note={note.tone}>
                     {note.tone === 'err' ? <IconX /> : <IconGate />}

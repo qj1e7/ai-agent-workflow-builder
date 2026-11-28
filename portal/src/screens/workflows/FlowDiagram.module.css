@@ -44,10 +44,11 @@
   gap: var(--space-2);
 }
 
-.key i {
+/* One class for the swatch and one for its state, in this order, so the state's rule is the later of two of the same weight. */
+.kd {
   width: 12px;
   height: 12px;
-  border: 2px solid var(--line-strong);
+  border: 2px solid var(--edge);
   border-radius: 4px;
 }
 
@@ -69,7 +70,8 @@
   background: var(--stop);
 }
 
-.kd-no {
+.kd-no,
+.kd-skip {
   border-style: dashed;
   border-color: var(--muted);
 }
@@ -83,19 +85,24 @@
   padding: var(--space-3) var(--space-3) var(--space-1) 0;
 }
 
-/* Equal boxes in a row. A note hangs under its box, so the row keeps room for it. */
+/* Equal boxes in a row. Each item is two rows of the row's grid, the box and its note, so a note sits in its box's column and the tallest note sets the row. */
 .flow {
   display: grid;
   grid-template-columns: repeat(var(--n), minmax(9rem, 1fr));
-  align-items: stretch;
-  gap: var(--space-6);
+  grid-template-rows: auto auto;
+  column-gap: var(--space-6);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.hasNote {
-  padding-bottom: calc(var(--space-7) + var(--space-6));
+.item {
+  position: relative;
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  row-gap: var(--space-3);
+  min-width: 0;
 }
 
 .box {
@@ -105,7 +112,7 @@
   gap: var(--space-1);
   min-height: 6rem;
   padding: var(--space-3);
-  border: 1.5px dashed var(--line-strong);
+  border: 1.5px dashed var(--edge);
   border-radius: var(--r-md);
   background: var(--surface);
   transition:
@@ -113,13 +120,13 @@
     box-shadow var(--dur-small) ease;
 }
 
-/* The link to the box before it: dashed, solid and green once that step is done. It runs on the box's top line. */
-.box + .box::before {
+/* The link to the box before it: dashed, solid and green once that step is done. It runs on the box's icon line. */
+.item + .item::before {
   position: absolute;
   inset-inline-end: calc(100% + 1.5px);
   top: calc(var(--space-3) + 14px);
   width: var(--space-6);
-  border-top: 2px dashed var(--line-strong);
+  border-top: 2px dashed var(--edge);
   content: '';
 }
 
@@ -165,26 +172,27 @@
   font-size: var(--fs-small);
 }
 
-.done {
+.done .box {
   border: 1.5px solid var(--ok);
 }
 
-.now {
+.now .box {
   border: 2px solid var(--run);
   box-shadow: 0 0 0 5px var(--run-bg);
 }
 
-.wait {
+.wait .box {
   border: 2px solid var(--wait-line);
   box-shadow: 0 0 0 5px var(--wait-bg);
 }
 
-.err {
+.err .box {
   border: 2px solid var(--stop);
   background: var(--stop-bg);
 }
 
-.no {
+.no .box,
+.skip .box {
   border: 1.5px dashed var(--muted);
 }
 
@@ -215,22 +223,19 @@
   height: 12px;
 }
 
-/* The note under a stop or a wait, as wide as two boxes' worth of words, starting at its box's left edge. */
+/* The note under a stop or a wait: in its box's column, and as tall as its words need. */
 .note {
-  position: absolute;
-  top: calc(100% + var(--space-3));
-  inset-inline-start: -2px;
-  z-index: 1;
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  width: 15rem;
   margin: 0;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--r-sm);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .note::before {

@@ -39,7 +39,7 @@ export interface Flow {
 }
 
 /** The key's order, as the sketch lists it. */
-const KEY_ORDER: readonly StepState[] = ['done', 'now', 'wait', 'err', 'no', 'todo']
+const KEY_ORDER: readonly StepState[] = ['done', 'now', 'wait', 'err', 'no', 'skip', 'todo']
 
 /** The states on the boxes, in the key's order. Nothing is listed when no run is drawn. */
 export function flowKeyOf(flow: Flow): StepState[] {
@@ -55,12 +55,12 @@ export function ranWords(startedAt: string, now: Date): string {
 
 /**
  * The workflow's designed steps, coloured by the latest run when there is one. Names, tags and agents come from the workflow, the
- * states from the run's events, folded as the run page folds them. A step the run did not reach reads as not reached.
+ * states from the run's events, folded as the run page folds them. A step the run did not reach reads as not reached, and one it skipped as skipped. A run with no events draws no state: nothing is guessed.
  */
 export function flowOf(useCase: Pick<UseCaseView, 'schedule' | 'plan' | 'agents' | 'template'>, run: FlowRun | null, now: Date): Flow {
   const designed = templateLine(useCase)
   const tagOf = (station: (typeof designed)[number]) => (station.under?.kind === 'note' ? station.under.text : '')
-  if (run === null) {
+  if (run === null || run.events.length === 0) {
     return { steps: designed.map((station) => ({ key: station.key, label: station.label, icon: station.icon, agent: station.agent, tag: tagOf(station), state: null })), note: null, ranWhen: null }
   }
   const plan: PlanBlock[] = useCase.plan.map((block) => ({ key: block.key, name: block.name, kind: block.kind }))
@@ -69,7 +69,7 @@ export function flowOf(useCase: Pick<UseCaseView, 'schedule' | 'plan' | 'agents'
   const steps = designed.map(
     (station): FlowStep => {
       const state = reached.get(station.key) ?? 'todo'
-      return { key: station.key, label: station.label, icon: station.icon, agent: station.agent, tag: tagOf(station), state: state === 'skip' ? 'todo' : state }
+      return { key: station.key, label: station.label, icon: station.icon, agent: station.agent, tag: tagOf(station), state }
     },
   )
   const at = steps.find((step) => step.state === 'err' || step.state === 'wait')

@@ -1,35 +1,33 @@
-import { useQuery } from '@tanstack/react-query'
+import { queryOptions, useQuery } from '@tanstack/react-query'
+import type { ApiClient } from '../../api/client'
 import { useApiClient, useCacheScope } from '../../api/context'
-import { fetchEventPage } from '../../api/queries'
+import { fetchEventPage, keys } from '../../api/queries'
 import type { RunView } from '../../api/types'
 import type { FlowRun } from './flow'
-import { stageOfRun } from './workflow'
+import { runAt, stageOfRun } from './workflow'
 
 /**
- * The latest run's events, from the endpoint the run page reads, cached by the query client. The key holds the run's last event, so the
- * page reads again when the runs list says the run moved on. Null while there is no run, or until its events are read: the diagram then
- * draws the steps without states.
+ * How the latest run is read: its events from the endpoint the run page reads, in one request. The key holds the run's last event, so the
+ * page reads again when the runs list says the run moved on, and the states of the same run stay on the page while it does. Another run's
+ * states never do.
  */
+export function flowRunOptions(client: ApiClient, user: string, run: RunView) {
+  return queryOptions({
+    queryKey: keys.runFlow(user, run.run_id, run.last_seq),
+    queryFn: async (): Promise<FlowRun> => {
+      const { events } = await fetchEventPage(client, run.run_id)
+      return { runId: run.run_id, events, startedAt: runAt(run), stage: stageOfRun(run) }
+    },
+    placeholderData: (before: FlowRun | undefined) => (before?.runId === run.run_id ? before : undefined),
+  })
+}
+
+/** The latest run's events for the flow diagram. Null while there is no run, or until its events are read: the diagram then draws the steps without states. */
 export function useFlowRun(run: RunView | undefined): FlowRun | null {
   const client = useApiClient()
   const user = useCacheScope()
-  const lastSeq = run && 'last_seq' in run ? run.last_seq : 0
-  const read = useQuery({
-    queryKey: ['flow-run', user, run?.run_id ?? '', lastSeq],
-    enabled: run !== undefined,
-    queryFn: async (): Promise<FlowRun> => {
-      const runId = run?.run_id ?? ''
-      const events: unknown[] = []
-      let after = 0
-      for (;;) {
-        const page = await fetchEventPage(client, runId, after)
-        events.push(...page.events)
-        const last = page.events.at(-1)
-        if (!last || last.seq <= after) break
-        after = last.seq
-      }
-      return { runId, events, startedAt: run?.started_at ?? '', ...(run ? { stage: stageOfRun(run) } : {}) }
-    },
-  })
-  return read.data ?? null
+  const read = useQuery({ ...flowRunOptions(client, user, run ?? NO_RUN), enabled: run !== undefined })
+  return run === undefined ? null : (read.data ?? null)
 }
+
+const NO_RUN = { run_id: '', last_seq: 0 } as unknown as RunView

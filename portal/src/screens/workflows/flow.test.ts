@@ -53,7 +53,7 @@ describe('the flow of the latest run', () => {
   })
 
   it('draws no state at all when the run has no events, never a guess', () => {
-    const flow = flowOf(UC, run([]), NOW)
+    const flow = flowOf(UC, { runId: 'run_x', events: [], startedAt: TODAY }, NOW)
     expect(flow.steps.map((step) => step.state)).toEqual([null, null, null, null])
     expect(flow.ranWhen).toBeNull()
     expect(flowKeyOf(flow)).toEqual([])
