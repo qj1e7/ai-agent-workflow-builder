@@ -124,29 +124,6 @@
   gap: var(--space-2);
 }
 
-/* A draft's flags, closed until See them opens them. The browser's own disclosure keeps the keyboard and the screen reader's state. */
-.flags summary {
-  width: fit-content;
-  min-height: 32px;
-  cursor: pointer;
-}
-
-.flags summary:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
-.see {
-  color: var(--link);
-  font-size: var(--fs-small);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.flags .rows {
-  margin-top: var(--space-2);
-}
-
 .parts {
   display: grid;
   gap: var(--space-3);
@@ -265,17 +242,4 @@
   color: var(--text-2);
   text-align: center;
   font-weight: var(--fw-bold);
-}
-
-/* Cases that passed, folded under the result on a workflow's page. */
-details.foldedCases > summary {
-  display: flex;
-  align-items: center;
-  width: fit-content;
-  min-height: 44px;
-  color: var(--text-2);
-  font-size: var(--fs-small);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
 }

@@ -309,8 +309,8 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
       <p>
         You asked me to skip approval: <q>{reply.said}</q>.
       </p>
+      <p>Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.</p>
       <CardFold summary="Details">
-        <p>Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.</p>
         <p className="muted">{SAY_ANOTHER_WAY}</p>
       </CardFold>
     </Card>
@@ -369,13 +369,11 @@ function HowToStart({ view, page }: { view: CapabilitiesView; page: Page }) {
   return (
     <Card title="How to start">
       <p>{START_LEAD}</p>
-      <CardFold summary="Show the steps">
-        <ol className={styles['steps']}>
-          {startSteps(view).map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-      </CardFold>
+      <ol className={styles['steps']}>
+        {startSteps(view).map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
       {examples.length > 0 ? (
         <div className={styles['chips']} role="group" aria-label="Try one">
           {examples.map((text) => (

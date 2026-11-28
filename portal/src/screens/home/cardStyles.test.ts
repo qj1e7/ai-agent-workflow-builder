@@ -3,38 +3,46 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 // Vitest blanks a CSS import, even with ?raw, so the sheets are read as files.
-const SHEETS = ['../../ui/Card.module.css', './AnswerCards.module.css', './SetupCard.module.css', './EditCard.module.css', './PartsList.module.css', '../drafted/Drafted.module.css']
+const SHEETS = ['../../ui/Card.module.css', './SetupCard.module.css', './EditCard.module.css', './PartsList.module.css', './StateAnswers.module.css', '../drafted/Drafted.module.css']
 
 /** The card bodies in Planner.module.css, which also holds the chat's own layout (another change owns that). */
-const PLANNER_CARD = ['lines', 'caps', 'steps', 'moreChoices', 'note', 'buttons', 'ask', 'sent', 'starters', 'starter', 'more', 'lookedAt', 'actions', 'cardDone', 'cardOk', 'waiting']
+const PLANNER_CARD = ['lines', 'caps', 'steps', 'moreChoices', 'note', 'buttons', 'ask', 'sent', 'starters', 'starter', 'more', 'lookedAt', 'actions', 'cardDone', 'cardOk', 'waiting', 'chips', 'problem']
 
 const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
 
-const planner = [...strip(readFileSync(new URL('./Planner.module.css', import.meta.url), 'utf8')).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-  .filter((match) => (match[1] ?? '').split(',').every((selector) => PLANNER_CARD.includes(/^\s*\.([a-zA-Z]+)/.exec(selector)?.[1] ?? '')))
-  .map((match) => `${match[1] ?? ''}{${match[2] ?? ''}}`)
+function rules(css: string): { selector: string; body: string }[] {
+  return [...strip(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({ selector: (match[1] ?? '').trim(), body: match[2] ?? '' }))
+}
+
+const planner = rules(readFileSync(new URL('./Planner.module.css', import.meta.url), 'utf8'))
+  .filter((rule) => rule.selector.split(',').every((selector) => PLANNER_CARD.includes(/^\s*\.([a-zA-Z]+)/.exec(selector)?.[1] ?? '')))
+  .map((rule) => `${rule.selector}{${rule.body}}`)
   .join('\n')
 
 const sheets = [...SHEETS.map((file) => ({ file, css: strip(readFileSync(new URL(file, import.meta.url), 'utf8')) })), { file: './Planner.module.css (card rules)', css: planner }]
 
-function rules(css: string): { selector: string; body: string }[] {
-  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({ selector: (match[1] ?? '').trim(), body: match[2] ?? '' }))
-}
+/** The card surfaces: the one card, the left-out words above a card and a starter. Each may have a shadow, and nothing inside them may. */
+const SURFACES = ['.card', '.leftovers', '.starter']
 
-const CONTROL = /input|select|textarea|button|chip|choice|value|field|spin|input|summary|link/i
+/** The controls that keep an edge: a chip, a choice, a field and the spinner, by exact selector. A focus or hover state is always allowed. */
+const EDGED = new Set(['.chip', 'button.chip', '.choice', '.value', '.editor input', '.editor select', '.field input', '.field select', '.another input', '.input', '.spin', '.ask textarea'])
+
+const ALIASES = /var\(--(muted|hair|rail|rule|(?:green|red|amber|accent)(?:-[a-z]+)?)\s*[,)]/g
 
 describe('the answer and set-up cards (ADR 0052)', () => {
-  it('space only with the spacing tokens, never a pixel gap of their own', () => {
+  it('space only with the spacing tokens, never a length of their own in any unit', () => {
     const found = sheets.flatMap(({ file, css }) =>
-      [...css.matchAll(/(?:^|[;{\s])((?:row-|column-)?gap|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?)\s*:\s*([^;}]+)/g)]
-        .filter((match) => /\d+px/.test(match[2] ?? ''))
-        .map((match) => `${match[1] ?? ''}: ${(match[2] ?? '').trim()} in ${file}`),
+      rules(css).flatMap((rule) =>
+        [...rule.body.matchAll(/(?:^|[;\s])((?:row-|column-)?gap|padding[a-z-]*|margin[a-z-]*)\s*:\s*([^;]+)/g)]
+          .filter((match) => /(^|[^\w.-])-?(?!0(?:\.0+)?(?:px|rem|em|%|ch|vw|vh)?\b)\d*\.?\d+(px|rem|em|%|ch|vw|vh|pt)\b/.test((match[2] ?? '').replace(/var\([^)]*\)/g, '')))
+          .map((match) => `${match[1] ?? ''}: ${(match[2] ?? '').trim()} in ${file} (${rule.selector})`),
+      ),
     )
     expect(found).toEqual([])
   })
 
-  it('use the sketch’s colour names, not the older aliases', () => {
-    const found = sheets.flatMap(({ file, css }) => [...css.matchAll(/var\(--(muted|hair|rail|rule|green-[a-z]+|red-[a-z]+|amber(?:-[a-z]+)?|accent(?:-[a-z]+)?)\)/g)].map((match) => `--${match[1] ?? ''} in ${file}`))
+  it('use the sketch’s colour names, with no older alias and no raw fallback colour', () => {
+    const found = sheets.flatMap(({ file, css }) => [...css.matchAll(ALIASES), ...css.matchAll(/var\(--[a-z0-9-]+\s*,\s*(?:#|rgb|hsl)[^)]*\)/g)].map((match) => `${match[0]} in ${file}`))
     expect(found).toEqual([])
   })
 
@@ -43,12 +51,14 @@ describe('the answer and set-up cards (ADR 0052)', () => {
     expect(card).toContain('border-radius: var(--r-lg)')
     expect(card).toContain('box-shadow: var(--shadow-2)')
     expect(card).not.toMatch(/\bborder\s*:/)
+    expect(card).toContain('outline: 1px solid transparent')
   })
 
-  it('put no box inside the card: only a control, a chip or a hairline has an edge', () => {
+  it('put no box inside a card: no border, ring, outline or shadow except on a surface, an exact control or a hairline', () => {
     const found = sheets.flatMap(({ file, css }) =>
       rules(css)
-        .filter((rule) => /(^|[;\s])border(-left|-right|-bottom)?\s*:\s*[^;]*\b(solid|dashed)/.test(rule.body) && !CONTROL.test(rule.selector))
+        .filter((rule) => /(^|[;\s])(border(-left|-right|-bottom|-inline[a-z-]*)?|outline|box-shadow)\s*:[ \t]*(?![ \t])(?!none|0\s*;|transparent)/.test(rule.body))
+        .filter((rule) => rule.selector.split(',').some((selector) => !SURFACES.includes(selector.trim()) && !EDGED.has(selector.trim()) && !/:focus|:hover/.test(selector)))
         .map((rule) => `${rule.selector} in ${file}`),
     )
     expect(found).toEqual([])

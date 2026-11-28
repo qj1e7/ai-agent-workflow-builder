@@ -23,6 +23,7 @@ import { DecisionRows, SoftwareRows, WorkflowRows } from './panels/ListRows'
 import { NeedsMore } from './panels/NeedsMore'
 import { usePagedNeeds } from './usePagedNeeds'
 import lists from './panels/Lists.module.css'
+import flat from './StateAnswers.module.css'
 
 const NOTHING: ReadonlySet<string> = new Set()
 
@@ -139,7 +140,9 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   if (needs.shown.length === 0) return <p>{sentence}</p>
   return (
     <Card title={sentence.replace(/\.$/, '')}>
-      <NeedRows needs={needs.shown} now={now} more={<NeedsMore needs={needs} pager={pager} />} />
+      <div className={flat['flat']}>
+        <NeedRows needs={needs.shown} now={now} more={<NeedsMore needs={needs} pager={pager} />} />
+      </div>
     </Card>
   )
 }

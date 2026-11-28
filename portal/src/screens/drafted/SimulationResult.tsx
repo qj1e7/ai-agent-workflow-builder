@@ -63,10 +63,7 @@ function Cases({ cases, fold }: { cases: readonly SimulatedCaseView[]; fold: boo
   return (
     <>
       {others.length > 0 ? list(others) : null}
-      <details className={styles['foldedCases']}>
-        <summary>Show cases</summary>
-        {list(passed)}
-      </details>
+      <CardFold summary="Show cases">{list(passed)}</CardFold>
     </>
   )
 }

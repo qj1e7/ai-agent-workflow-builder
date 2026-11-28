@@ -6,7 +6,7 @@ import { useUseCase } from '../../api/queries'
 import type { DraftedWorkflowView, SimulationView, UseCaseState } from '../../api/types'
 import { useHoldTurnOn, useSetUp } from '../../api/workflowQueries'
 import { Button, ButtonAnchor, ButtonLink } from '../../ui/Button'
-import { Card } from '../../ui/Card'
+import { Card, CardFold } from '../../ui/Card'
 import { AskTheTeam } from '../home/AskTheTeam'
 import { Building, DraftPill } from '../home/Building'
 import { useAskForChange, useShowRevision } from '../home/ChatProvider'
@@ -262,16 +262,13 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
       {added ? <p className={styles['note']}>{added}</p> : null}
       {view.flags > 0 ? (
         report && report.flags.length > 0 ? (
-          <details className={styles['flags']}>
-            <summary>
-              {flagsWords(view.flags)} <span className={styles['see']}>See them</span>
-            </summary>
+          <CardFold summary={`${flagsWords(view.flags)} See them`}>
             <ul className={styles['rows']}>
               {report.flags.map((flag, index) => (
                 <Flag key={index} flag={flag} />
               ))}
             </ul>
-          </details>
+          </CardFold>
         ) : (
           <p className={styles['said']}>{flagsWords(view.flags)}</p>
         )

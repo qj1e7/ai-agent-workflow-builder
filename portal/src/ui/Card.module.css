@@ -3,8 +3,10 @@
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-4) var(--space-5);
+  padding: calc(var(--space-4) + var(--space-1) / 2) calc(var(--space-4) + var(--space-1));
   border-radius: var(--r-lg);
+  /* Cards have no border, so forced-colors mode keeps an edge. */
+  outline: 1px solid transparent;
   background: var(--surface);
   box-shadow: var(--shadow-2);
 }
@@ -97,6 +99,10 @@
 .fold > summary:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
+}
+
+.fold:not([open]) {
+  gap: 0;
 }
 
 .fold[open] {

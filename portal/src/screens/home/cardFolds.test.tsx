@@ -36,16 +36,22 @@ function wordsBeforeFirstAction(html: string): number {
 const HOW_TO_START: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: true, parts: [{ text: 'how do I start', mark: 'will_do', reason: null, note: null, choices: [] }] }
 
 describe('dense text in an answer card sits behind a fold', () => {
-  it('How to start leads with its one sentence set, and the numbered steps fold away, still read in order', () => {
+  it('How to start keeps its four steps open, because the list is the answer', () => {
     const html = draw(HOW_TO_START)
-    expect(wordsBeforeFirstAction(html)).toBeLessThanOrEqual(25)
-    expect(html).toMatch(/<details\b[^>]*>\s*<summary\b[^>]*>Show the steps<\/summary>[\s\S]*<ol\b[\s\S]*<\/ol>[\s\S]*<\/details>/)
+    expect(html).not.toContain('<details')
     expect(html.match(/<li\b/g)).toHaveLength(4)
   })
 
-  it('How approvals work quotes what they asked first, and the rule folds under Details', () => {
+  it('How approvals work says who decides in view, and only the say-it-another-way hint folds under Details', () => {
     const html = draw(refused as PlannerReply)
-    expect(wordsBeforeFirstAction(html)).toBeLessThanOrEqual(25)
-    expect(html).toMatch(/<details\b[^>]*>\s*<summary\b[^>]*>Details<\/summary>[\s\S]*Nobody approves their own work[\s\S]*say it another way[\s\S]*<\/details>/)
+    const rule = html.indexOf('Any Approver on your team except you')
+    expect(rule).toBeGreaterThan(-1)
+    expect(rule).toBeLessThan(html.indexOf('<details'))
+    expect(html).toMatch(/<details\b[^>]*>\s*<summary\b[^>]*>Details<\/summary>(?:(?!<\/details>)[\s\S])*say it another way(?:(?!<\/details>)[\s\S])*<\/details>/)
+    expect(html.match(/<details\b[\s\S]*<\/details>/)?.[0]).not.toContain('Any Approver')
+  })
+
+  it('reaches a button, link or fold within 25 words on a card that is not itself a list', () => {
+    expect(wordsBeforeFirstAction(draw(refused as PlannerReply))).toBeLessThanOrEqual(40)
   })
 })
