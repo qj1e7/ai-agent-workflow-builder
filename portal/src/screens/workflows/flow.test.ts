@@ -1,5 +1,6 @@
 import useCase from '@contracts/fixtures/builder/use-case.json'
 import failure from '@contracts/fixtures/runs/failure.json'
+import expired from '@contracts/fixtures/runs/expired.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { describe, expect, it } from 'vitest'
 import type { UseCaseView } from '../../api/types'
@@ -49,6 +50,19 @@ describe('the flow of the latest run', () => {
 
   it('lists in the key only the states on the boxes, in a fixed order', () => {
     expect(flowKeyOf(flowOf(UC, run(success.filter((event) => event.seq <= 15)), NOW))).toEqual(['done', 'wait', 'todo'])
+  })
+
+  it('draws no state at all when the run has no events, never a guess', () => {
+    const flow = flowOf(UC, run([]), NOW)
+    expect(flow.steps.map((step) => step.state)).toEqual([null, null, null, null])
+    expect(flow.ranWhen).toBeNull()
+    expect(flowKeyOf(flow)).toEqual([])
+  })
+
+  it("keeps an expired run's gate and write as skipped, never not reached", () => {
+    const flow = flowOf(UC, run(expired), NOW)
+    expect(flow.steps.map((step) => step.state)).toContain('skip')
+    expect(flowKeyOf(flow)).toContain('skip')
   })
 
   it('names the run by the time it started', () => {

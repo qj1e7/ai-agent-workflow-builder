@@ -1,6 +1,7 @@
 import useCase from '@contracts/fixtures/builder/use-case.json'
 import failure from '@contracts/fixtures/runs/failure.json'
 import success from '@contracts/fixtures/runs/success.json'
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -60,5 +61,32 @@ describe('the flow diagram with a run', () => {
   it('puts a note under the gate that waits', () => {
     const html = draw(success.filter((event) => event.seq <= 15))
     expect(html).toMatch(/data-note="wait"[^>]*>[\s\S]*Waiting for approval/)
+  })
+})
+
+describe("the key's swatches", () => {
+  const css = readFileSync(new URL('./FlowDiagram.module.css', import.meta.url), 'utf8')
+  const rule = (name: string) => new RegExp(`\\n\\.${name}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? ''
+
+  it('is one class each, so no rule written for the swatch element outranks a state', () => {
+    expect(css).not.toMatch(/\.key\s+i\s*\{/)
+    const html = draw(success.filter((event) => event.seq <= 15))
+    expect(html).toMatch(/<i class="[^"]*kd[^"]*kd-wait[^"]*"/)
+  })
+
+  it('gives each state its own edge, and the not-reached edge the 3:1 token', () => {
+    expect(rule('kd-done')).toContain('var(--ok)')
+    expect(rule('kd-wait')).toContain('var(--wait-line)')
+    expect(rule('kd-err')).toContain('var(--stop)')
+    expect(rule('kd-todo')).toMatch(/dashed/)
+    expect(rule('kd')).toContain('var(--edge)')
+    expect(css).not.toContain('--line-strong')
+  })
+})
+
+describe('a box with a note', () => {
+  it('keeps its note in the same item as its box, in the box column, so it is never cut off', () => {
+    const html = draw(failure)
+    expect(html).toMatch(/<li [^>]*data-state="err"[^>]*>[\s\S]*?<p [^>]*data-note="err"/)
   })
 })

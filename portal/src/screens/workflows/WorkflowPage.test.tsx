@@ -148,7 +148,7 @@ describe('a workflow page', () => {
   it('draws its steps as the flow diagram, with a tag under each, and no state until a run is read', () => {
     const line = text(/<ol[^>]*aria-label="Steps"[\s\S]*?<\/ol>/.exec(mainOf(render()))?.[0] ?? '')
     expect(mainOf(render())).not.toMatch(/<li [^>]*data-state=/)
-    expect(sectionText(render(), 'Steps')).not.toContain('with ')
+    expect(mainOf(render())).toMatch(/<h2 id="flow-steps">Steps<\/h2>/)
     expect(line).toContain('Run now No system access')
     expect(line).toContain('Check release Reads only')
     expect(line).toContain('Ask for approval Waits for approval')
