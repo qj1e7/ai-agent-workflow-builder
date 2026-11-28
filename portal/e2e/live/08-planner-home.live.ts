@@ -1596,6 +1596,8 @@ test.describe('bob asks the Planner questions only', () => {
   test('ROLE-home and ROLE-asks: bob’s Home has the box and his three questions above Needs you, and each answer comes from platform state', async ({ browser, backend }, info) => {
     await bobDeclined(backend, 'Wrong version')
     await backend.waitingRun('alice')
+    // A second workflow beside the watchlist, so the team's answer counts them. With one, the Planner answers about it by name.
+    await backend.post('alice', '/api/v1/agent-use-cases', { name: `Bob counts ${tag()}`, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
     const context = await devContext(browser, 'bob')
     const page = await context.newPage()
     const watch = watchPage(page)
