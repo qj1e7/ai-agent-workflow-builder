@@ -364,7 +364,7 @@
 
 .waiting {
   margin: 0;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
 }
 
@@ -374,16 +374,16 @@
 
 .lines {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   list-style: none;
 }
 
 /* What I can do: the sketch's short bulleted list. */
 .caps {
   display: grid;
-  gap: 2px;
+  gap: var(--space-1);
   margin: 0;
-  padding-left: 18px;
+  padding-left: var(--space-5);
   font-size: var(--fs-small);
   list-style: disc;
 }
@@ -391,9 +391,9 @@
 /* How to start: the same short list, numbered. */
 .steps {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   margin: 0;
-  padding-left: 20px;
+  padding-left: var(--space-5);
   font-size: var(--fs-small);
   list-style: decimal;
 }
@@ -403,14 +403,14 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  margin-block: -4px;
+  margin-block: calc(var(--space-1) * -1);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);
 }
 
 .note {
   display: block;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
 }
 
@@ -418,7 +418,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: var(--space-2) var(--space-3);
 }
 
 /* Buttons that gave way to the side panel leave no gap behind them. */
@@ -440,7 +440,7 @@
 .ask textarea {
   width: 100%;
   min-height: 4.5rem;
-  padding: 10px 12px;
+  padding: var(--space-3);
   border: 1px solid var(--edge);
   border-radius: var(--r-ctl);
   font: inherit;
@@ -449,7 +449,7 @@
 
 .sent {
   display: flex;
-  gap: 10px;
+  gap: var(--space-3);
   align-items: flex-start;
 }
 
@@ -532,19 +532,20 @@
 
 .starters {
   display: grid;
-  gap: 8px;
+  gap: var(--space-3);
   list-style: none;
 }
 
+/* A starter is a card of its own: the same soft surface as every card in the chat. */
 .starter {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding: 12px 16px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--r-lg);
   background: var(--surface);
+  box-shadow: var(--shadow-2);
 }
 
 .starter > div {
@@ -573,7 +574,7 @@
 }
 
 .more {
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
 }
 
@@ -602,9 +603,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 14px;
+  gap: var(--space-1) var(--space-3);
   margin: 0;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
 }
 
@@ -613,18 +614,18 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  margin-block: -6px;
+  margin-block: calc(var(--space-2) * -1);
 }
 
 .actions {
   display: grid;
-  gap: 10px;
-  margin-top: 4px;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
 }
 
 .actions ul {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -634,7 +635,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: var(--space-2) var(--space-3);
 }
 
 /* Once the conversation starts, Home is the chat (the sketch's chat column): the needs strip across the top, the conversation
@@ -737,11 +738,11 @@
 .cardDone {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .cardOk {
-  color: var(--green-ink);
+  color: var(--ok-text);
 }
 
 .changing {

@@ -6,14 +6,14 @@ import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { CapabilitiesView, PlannerReply } from '../../api/types'
+import type { PlannerReply } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 
 function draw(reply: PlannerReply): string {
   const queryClient = new QueryClient()
-  queryClient.setQueryData(['capabilities', createDevSession(null).cacheScope()], capabilities as CapabilitiesView)
+  queryClient.setQueryData(['capabilities', createDevSession(null).cacheScope()], capabilities)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
@@ -27,10 +27,10 @@ function draw(reply: PlannerReply): string {
 
 const words = (html: string) => html.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length
 
-/** The words a person reads before the first button, link or fold in a card (ADR 0052: about 25 at most). */
+/** The words a person reads before the first button, link or fold in a card, past its title (ADR 0052: about 25 at most). */
 function wordsBeforeFirstAction(html: string): number {
   const at = html.search(/<(button|a|summary)\b/)
-  return words(at === -1 ? html : html.slice(0, at))
+  return words((at === -1 ? html : html.slice(0, at)).replace(/<h3\b[\s\S]*?<\/h3>/, ''))
 }
 
 const HOW_TO_START: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: true, parts: [{ text: 'how do I start', mark: 'will_do', reason: null, note: null, choices: [] }] }

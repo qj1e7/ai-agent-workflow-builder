@@ -4,7 +4,7 @@
 
 .rows {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -12,7 +12,7 @@
 
 .note {
   margin: 0;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
 }
 
@@ -22,7 +22,7 @@
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 .ok {
@@ -38,14 +38,14 @@
 }
 
 .revision {
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);
 }
 
 .linkButton {
   min-height: 32px;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border: 0;
   background: none;
   color: var(--link);
@@ -62,7 +62,7 @@
 }
 
 .stand {
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
   font-weight: var(--fw-semi);
 }
@@ -70,7 +70,7 @@
 .reasons {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -78,7 +78,7 @@
 
 .page {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
   max-width: 68ch;
 }
 
@@ -87,7 +87,7 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px 16px;
+  gap: var(--space-2) var(--space-4);
 }
 
 .pageHead h1 {
@@ -99,7 +99,7 @@
 
 .kind {
   margin: 0;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
   font-weight: var(--fw-bold);
 }
@@ -108,14 +108,14 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
 }
 
 .more {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* A draft's flags, closed until See them opens them. The browser's own disclosure keeps the keyboard and the screen reader's state. */
@@ -138,12 +138,12 @@
 }
 
 .flags .rows {
-  margin-top: 6px;
+  margin-top: var(--space-2);
 }
 
 .parts {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -153,22 +153,22 @@
   display: grid;
   grid-template-columns: 22px minmax(56px, auto) 1fr;
   align-items: start;
-  gap: 4px 10px;
+  gap: var(--space-1) var(--space-3);
 }
 
 .icon {
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--rule);
+  width: var(--space-5);
+  height: var(--space-5);
   border-radius: 50%;
+  background: var(--sunk);
   font-size: var(--fs-tiny);
   font-weight: var(--fw-bold);
 }
 
 .key {
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
   font-weight: var(--fw-bold);
   line-height: 22px;
@@ -176,28 +176,28 @@
 
 .value {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .picks {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .typeForm {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .input {
   flex: 1 1 160px;
   min-width: 0;
   min-height: 40px;
-  padding: 0 10px;
-  border: 1px solid var(--rule);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: transparent;
   color: var(--ink);
@@ -211,8 +211,8 @@
 
 .chip {
   display: inline-block;
-  padding: 1px 8px;
-  border: 1px solid var(--rule);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line);
   border-radius: 999px;
   font-weight: var(--fw-semi);
 }
@@ -220,13 +220,13 @@
 /* The revision tried on practice systems (ADR 0054): the result, then each case with a mark and a word. */
 .simulation {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   margin: 0;
 }
 
 .cases {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -234,29 +234,29 @@
 
 .case {
   display: grid;
-  gap: 2px;
+  gap: var(--space-1);
 }
 
 .caseHead {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .passed {
   flex: none;
-  color: var(--green-ink);
+  color: var(--ok-text);
 }
 
 .failed {
   flex: none;
-  color: var(--red-ink);
+  color: var(--stop-text);
 }
 
 .untried {
   flex: none;
   width: 16px;
-  color: var(--muted);
+  color: var(--text-2);
   text-align: center;
   font-weight: var(--fw-bold);
 }
@@ -267,7 +267,7 @@ details.foldedCases > summary {
   align-items: center;
   width: fit-content;
   min-height: 44px;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
   text-decoration: underline;
   text-underline-offset: 3px;

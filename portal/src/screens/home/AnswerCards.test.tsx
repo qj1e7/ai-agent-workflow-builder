@@ -97,7 +97,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: true, parts: [asked('list me the steps to use this app', 'will_do')] }
     const html = draw(reply, { registry: REGISTRY })
     expect(text(html)).toBe(
-      'How to start This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written until an Approver approves it. Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes. Nothing is written until an Approver approves it in Teams. Keep track of the LangGraph version',
+      'How to start This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written until an Approver approves it. Show the steps Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes. Nothing is written until an Approver approves it in Teams. Keep track of the LangGraph version',
     )
     expect(buttons(html)).toEqual(['Keep track of the LangGraph version'])
     expect(html).toContain('aria-label="Try one"')

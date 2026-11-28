@@ -44,3 +44,13 @@ export function Card({ title, label, pill, children, status, actions, foot, head
     </section>
   )
 }
+
+/** Dense words folded under a plain summary, closed until pressed: the browser's own disclosure keeps the keyboard and the screen reader's state. */
+export function CardFold({ summary, children }: { readonly summary: string; readonly children: ReactNode }) {
+  return (
+    <details className={styles['fold']}>
+      <summary>{summary}</summary>
+      {children}
+    </details>
+  )
+}

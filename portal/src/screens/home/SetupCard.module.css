@@ -1,60 +1,10 @@
-.card {
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
-  background: var(--surface);
-  overflow: hidden;
-}
-
-.head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  padding: 14px 16px 10px;
-}
-
-.head h3 {
-  min-width: 0;
-  font-size: var(--fs-body);
-}
-
-.rename {
-  display: flex;
-  flex: 1 1 100%;
-  gap: 8px;
-}
-
-.rename input {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-ctl);
-  font: inherit;
-}
-
-.part {
-  display: grid;
-  gap: 10px;
-  padding: 12px 16px 14px;
-  border-top: 1px solid var(--rule);
-}
-
-.part h4 {
-  font-size: var(--fs-small);
-}
-
-.part p {
-  margin: 0;
-}
-
+/* The set-up card's own pieces. The card itself is ui/Card, and its rows are PartsList. */
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   min-height: 36px;
-  padding: 2px 12px;
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--edge);
   border-radius: 999px;
   background: var(--sunk);
@@ -70,9 +20,9 @@ button.chip:hover {
 }
 
 .chip[data-state='understood'] {
-  border-color: var(--green-line);
-  background: var(--green-soft);
-  color: var(--green-ink);
+  border-color: var(--ok-edge);
+  background: var(--ok-bg);
+  color: var(--ok-text);
 }
 
 .chip[data-state='changed'] {
@@ -83,9 +33,9 @@ button.chip:hover {
 
 .chip[data-state='edited'],
 .chip[data-state='checking'] {
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--run) 35%, transparent);
+  background: var(--run-bg);
+  color: var(--run-text);
 }
 
 .chip[data-state='checking'] {
@@ -95,7 +45,6 @@ button.chip:hover {
 .chip[data-state='missing'] {
   border-style: dashed;
 }
-
 
 .spin {
   width: 12px;
@@ -118,29 +67,10 @@ button.chip:hover {
   }
 }
 
-.tag {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 10px;
-  border-radius: 999px;
-  background: var(--sunk);
-  color: var(--ink);
-  font-size: var(--fs-tiny);
-  font-weight: var(--fw-semi);
-}
-
-.tag[data-state='missing'] {
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-}
-
+/* A change opens its fields in place, on the card itself: a label, then the fields, with no box of their own. */
 .editor {
   display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-ctl);
-  background: var(--sunk);
+  gap: var(--space-2);
 }
 
 .editor label {
@@ -153,7 +83,7 @@ button.chip:hover {
 .field input,
 .field select {
   min-height: 44px;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--edge);
   border-radius: var(--r-ctl);
   background: var(--surface);
@@ -163,22 +93,22 @@ button.chip:hover {
 .fields {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .field {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
 .help {
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-tiny);
 }
 
 .problem {
-  color: var(--red-ink);
+  color: var(--stop-text);
   font-size: var(--fs-small);
 }
 
@@ -186,123 +116,29 @@ button.chip:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: var(--space-2) var(--space-3);
 }
 
 .link {
   min-height: 44px;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border: 0;
   background: none;
   color: var(--ink);
   font: inherit;
   font-weight: var(--fw-semi);
   text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
   cursor: pointer;
-}
-
-.similar {
-  color: var(--muted);
-}
-
-.how {
-  padding: 4px 16px;
-  border-top: 1px solid var(--rule);
-}
-
-.how summary {
-  min-height: 44px;
-  padding: 10px 0;
-  font-weight: var(--fw-bold);
-  cursor: pointer;
-}
-
-.howBody {
-  display: grid;
-  gap: 12px;
-  padding-bottom: 12px;
-}
-
-.agent ol {
-  display: grid;
-  gap: 6px;
-  margin: 8px 0 0;
-  padding-left: 1.25rem;
-}
-
-.agent li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-}
-
-.agentHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.stepTag {
-  padding: 0 10px;
-  border-radius: 999px;
-  background: var(--sunk);
-  font-size: var(--fs-tiny);
-  font-weight: var(--fw-semi);
-}
-
-.stepTag[data-writes] {
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-}
-
-.foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  padding: 12px 16px 14px;
-  border-top: 1px solid var(--rule);
-}
-
-.left {
-  flex: 1 1 14rem;
-  color: var(--muted);
 }
 
 .refused {
-  margin: 0;
-  padding: 0 16px 14px 36px;
-  color: var(--red-ink);
-}
-
-.done {
-  display: flex;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid var(--green-line);
-  border-radius: var(--r-card);
-  background: var(--green-soft);
-}
-
-.done > div {
   display: grid;
-  gap: 8px;
-}
-
-.done p {
+  gap: var(--space-1);
   margin: 0;
-}
-
-.tick {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--green-ink);
-  color: #fff;
+  padding-left: var(--space-5);
+  color: var(--stop-text);
 }
 
 .pq {
@@ -314,13 +150,13 @@ button.chip:hover {
 .pick {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .choice {
   min-height: 44px;
-  padding: 6px 16px;
-  border: 1px solid var(--edge);
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--surface);
   color: var(--ink);
@@ -341,7 +177,7 @@ button.chip:hover {
 }
 
 .pnote {
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
 }
 
@@ -349,7 +185,7 @@ button.chip:hover {
   flex: 1 1 12rem;
   min-width: 0;
   min-height: 44px;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--edge);
   border-radius: var(--r-ctl);
   font: inherit;
@@ -361,57 +197,45 @@ button.chip:hover {
   flex: 1 1 100%;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
+  gap: var(--space-2) var(--space-3);
   min-width: 0;
 }
 
 .after {
-  color: var(--muted);
+  color: var(--text-2);
 }
 
 .valueLabel {
   flex-basis: 100%;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
   font-weight: var(--fw-bold);
 }
 
 .trouble {
   display: grid;
-  gap: 8px;
-}
-
-/* The safety checker's note, beside its face. */
-.note {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--safety) 8%, var(--surface));
-  color: var(--safety);
-  font-size: var(--fs-small);
-  font-weight: var(--fw-semi);
+  justify-items: start;
+  gap: var(--space-2);
 }
 
 .good,
 .bad {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .good {
-  color: var(--green-ink);
+  color: var(--ok-text);
 }
 
 .bad {
-  color: var(--red-ink);
+  color: var(--stop-text);
 }
 
 .checks {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -420,24 +244,29 @@ button.chip:hover {
 .checks li {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--red-ink);
+  gap: var(--space-2);
+  color: var(--stop-text);
   font-weight: var(--fw-semi);
 }
 
 .checks li[data-ok] {
-  color: var(--green-ink);
+  color: var(--ok-text);
 }
 
 .footnote {
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-small);
 }
 
-.guess {
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: var(--fs-tiny);
-  background: var(--sunk);
-  color: var(--muted);
+/* The safety checker's note, beside its face: the sketch's note line, a quiet tint with no edge. */
+.note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--r-sm);
+  background: var(--subtle);
+  color: var(--safety);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
 }
