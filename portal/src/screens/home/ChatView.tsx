@@ -37,7 +37,7 @@ const openersOf = (root: HTMLElement | null, item: PanelItem): HTMLElement[] => 
  */
 export function ChatView({ home, now, page, box, chips, toast, onNewChat }: ChatViewProps) {
   const chat = useChat()
-  const column = useRef<HTMLDivElement>(null)
+  const layout = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const restored = useRef(false)
   const shownCount = useRef(chat.thread.messages.length)
@@ -124,7 +124,7 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
       shown,
       open: (item, from) => {
         opened.current = true
-        openPanel(item, Math.max(0, openersOf(column.current, item).indexOf(from)))
+        openPanel(item, Math.max(0, openersOf(layout.current, item).indexOf(from)))
       },
       show: (item) => openPanel(item, null),
     }),
@@ -154,7 +154,7 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
     if (!was || panel) return
     closed.current = null
     const box = document.getElementById('planner-box')
-    focusAfterClose({ openers: openersOf(column.current, was.panel.root), from: was.panel.from, lost: was.lost, box })?.focus({ preventScroll: true })
+    focusAfterClose({ openers: openersOf(layout.current, was.panel.root), from: was.panel.from, lost: was.lost, box })?.focus({ preventScroll: true })
   }, [panel])
 
   const close = () => {
@@ -166,8 +166,8 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
 
   return (
     <InChat.Provider value>
-      <div className={cx(styles['chatLayout'], panel !== null && styles['beside'], panel !== null && isWide(panel.item) && styles['wideSplit'])} data-chat>
-        <div ref={column} className={styles['chat']} inert={(narrow && panel !== null) || undefined}>
+      <div ref={layout} className={cx(styles['chatLayout'], panel !== null && styles['beside'], panel !== null && isWide(panel.item) && styles['wideSplit'])} data-chat>
+        <div className={styles['chat']} inert={(narrow && panel !== null) || undefined}>
           <OpensInPanel.Provider value={opener}>
             <h1 className="visually-hidden" tabIndex={-1}>
               Planner
@@ -194,7 +194,11 @@ export function ChatView({ home, now, page, box, chips, toast, onNewChat }: Chat
             </div>
           </div>
         </div>
-        {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} back={panel.previous} now={now} narrow={narrow} onClose={close} onBack={back} onOpen={push} /> : beside.slim ? <ChatSlimList home={home} now={now} /> : null}
+        {panel ? <SidePanel key={panelKey(panel.item)} item={panel.item} back={panel.previous} now={now} narrow={narrow} onClose={close} onBack={back} onOpen={push} /> : beside.slim ? (
+          <OpensInPanel.Provider value={opener}>
+            <ChatSlimList home={home} now={now} />
+          </OpensInPanel.Provider>
+        ) : null}
       </div>
     </InChat.Provider>
   )

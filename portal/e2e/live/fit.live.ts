@@ -132,7 +132,9 @@ for (const width of WIDTHS) {
       const box = page.getByLabel('Ask, or describe a task')
       await box.fill('Check my workflows')
       await box.press('Enter')
-      await expect(page.getByRole('region', { name: 'Needs you', exact: true })).toBeVisible()
+      // From 1080 px the slim list is the glance beside the chat, and the pinned line is dropped. Narrower, the line is.
+      if (width >= 1080) await expect(page.getByRole('complementary', { name: 'Your workflows' })).toBeVisible()
+      else await expect(page.getByRole('region', { name: 'Needs you', exact: true })).toBeVisible()
       await expect(page.getByRole('list', { name: 'Your workflows' }).first()).toBeVisible()
       await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined)
       const problems = await fitProblems(page)

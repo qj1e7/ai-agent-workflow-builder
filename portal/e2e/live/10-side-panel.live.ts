@@ -467,8 +467,9 @@ for (const width of [1440, 390]) {
     await ask(page, 'What can you do?')
     const total = await platformNeeds(backend, 'alice')
     expect(total).toBeGreaterThan(1)
-    const more = strip(page).getByRole('button', { name: `${String(total - 1)} more that need you` })
-    await expect(more, 'the strip’s N more is a button that opens the panel').toBeVisible()
+    // From 1080 px the slim list's Needs you count opens the panel. Narrower, the strip's N more does.
+    const more = width >= 1080 ? page.getByRole('complementary').getByRole('button', { name: `Needs you ${String(total)}`, exact: true }) : strip(page).getByRole('button', { name: `${String(total - 1)} more that need you` })
+    await expect(more, 'the way to Needs you beside the chat is a button that opens the panel').toBeVisible()
 
     await more.click()
     await expect(heading(page)).toHaveText('Needs you')
@@ -504,7 +505,7 @@ for (const width of [1440, 390]) {
       await page.keyboard.press('Escape')
       await expect(panel(page)).toHaveCount(0, { timeout: 1_000 })
     }, 'Escape closes the panel').toPass({ timeout: 10_000 })
-    await expect(strip(page).getByRole('button', { name: /more that need you$/ }), 'Escape puts focus back on what opened the panel').toBeFocused()
+    await expect(more, 'Escape puts focus back on what opened the panel').toBeFocused()
     expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
     assertClean(watch)
     await repair()
