@@ -46,6 +46,61 @@ test('bob sees the run alice started at the top of Home, and its row opens the r
   await context.close()
 })
 
+test('Home’s board lists the workflows as tiles under Needs you, each one link with its one pill, and a workflow that needs Bob says why only in Needs you', async ({ browser, backend }, info) => {
+  const { approvalId } = await backend.waitingRun('alice')
+  const context = await devContext(browser, 'bob')
+  const page = await context.newPage()
+  await page.goto('/')
+  await expect(itemOf(page, approvalId)).toBeVisible()
+  const board = page.locator('ul[data-board]')
+  const tile = board.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
+  await expect(tile.getByRole('link')).toHaveAttribute('href', /^\/workflows\/.+/)
+  await expect(tile, 'its one pill is Needs you').toContainText('Needs you')
+  await expect(tile, 'the reason is in Needs you, not on the tile').not.toContainText('needs your approval')
+  await expect(board.getByText('needs your approval'), 'no tile says it').toHaveCount(0)
+  await expect(itemOf(page, approvalId), 'Needs you says it once').toHaveCount(1)
+  const edges = await page.evaluate(() => ['form', 'ul[aria-label="Needs you"]', 'ul[data-board]'].map((query) => document.querySelector(query)?.getBoundingClientRect().left ?? -1))
+  expect(Math.max(...edges) - Math.min(...edges), 'the box, Needs you and the board start at one left edge').toBeLessThanOrEqual(1)
+  for (const width of [1280, 800]) {
+    await page.setViewportSize({ width, height: 900 })
+    const fit = await page.evaluate(() => {
+      const tiles = [...document.querySelectorAll('ul[data-board] > li[data-workflow-id]')]
+      const pills = tiles.flatMap((item) => [...item.querySelectorAll('[data-life]')]).map((pill) => pill.getBoundingClientRect().height)
+      const lines = tiles.flatMap((item) => {
+        const line = item.querySelector('[role="img"]')
+        return line ? [{ row: Math.round(item.getBoundingClientRect().top), inTile: Math.round(line.getBoundingClientRect().top - item.getBoundingClientRect().top) }] : []
+      })
+      return { tallest: Math.max(0, ...pills), lines }
+    })
+    expect(fit.tallest, `every board pill is one line at ${String(width)} px`).toBeLessThan(34)
+    for (const row of new Set(fit.lines.map((line) => line.row))) {
+      const heights = new Set(fit.lines.filter((line) => line.row === row).map((line) => line.inTile))
+      expect(heights.size, `step lines in one row share a top edge at ${String(width)} px`).toBe(1)
+    }
+  }
+  const spacing = await page.evaluate(() => {
+    const top = (query: string) => document.querySelector(query)?.getBoundingClientRect().top ?? -1
+    const bottom = (query: string) => document.querySelector(query)?.getBoundingClientRect().bottom ?? -1
+    const needsHead = bottom('section[aria-labelledby] > h2')
+    const boardHead = bottom('section:has(ul[data-board]) h2')
+    const groups = [...document.querySelectorAll('ul[aria-label="Needs you"] > li > h3')]
+    const firstList = document.querySelector('ul[aria-label="Needs you"] > li > ul')
+    const rows = [...document.querySelectorAll('ul[aria-label="Needs you"] li[data-home-item]')].map((row) => row.getBoundingClientRect())
+    const across = rows.find((row, index) => index > 0 && row.top === rows[0]?.top)
+    return {
+      needsGap: top('ul[aria-label="Needs you"]') - needsHead,
+      boardGap: top('ul[data-board]') - boardHead,
+      headToList: (firstList?.getBoundingClientRect().top ?? 0) - (groups[0]?.getBoundingClientRect().bottom ?? 0),
+      tileGap: across && rows[0] ? across.left - rows[0].right : 16,
+    }
+  })
+  expect(spacing.boardGap, 'the Needs you heading sits as far above its list as the board’s does above its own').toBeGreaterThan(0)
+  expect(Math.abs(spacing.needsGap - spacing.boardGap), 'heading to list is equal for Needs you and the board').toBeLessThanOrEqual(1)
+  expect(spacing.tileGap, 'tiles are 16 px apart').toBeGreaterThan(0)
+  await shot(page, info, 'mc-board-bob-home')
+  await context.close()
+})
+
 test('alice sees no Waiting on others on Home or Workflows, and the run she started reads On, waiting for an Approver’s yes, on its workflow’s row', async ({ browser, backend }, info) => {
   const { runId, approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'alice')
@@ -58,6 +113,8 @@ test('alice sees no Waiting on others on Home or Workflows, and the run she star
   await shot(page, info, 'p11-06-alice-home')
   await page.goto('/workflows')
   await expect(page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })).toContainText('On · waiting for approval')
+  const pill = page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' }).locator('[data-life]')
+  expect((await pill.boundingBox())?.height ?? 99, 'the state column fits its longest pill on one line').toBeLessThan(34)
   await expect(waitingOnOthers(page)).toHaveCount(0)
   await expect(page.locator(`a[href="/runs/${runId}"]`), 'Needs you offers alice no run she can’t decide').toHaveCount(0)
   await context.close()

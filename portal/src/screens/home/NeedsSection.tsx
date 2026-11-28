@@ -109,10 +109,10 @@ export function NeedsSection({ needs, now, arrival, more, whenNone, quiet = fals
   )
 }
 
-/** A group label is a level 2 heading on Home, which has no Needs you heading, and level 3 under Workflows' Needs you. */
+/** A group label is a level 2 heading in the chat's card and the side panel, and level 3 under Needs you's own heading on Home and Workflows. */
 type Level = 2 | 3
 
-function RowGroup({ label, needs, now, level }: { label: string; needs: readonly Need[]; now: Date; level: Level }) {
+function RowGroup({ label, needs, now, level, tile }: { label: string; needs: readonly Need[]; now: Date; level: Level; tile: boolean }) {
   const headingId = useId()
   const Heading = level === 2 ? 'h2' : 'h3'
   return (
@@ -120,7 +120,7 @@ function RowGroup({ label, needs, now, level }: { label: string; needs: readonly
       <Heading id={headingId}>{label}</Heading>
       <ul className={styles['needRows']} aria-labelledby={headingId}>
         {needs.map((need) => (
-          <NeedRow key={need.key} need={need} now={now} />
+          <NeedRow key={need.key} need={need} now={now} tile={tile} />
         ))}
       </ul>
     </li>
@@ -128,17 +128,17 @@ function RowGroup({ label, needs, now, level }: { label: string; needs: readonly
 }
 
 /**
- * Needs you as plain rows under Do now and Set up, with no count or buttons, as the sketch draws it on Home and on Workflows, so both
- * say every row in the same words and tone. `more` follows the rows.
+ * Needs you under Do now and Set up, one link per row, with no buttons, so every place says a row in the same words and tone. `tiles` draws
+ * them as the sketch's bright tiles (Home, Workflows); otherwise they are compact rows (the chat's card, the side panel). `more` follows.
  */
-export function NeedRows({ needs, now, more, level = 2 }: { needs: readonly Need[]; now: Date; more: ReactNode; level?: Level }) {
+export function NeedRows({ needs, now, more, level = 2, tiles = false }: { needs: readonly Need[]; now: Date; more: ReactNode; level?: Level; tiles?: boolean }) {
   if (needs.length === 0) return null
   return (
-    <div className={styles['plain']}>
+    <div className={cx(styles['plain'], tiles && styles['tiles'])}>
       <ul className={styles['groups']} aria-label="Needs you">
         {NEED_GROUPS.map(([group, label]) => {
           const rows = needs.filter((need) => groupOf(need) === group)
-          return rows.length > 0 ? <RowGroup key={group} label={label} needs={rows} now={now} level={level} /> : null
+          return rows.length > 0 ? <RowGroup key={group} label={label} needs={rows} now={now} level={level} tile={tiles} /> : null
         })}
       </ul>
       {more}

@@ -494,3 +494,107 @@
 [data-tone='err'] .dot {
   background: var(--red);
 }
+
+/* Home's and Workflows' Needs you as the sketch draws it: bright tiles, one control each. A tile's tone is its bar and its tint, and its mark
+   carries the shape. The chat's card and the side panel keep the compact rows above. */
+.tiles .needRows {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-4);
+}
+
+.plain.tiles {
+  margin-top: 0;
+  gap: var(--space-3);
+}
+
+.tiles .groups {
+  gap: var(--space-4);
+}
+
+.tiles .group {
+  gap: var(--space-2);
+}
+
+.tiles .need {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  height: 100%;
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-5);
+  border: 0;
+  overflow: hidden;
+  background: var(--wait-bg);
+  box-shadow: var(--shadow-2);
+  transition:
+    box-shadow var(--dur-press) ease,
+    scale var(--dur-press) var(--ease-out);
+}
+
+.tiles .need::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 6px;
+  background: var(--wait);
+}
+
+.tiles [data-tone='err'] > .need {
+  background: var(--stop-bg);
+}
+
+.tiles [data-tone='err'] > .need::before {
+  background: var(--stop);
+}
+
+.tiles .need:active {
+  transform: none;
+  scale: 0.99;
+}
+
+.tiles .need > svg {
+  color: var(--text-2);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tiles .need:hover {
+    border: 0;
+    box-shadow: var(--shadow-3);
+  }
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--wait);
+  color: var(--on-wait);
+}
+
+.tiles [data-tone='err'] > .need .mark {
+  background: var(--stop);
+  color: var(--on-status);
+}
+
+/* Needs you's heading on Home, the same size as the board's. */
+.block {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.blockHead {
+  font-size: var(--fs-head);
+  font-weight: var(--fw-semi);
+  line-height: 1.3;
+}
+
+.blockCount {
+  margin-inline-start: var(--space-1);
+  color: var(--text-2);
+  font-weight: var(--fw-regular);
+  font-variant-numeric: tabular-nums;
+}

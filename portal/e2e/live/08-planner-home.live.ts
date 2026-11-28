@@ -724,7 +724,7 @@ test.describe('with the AI model on', () => {
     await expect(chips).toHaveCount(3)
     await expect(chips).toHaveText(['What needs me?', 'Which software is behind?', 'What can you do?'])
     const needsYou = main(page).getByRole('list', { name: 'Needs you' })
-    await expect(needsYou.locator('li[data-home-item]').first(), 'Needs you is plain rows under the chips').toBeVisible()
+    await expect(needsYou.locator('li[data-home-item]').first(), 'Needs you is tiles under the chips').toBeVisible()
     const total = await platformNeeds(backend, 'alice')
 
     await ask(page, 'Check my workflows')
@@ -888,6 +888,8 @@ test.describe('with the AI model on', () => {
     await expect(box(page)).toBeVisible()
     // The suggestions draw once the watchlist and the registry have loaded, so the walk waits for the ones it checks.
     await expect(page.getByRole('group', { name: 'Suggestions' }).getByRole('button')).toHaveCount(3)
+    // The board under Needs you draws once the workflows have loaded, and its links are stops of the walk.
+    await expect(page.locator('ul[data-board] > li').first()).toBeVisible()
     const walk = await walkTabs(page)
     const labels = walk.stops.map((stop) => stop.label)
     for (const name of ['Ask, or describe a task', 'Send', 'Which software is behind?']) {
@@ -910,18 +912,19 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  // The sketch's measures up to a 1440 px window. Wider, Home grows as one block: 1.25 times at 1920 px and 1.4 times at 2560 px.
+  // The sketch's measures (ADR 0052, measured on prototype.html at each width: a 38 px Visor bot in the box, a 68 px box, 34 px chips, the question on one line, two on a phone).
+  // The sketch does not grow with the window. Home does, as one block: 1.25 times at 1920 px and 1.4 times at 2560 px.
   for (const { width, height, phone, face: faceSize, box: boxHeight, chip: chipHeight } of [
-    { width: 390, height: 844, phone: true, face: 96, box: 60, chip: 36 },
-    { width: 1440, height: 900, phone: false, face: 96, box: 60, chip: 36 },
-    { width: 1920, height: 1080, phone: false, face: 120, box: 75, chip: 45 },
-    { width: 2560, height: 1440, phone: false, face: 134, box: 84, chip: 50 },
+    { width: 390, height: 844, phone: true, face: 38, box: 68, chip: 34 },
+    { width: 1440, height: 900, phone: false, face: 38, box: 68, chip: 34 },
+    { width: 1920, height: 1080, phone: false, face: 48, box: 85, chip: 43 },
+    { width: 2560, height: 1440, phone: false, face: 53, box: 96, chip: 48 },
   ]) {
-    test(`Home at ${String(width)} px: a ${String(faceSize)} px face, a ${String(boxHeight)} px box, ${String(chipHeight)} px chips, the question on ${phone ? 'two lines at most' : 'one line'}, and a page that ends in the window`, async ({ browser }) => {
+    test(`Home at ${String(width)} px: a ${String(faceSize)} px face in the box, a ${String(boxHeight)} px box, ${String(chipHeight)} px chips, the question on ${phone ? 'two lines at most' : 'one line'}, and the box, chips and Needs you in the first window`, async ({ browser }) => {
       const context = await devContext(browser, 'alice', { phone })
       const page = await context.newPage()
       await page.setViewportSize({ width, height })
-      // Home with nothing to do, so the rows can't make the page longer than the window.
+      // Home with nothing to do, so Needs you is the one line that says so.
       await page.route('**/api/v1/home', async (route) => {
         const response = await route.fetch()
         const home = (await response.json()) as Record<string, unknown>
@@ -940,9 +943,13 @@ test.describe('with the AI model on', () => {
       const lines = await main(page).getByRole('heading', { level: 1 }).evaluate((h1: HTMLElement) => Math.round(h1.offsetHeight / parseFloat(getComputedStyle(h1).lineHeight)))
       // The team lead's question of 25 Nov, "What can I help you with today?", is longer than the sketch's, so a phone's narrow window balances it on two lines.
       expect(lines, phone ? 'the question takes two lines at most' : 'the question stays on one line').toBeLessThanOrEqual(phone ? 2 : 1)
-      // At 860 px and narrower the practice stack's test controls sit under the page, so the check is that the page itself ends in the window.
-      const mainBottom = await main(page).evaluate((element) => element.getBoundingClientRect().bottom)
-      expect(mainBottom, 'the empty Home never makes the page scroll').toBeLessThanOrEqual((await page.evaluate(() => window.innerHeight)) + 1)
+      // The sketch promises the box, the chips and Needs you in the first window. The board under them may be longer than the window and scrolls.
+      const windowHeight = await page.evaluate(() => window.innerHeight)
+      expect(face?.y ?? 0, 'the face sits inside the box').toBeGreaterThan((composer?.y ?? 0) - 1)
+      expect((composer?.y ?? 0) + (composer?.height ?? 0), 'the box is in the first window').toBeLessThanOrEqual(windowHeight)
+      expect((chip?.y ?? 0) + (chip?.height ?? 0), 'the chips are in the first window').toBeLessThanOrEqual(windowHeight)
+      const needs = await main(page).getByText('Nothing needs you.').boundingBox()
+      expect((needs?.y ?? 0) + (needs?.height ?? 0), 'Needs you is in the first window').toBeLessThanOrEqual(windowHeight)
       await context.close()
     })
   }

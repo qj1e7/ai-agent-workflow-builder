@@ -27,6 +27,8 @@ export const keys = {
   runs: (user: string) => ['runs', user] as const,
   run: (user: string, runId: string) => ['run', user, runId] as const,
   useCases: (user: string) => ['use-cases', user] as const,
+  /** A tile's last run read as steps. Under the run's own key, and per state, so a run that moves on is read again. */
+  runSteps: (user: string, runId: string, state: string) => ['run', user, runId, 'steps', state] as const,
   useCase: (user: string, useCaseId: string) => ['use-case', user, useCaseId] as const,
   /** Under the workflow's own key, so whatever reads the workflow again reads this again too. */
   useCaseInN8n: (user: string, useCaseId: string) => ['use-case', user, useCaseId, 'n8n'] as const,

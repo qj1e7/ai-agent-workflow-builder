@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { useSearchParams } from 'react-router'
 import { Link } from '../../ui/Link'
@@ -22,7 +22,8 @@ import { CapabilityLists } from './CapabilityLists'
 import { APPROVER_SUGGESTIONS, approverHeading, approverLine, HOME_NEEDS_SHOWN, needsOf, needsTotal, suggestionsOf, type Needs } from './home'
 import { NeedsMore } from './panels/NeedsMore'
 import { usePagedNeeds } from './usePagedNeeds'
-import { NeedRows, NeedsSection, useArrival } from './NeedsSection'
+import { NeedsSection, useArrival } from './NeedsSection'
+import { HeroBoard } from './HeroBoard'
 import { ChatView, NEWEST } from './ChatView'
 import { foldSender, type Transition } from './fold'
 import { useChat } from './ChatProvider'
@@ -283,7 +284,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   }
 
   const send = (go: () => void) => sendOne(go, empty ? viewTransition() : null)
-  const box = (
+  const box = (bot?: ReactNode) => (
     <PlannerBox
       text={text}
       busy={busy}
@@ -295,6 +296,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
         setKeys((count) => count + 1)
       }}
       onSend={() => send(chat.sendText)}
+      bot={bot}
       changing={chat.changing ? { name: chat.changing.name, revision: chat.changing.revision, onCancel: () => { chat.cancelChange(); boxRef.current?.focus() } } : null}
     />
   )
@@ -325,7 +327,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
           home={home}
           now={now}
           page={page}
-          box={box}
+          box={box()}
           chips={chips}
           toast={toast}
           onNewChat={() => {
@@ -340,15 +342,16 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
 
   return (
     <div className={styles['hero']} data-hero>
-      <PlannerBot state={hero} size={96} keys={keys} look={look} />
-      <p className={styles['hi']}>{greeting}</p>
-      <h1 tabIndex={-1}>{operator ? OPERATOR_HEADING : approverHeading(home)}</h1>
-      <div className={styles['dock']}>
-        {toast}
-        {box}
-        {chips}
+      <div className={styles['intro']}>
+        <p className={styles['hi']}>{greeting}</p>
+        <h1 tabIndex={-1}>{operator ? OPERATOR_HEADING : approverHeading(home)}</h1>
+        <div className={styles['dock']}>
+          {toast}
+          {box(<PlannerBot state={hero} size={38} keys={keys} look={look} />)}
+          {chips}
+        </div>
       </div>
-      <NeedRows needs={needs.shown} now={now} more={<More needs={needs} pager={pager} full={!operator} />} />
+      <HeroBoard needs={needs.shown} total={needs.total} more={<More needs={needs} pager={pager} full={!operator} />} now={now} operator={operator} />
     </div>
   )
 }

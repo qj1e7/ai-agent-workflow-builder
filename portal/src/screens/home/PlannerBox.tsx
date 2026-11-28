@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type RefObject } from 'react'
+import { useEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { cx } from '../../ui/cx'
 import { CHANGE_PLACEHOLDER, changingWords } from '../drafted/drafted'
 import styles from './Planner.module.css'
@@ -12,6 +12,8 @@ interface PlannerBoxProps {
   readonly boxRef: RefObject<HTMLTextAreaElement | null>
   readonly onChange: (text: string) => void
   readonly onSend: () => void
+  /** The Visor bot, drawn at the box's left edge on Home's first screen, as the sketch has it. */
+  readonly bot?: ReactNode
   /** Set while the next message changes a drafted workflow. The box says so, and Cancel goes back to the Planner. */
   readonly changing?: { readonly name: string; readonly revision: number; readonly onCancel: () => void } | null
 }
@@ -20,7 +22,7 @@ interface PlannerBoxProps {
 export const BOX_WORDS = 'Ask, or describe a task'
 
 /** The Planner's box. Enter sends, Shift+Enter starts a new line, and the box grows with the text. */
-export function PlannerBox({ text, busy, empty, problem, boxRef, onChange, onSend, changing = null }: PlannerBoxProps) {
+export function PlannerBox({ text, busy, empty, problem, boxRef, onChange, onSend, bot = null, changing = null }: PlannerBoxProps) {
   const grown = useRef(0)
   useEffect(() => {
     const box = boxRef.current
@@ -53,6 +55,7 @@ export function PlannerBox({ text, busy, empty, problem, boxRef, onChange, onSen
         </p>
       ) : null}
       <div className={cx(styles['composer'], empty && styles['fresh'])}>
+        {bot ? <span className={styles['inBox']}>{bot}</span> : null}
         <label className="visually-hidden" htmlFor="planner-box">
           {BOX_WORDS}
         </label>
