@@ -105,7 +105,8 @@ test('Home keeps the design rules in each of its states', async ({ browser, back
   await allRules(page, capabilities, 'the abilities answer')
 
   await ask(page, 'Check my workflows')
-  await expect(main(page).getByRole('list', { name: 'Your workflows' })).toBeVisible()
+  // The answer's list comes before the slim list's, which has the same name from 1080 px.
+  await expect(main(page).getByRole('list', { name: 'Your workflows' }).first()).toBeVisible()
   await allRules(page, capabilities, 'the Check my workflows answer')
 
   await ask(page, 'What needs me?')
