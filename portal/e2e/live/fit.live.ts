@@ -248,6 +248,9 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
       bobsDecision = (await backend.waitingRun('alice')).runId
       await approve(backend, bobsDecision)
     }
+    // Carol's request waits for him too, so his answers hold two requests and each card offers its opener. A lone request
+    // opens beside the chat by itself on a wide screen, and its card then has none.
+    panelFacts ??= await panelSetup(backend)
     // His own request, the newest waiting for his yes, so the answer's few newest requests hold it however many earlier specs left.
     const { runId: request } = await backend.waitingRun('alice')
     const context = await devContext(browser, 'bob', { reducedMotion: true })

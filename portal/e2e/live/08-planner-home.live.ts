@@ -1621,7 +1621,8 @@ test.describe('bob asks the Planner questions only', () => {
     } else {
       await expect(newest(page).getByRole('heading', { level: 3 }), 'what needs him is his Home heading, as the card’s head').toHaveText(line)
     }
-    await expect(newest(page).locator('[data-opens^="approval:"]').or(page.locator('#side-panel [data-approval-pill]')).first(), 'each request opens beside the chat, or already shows there').toBeVisible()
+    // One request opens beside the chat by itself on a wide screen, and the request's panel has no pill of its own.
+    await expect(newest(page).locator('[data-opens^="approval:"]').or(page.locator('#side-panel[data-panel="approval"]')).first(), 'each request opens beside the chat, or already shows there').toBeVisible()
     await bobAsks(page, 'What did I decide before?')
     await expect(newest(page).getByRole('heading', { level: 3, name: 'Your recent decisions' })).toBeVisible()
     await expect(newest(page).getByRole('list', { name: 'Your decisions' }).locator('[data-decision="decline"]').first()).toContainText(/Today \d+:\d\d · Wrong version\s*Declined/)
